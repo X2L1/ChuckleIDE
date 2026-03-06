@@ -27,7 +27,7 @@ const APP_ROOT = path.resolve(__dirname, '..', '..');
 
 // GitHub repository that owns this IDE — used only for building the changelog URL.
 const REPO_OWNER = 'X2L1';
-const REPO_NAME = 'Funny';
+const REPO_NAME = 'ChuckleIDE';
 
 class Updater {
   constructor() {

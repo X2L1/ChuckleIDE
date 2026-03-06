@@ -242,14 +242,9 @@ Follow these steps to download and run FTC IDE for the first time.
 Open a terminal (Command Prompt on Windows, Terminal on macOS/Linux) and run:
 
 ```bash
-git clone https://github.com/X2L1/Funny.git
-```
-
-### Step 2 — Enter the project folder
-
-```bash
-cd Funny
-```
+# Clone the repository
+git clone https://github.com/X2L1/ChuckleIDE.git
+cd ChuckleIDE
 
 ### Step 3 — Install dependencies
 
