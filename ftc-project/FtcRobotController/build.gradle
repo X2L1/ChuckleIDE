@@ -1,0 +1,29 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 33
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 33
+    }
+
+    namespace 'com.qualcomm.ftcrobotcontroller'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // FTC SDK modules (available from FTC Maven)
+    implementation 'org.firstinspires.ftc:RobotCore:9.0.1'
+    implementation 'org.firstinspires.ftc:RobotServer:9.0.1'
+    implementation 'org.firstinspires.ftc:OnBotJava:9.0.1'
+    implementation 'org.firstinspires.ftc:Hardware:9.0.1'
+    implementation 'org.firstinspires.ftc:FtcCommon:9.0.1'
+    implementation 'org.firstinspires.ftc:Vision:9.0.1'
+    implementation 'org.firstinspires.ftc:Blocks:9.0.1'
+    implementation 'org.firstinspires.ftc:Inspection:9.0.1'
+}

@@ -1,0 +1,67 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 33
+
+    defaultConfig {
+        applicationId "com.qualcomm.ftcrobotcontroller"
+        minSdkVersion 24
+        targetSdkVersion 33
+        versionCode 1
+        versionName "9.0.1"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    namespace 'org.firstinspires.ftc.teamcode'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+    }
+}
+
+dependencies {
+    implementation project(':FtcRobotController')
+
+    // ── PedroPathing (developer branch) ─────────────────────────────────────
+    // Path-following library for FTC autonomous routines
+    // Source: https://github.com/Pedro-Pathing/PedroPathing (developer branch)
+    implementation 'com.github.Pedro-Pathing:PedroPathing:developer-SNAPSHOT'
+
+    // ── NextFTC ───────────────────────────────────────────────────────────────
+    // Command-based FTC framework by Rowan McAlpin
+    // Source: https://github.com/rowan-mcalpin/nextftc
+    implementation 'com.github.rowan-mcalpin:nextftc:main-SNAPSHOT'
+
+    // ── FTC Dashboard ─────────────────────────────────────────────────────────
+    // Real-time telemetry and configuration dashboard
+    // Source: https://github.com/acmerobotics/ftc-dashboard
+    releaseImplementation 'com.acmerobotics.dashboard:dashboard:0.4.16'
+    debugImplementation   'com.acmerobotics.dashboard:dashboard:0.4.16'
+
+    // ── Road Runner (optional) ────────────────────────────────────────────────
+    // Uncomment to add Road Runner motion profiling
+    // implementation 'com.acmerobotics.roadrunner:core:1.0.0'
+
+    // ── Test dependencies ────────────────────────────────────────────────────
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}

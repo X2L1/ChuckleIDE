@@ -1,0 +1,60 @@
+{
+  "name": "ftc-ide",
+  "version": "1.0.0",
+  "description": "A comprehensive IDE for FIRST Tech Challenge (FTC) robotics programming",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder",
+    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "pack": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": ["ftc", "robotics", "ide", "electron", "java", "first-tech-challenge"],
+  "author": "FTC IDE Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@devicefarmer/adbkit": "^3.2.6",
+    "@octokit/rest": "^20.0.2",
+    "chokidar": "^3.5.3",
+    "electron-store": "^8.1.0",
+    "express": "^4.18.2",
+    "fs-extra": "^11.2.0",
+    "simple-git": "^3.22.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.ftcide.app",
+    "productName": "FTC IDE",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*",
+      "ftc-project/**/*",
+      "node_modules/**/*"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.developer-tools"
+    },
+    "icon": "assets/icon.png"
+  }
+}

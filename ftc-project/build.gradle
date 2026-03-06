@@ -1,0 +1,27 @@
+// Top-level build file for FTC Android project
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.1'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        // PedroPathing and other FTC libs
+        maven { url 'https://maven.brott.dev/' }
+        // JitPack for GitHub-hosted libraries
+        maven { url 'https://jitpack.io' }
+        // Maven Central mirror
+        maven { url 'https://mvnrepository.com/artifact/' }
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
