@@ -131,6 +131,8 @@ public class GamepadEx {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static double applyDeadzone(double value, double deadzone) {
-        return Math.abs(value) < deadzone ? 0.0 : value;
+        if (Math.abs(value) < deadzone) return 0.0;
+        double sign = Math.signum(value);
+        return sign * (Math.abs(value) - deadzone) / (1.0 - deadzone);
     }
 }
