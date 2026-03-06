@@ -452,19 +452,29 @@ ipcMain.handle('copilot:isAuthenticated', async () => {
 
 // ── IPC: Build ────────────────────────────────────────────────────────────────
 
+function applyBuildSettings() {
+  buildManager.setGradleArgs(store.get('build.gradleArgs') || '');
+  buildManager.setSlothMode(store.get('build.slothMode') === true);
+  const javaHome = store.get('build.javaHome');
+  if (javaHome) process.env.JAVA_HOME = javaHome;
+}
+
 ipcMain.handle('build:assemble', async (_, projectPath) => {
+  applyBuildSettings();
   return buildManager.assemble(projectPath, (line) => {
     mainWindow.webContents.send('build:output', line);
   });
 });
 
 ipcMain.handle('build:clean', async (_, projectPath) => {
+  applyBuildSettings();
   return buildManager.clean(projectPath, (line) => {
     mainWindow.webContents.send('build:output', line);
   });
 });
 
 ipcMain.handle('build:install', async (_, projectPath) => {
+  applyBuildSettings();
   return buildManager.install(projectPath, (line) => {
     mainWindow.webContents.send('build:output', line);
   });

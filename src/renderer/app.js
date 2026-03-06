@@ -199,6 +199,7 @@ async function loadSettings() {
     setInputVal('setting-theme', state.settings['editor.theme'] || 'vs-dark');
     setInputVal('setting-java-home', state.settings['build.javaHome'] || '');
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
+    setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
     setInputVal('setting-github-user', state.settings['git.username'] || '');
     setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
@@ -223,6 +224,7 @@ async function saveSettings() {
     ['editor.theme', document.getElementById('setting-theme').value],
     ['build.javaHome', document.getElementById('setting-java-home').value],
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
+    ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['git.username', document.getElementById('setting-github-user').value],
     ['git.email', document.getElementById('setting-github-email').value],
     ['git.token', document.getElementById('setting-github-token').value],
