@@ -41,8 +41,7 @@
       "preload.js",
       "src/**/*",
       "assets/**/*",
-      "ftc-project/**/*",
-      "node_modules/**/*"
+      "ftc-project/**/*"
     ],
     "linux": {
       "target": ["AppImage", "deb"],
