@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src blob:; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTC IDE</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════ TOP BAR ═══════════════════════════ -->
+<div id="top-bar">
+  <div id="app-logo">
+    <svg width="22" height="22" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" rx="16" fill="#f97316"/>
+      <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">F</text>
+    </svg>
+    <span>FTC IDE</span>
+  </div>
+  <div id="project-title" class="project-title"></div>
+  <div id="top-actions">
+    <button class="top-btn" id="btn-build" title="Build (F6)">
+      <span class="icon">⚙</span> Build
+    </button>
+    <button class="top-btn primary" id="btn-deploy" title="Build &amp; Deploy (F7)">
+      <span class="icon">▶</span> Deploy
+    </button>
+    <div id="hub-status" class="status-badge disconnected" title="Control Hub Connection">
+      <span class="dot"></span> Hub
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MAIN LAYOUT ═══════════════════════ -->
+<div id="main-layout">
+
+  <!-- LEFT ACTIVITY BAR -->
+  <div id="activity-bar">
+    <button class="activity-btn active" data-panel="explorer" title="File Explorer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v13a1 1 0 001 1h16a1 1 0 001-1V7M3 7l9-4 9 4M3 7h18"/></svg>
+    </button>
+    <button class="activity-btn" data-panel="git" title="Source Control">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 01-2 2H8a2 2 0 01-2-2V9M12 15V9"/></svg>
+    </button>
+    <button class="activity-btn" data-panel="templates" title="Templates">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    </button>
+    <button class="activity-btn" data-panel="devices" title="ADB Devices">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+    </button>
+    <button class="activity-btn" data-panel="copilot" title="AI Copilot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-5 0v-15A2.5 2.5 0 019.5 2z"/><path d="M14.5 8A2.5 2.5 0 0117 10.5v9a2.5 2.5 0 01-5 0v-9A2.5 2.5 0 0114.5 8z"/></svg>
+    </button>
+    <div class="activity-spacer"></div>
+    <button class="activity-btn" data-panel="settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- LEFT SIDEBAR -->
+  <div id="sidebar">
+
+    <!-- FILE EXPLORER PANEL -->
+    <div id="panel-explorer" class="sidebar-panel active">
+      <div class="panel-header">
+        <span>EXPLORER</span>
+        <div class="panel-actions">
+          <button class="icon-btn" id="btn-new-file" title="New File">+</button>
+          <button class="icon-btn" id="btn-new-folder" title="New Folder">📁</button>
+          <button class="icon-btn" id="btn-open-project" title="Open Folder">⊞</button>
+          <button class="icon-btn" id="btn-refresh-tree" title="Refresh">↻</button>
+        </div>
+      </div>
+      <div id="file-tree" class="file-tree">
+        <div class="no-project">
+          <p>No project open</p>
+          <button class="btn-secondary" id="btn-open-project-2">Open Project</button>
+          <button class="btn-secondary" id="btn-new-project">New Project</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GIT PANEL -->
+    <div id="panel-git" class="sidebar-panel">
+      <div class="panel-header">
+        <span>SOURCE CONTROL</span>
+        <div class="panel-actions">
+          <button class="icon-btn" id="btn-git-refresh" title="Refresh">↻</button>
+          <button class="icon-btn" id="btn-git-commit-shortcut" title="Commit">✓</button>
+        </div>
+      </div>
+      <div id="git-panel-content">
+        <div class="git-commit-area">
+          <input type="text" id="git-commit-message" placeholder="Commit message..." class="git-input" />
+          <div class="git-actions-row">
+            <button class="btn-secondary small" id="btn-git-stage-all">Stage All</button>
+            <button class="btn-primary small" id="btn-git-commit">Commit</button>
+          </div>
+          <div class="git-actions-row">
+            <button class="btn-secondary small" id="btn-git-pull">Pull</button>
+            <button class="btn-secondary small" id="btn-git-push">Push</button>
+          </div>
+        </div>
+        <div class="panel-section-title">CHANGES</div>
+        <div id="git-changes-list" class="git-changes"></div>
+        <div class="panel-section-title">BRANCHES</div>
+        <div id="git-branches-list" class="git-branches"></div>
+        <div class="panel-section-title">RECENT COMMITS</div>
+        <div id="git-log-list" class="git-log"></div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES PANEL -->
+    <div id="panel-templates" class="sidebar-panel">
+      <div class="panel-header"><span>TEMPLATES</span></div>
+      <div class="template-search-wrap">
+        <input type="text" id="template-search" placeholder="Filter templates..." class="search-input" />
+      </div>
+      <div id="template-list" class="template-list"></div>
+    </div>
+
+    <!-- DEVICES PANEL -->
+    <div id="panel-devices" class="sidebar-panel">
+      <div class="panel-header">
+        <span>ADB DEVICES</span>
+        <div class="panel-actions">
+          <button class="icon-btn" id="btn-refresh-devices" title="Refresh Devices">↻</button>
+        </div>
+      </div>
+      <div class="connect-form">
+        <input type="text" id="hub-ip-input" placeholder="192.168.43.1" class="text-input" />
+        <div class="connect-row">
+          <input type="text" id="hub-port-input" placeholder="5555" class="text-input small" />
+          <button class="btn-primary small" id="btn-connect-hub">Connect</button>
+        </div>
+        <div class="panel-section-title">WIRELESS PAIRING</div>
+        <input type="text" id="pair-port-input" placeholder="Pair port" class="text-input" />
+        <input type="text" id="pair-code-input" placeholder="Pairing code" class="text-input" />
+        <button class="btn-secondary small" id="btn-pair-hub">Pair Device</button>
+      </div>
+      <div class="panel-section-title">CONNECTED DEVICES</div>
+      <div id="device-list" class="device-list">
+        <div class="no-devices">No devices connected</div>
+      </div>
+    </div>
+
+    <!-- COPILOT PANEL -->
+    <div id="panel-copilot" class="sidebar-panel">
+      <div class="panel-header"><span>AI COPILOT</span></div>
+      <div id="copilot-auth-section">
+        <div class="copilot-info">
+          <p>GitHub Copilot provides AI-powered code completions for FTC Java code.</p>
+        </div>
+        <div class="setting-row">
+          <label>GitHub Token</label>
+          <input type="password" id="copilot-token-input" placeholder="ghp_..." class="text-input" />
+        </div>
+        <button class="btn-primary small" id="btn-copilot-auth">Authenticate</button>
+        <div id="copilot-status-msg" class="status-msg"></div>
+      </div>
+      <div class="panel-section-title">RECENT SUGGESTIONS</div>
+      <div id="copilot-suggestions" class="copilot-suggestions">
+        <div class="hint-text">Open a Java file and start typing to see suggestions.</div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div id="panel-settings" class="sidebar-panel">
+      <div class="panel-header"><span>SETTINGS</span></div>
+      <div id="settings-content" class="settings-content">
+        <div class="setting-group">
+          <div class="setting-group-title">Editor</div>
+          <div class="setting-row">
+            <label>Font Size</label>
+            <input type="number" id="setting-font-size" value="14" min="10" max="24" class="text-input small" />
+          </div>
+          <div class="setting-row">
+            <label>Tab Size</label>
+            <input type="number" id="setting-tab-size" value="4" min="2" max="8" class="text-input small" />
+          </div>
+          <div class="setting-row">
+            <label>Word Wrap</label>
+            <select id="setting-word-wrap" class="select-input">
+              <option value="off">Off</option>
+              <option value="on">On</option>
+              <option value="wordWrapColumn">Column</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Theme</label>
+            <select id="setting-theme" class="select-input">
+              <option value="vs-dark">Dark (VS Code)</option>
+              <option value="vs">Light</option>
+              <option value="hc-black">High Contrast</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">Build</div>
+          <div class="setting-row">
+            <label>Java Home</label>
+            <input type="text" id="setting-java-home" placeholder="/usr/lib/jvm/java-17" class="text-input" />
+          </div>
+          <div class="setting-row">
+            <label>Gradle Args</label>
+            <input type="text" id="setting-gradle-args" placeholder="--stacktrace" class="text-input" />
+          </div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">GitHub</div>
+          <div class="setting-row">
+            <label>Username</label>
+            <input type="text" id="setting-github-user" placeholder="your-username" class="text-input" />
+          </div>
+          <div class="setting-row">
+            <label>Email</label>
+            <input type="text" id="setting-github-email" placeholder="email@example.com" class="text-input" />
+          </div>
+          <div class="setting-row">
+            <label>Token</label>
+            <input type="password" id="setting-github-token" placeholder="ghp_..." class="text-input" />
+          </div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">ADB</div>
+          <div class="setting-row">
+            <label>ADB Path</label>
+            <input type="text" id="setting-adb-path" placeholder="adb (in PATH)" class="text-input" />
+          </div>
+          <div class="setting-row">
+            <label>Auto-Connect</label>
+            <input type="checkbox" id="setting-auto-connect" class="checkbox-input" />
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-save-settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR RESIZE HANDLE -->
+  <div id="sidebar-resize" class="resize-handle"></div>
+
+  <!-- CENTER EDITOR AREA -->
+  <div id="editor-area">
+
+    <!-- EDITOR TABS -->
+    <div id="editor-tabs">
+      <div id="tabs-list"></div>
+      <div id="tabs-actions">
+        <button class="icon-btn" id="btn-split-editor" title="Split Editor">⊟</button>
+        <button class="icon-btn" id="btn-close-all-tabs" title="Close All">✕</button>
+      </div>
+    </div>
+
+    <!-- BREADCRUMB -->
+    <div id="breadcrumb-bar">
+      <span id="breadcrumb-content"></span>
+    </div>
+
+    <!-- MONACO EDITOR CONTAINER -->
+    <div id="editor-container">
+      <div id="welcome-screen" class="welcome-screen">
+        <div class="welcome-logo">
+          <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
+            <rect width="100" height="100" rx="16" fill="#f97316"/>
+            <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">F</text>
+          </svg>
+        </div>
+        <h1>FTC IDE</h1>
+        <p class="welcome-subtitle">FIRST Tech Challenge Development Environment</p>
+        <div class="welcome-actions">
+          <div class="welcome-section">
+            <h3>Start</h3>
+            <a href="#" class="welcome-link" id="wl-new-project">New FTC Project</a>
+            <a href="#" class="welcome-link" id="wl-open-project">Open Project</a>
+            <a href="#" class="welcome-link" id="wl-clone">Clone from GitHub</a>
+          </div>
+          <div class="welcome-section">
+            <h3>Templates</h3>
+            <a href="#" class="welcome-link" id="wl-template-auto">Autonomous OpMode</a>
+            <a href="#" class="welcome-link" id="wl-template-teleop">TeleOp OpMode</a>
+            <a href="#" class="welcome-link" id="wl-template-pedro">PedroPathing Autonomous</a>
+          </div>
+          <div class="welcome-section">
+            <h3>Learn</h3>
+            <a href="#" class="welcome-link" id="wl-ftc-docs">FTC SDK Documentation</a>
+            <a href="#" class="welcome-link" id="wl-pedro-docs">PedroPathing Docs</a>
+            <a href="#" class="welcome-link" id="wl-nextftc-docs">NextFTC Docs</a>
+          </div>
+        </div>
+      </div>
+      <div id="monaco-editor-wrapper" style="display:none; width:100%; height:100%;"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div id="right-sidebar">
+    <div id="outline-panel">
+      <div class="panel-header"><span>OUTLINE</span></div>
+      <div id="outline-content" class="outline-content">
+        <div class="hint-text">Open a file to see its outline.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM PANEL -->
+<div id="bottom-panel">
+  <div id="bottom-tabs">
+    <button class="bottom-tab active" data-tab="output">OUTPUT</button>
+    <button class="bottom-tab" data-tab="problems">PROBLEMS <span id="problem-count" class="badge"></span></button>
+    <button class="bottom-tab" data-tab="terminal">TERMINAL</button>
+    <button class="bottom-tab" data-tab="build">BUILD</button>
+    <div class="bottom-tabs-spacer"></div>
+    <button class="icon-btn" id="btn-clear-output" title="Clear">🗑</button>
+    <button class="icon-btn" id="btn-toggle-bottom" title="Toggle Panel">▼</button>
+  </div>
+  <div id="bottom-content">
+    <div id="tab-output" class="bottom-tab-content active">
+      <div id="output-log" class="log-area"></div>
+    </div>
+    <div id="tab-problems" class="bottom-tab-content">
+      <div id="problems-list" class="problems-list"></div>
+    </div>
+    <div id="tab-terminal" class="bottom-tab-content">
+      <div id="terminal-output" class="terminal-output"></div>
+    </div>
+    <div id="tab-build" class="bottom-tab-content">
+      <div id="build-output" class="log-area ansi-enabled"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="status-bar">
+  <div id="status-left">
+    <span id="status-branch" class="status-item clickable" title="Git Branch">
+      <span class="icon">⎇</span> <span id="branch-name">No repo</span>
+    </span>
+    <span id="status-sync" class="status-item" title="Sync Status"></span>
+  </div>
+  <div id="status-center">
+    <span id="status-project" class="status-item"></span>
+  </div>
+  <div id="status-right">
+    <span id="status-lsp" class="status-item" title="Java LSP">LSP</span>
+    <span id="status-position" class="status-item">Ln 1, Col 1</span>
+    <span id="status-encoding" class="status-item">UTF-8</span>
+    <span id="status-language" class="status-item">Java</span>
+    <span id="status-hub" class="status-item clickable" title="Control Hub">
+      <span class="dot red"></span> Hub
+    </span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MODALS ═══════════════════════════ -->
+
+<!-- New Project Modal -->
+<div id="modal-new-project" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>New FTC Project</h2>
+      <button class="modal-close" data-modal="new-project">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Project Name</label>
+        <input type="text" id="new-project-name" placeholder="MyFTCRobot" class="text-input" />
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <div class="input-with-btn">
+          <input type="text" id="new-project-path" placeholder="/home/user/projects" class="text-input" />
+          <button class="btn-secondary small" id="btn-browse-project-path">Browse</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Package Name</label>
+        <input type="text" id="new-project-package" placeholder="org.firstinspires.ftc.teamcode" class="text-input" />
+      </div>
+      <div class="form-group">
+        <label>Libraries</label>
+        <div class="checkbox-group">
+          <label><input type="checkbox" id="lib-pedro" checked /> PedroPathing</label>
+          <label><input type="checkbox" id="lib-nextftc" checked /> NextFTC</label>
+          <label><input type="checkbox" id="lib-dashboard" checked /> FTC Dashboard</label>
+          <label><input type="checkbox" id="lib-roadrunner" /> Road Runner</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal-close="new-project">Cancel</button>
+      <button class="btn-primary" id="btn-create-project">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template Insert Modal -->
+<div id="modal-template" class="modal-overlay" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>Insert Template</h2>
+      <button class="modal-close" data-modal="template">✕</button>
+    </div>
+    <div class="modal-body modal-split">
+      <div class="modal-left">
+        <input type="text" id="modal-template-search" placeholder="Search templates..." class="search-input" />
+        <div id="modal-template-list" class="template-list"></div>
+      </div>
+      <div class="modal-right">
+        <div id="modal-template-preview" class="template-preview">
+          <div class="hint-text">Select a template to preview.</div>
+        </div>
+        <div class="template-params" id="template-params">
+          <div class="form-group">
+            <label>Class Name</label>
+            <input type="text" id="template-class-name" placeholder="MyOpMode" class="text-input" />
+          </div>
+          <div class="form-group">
+            <label>Package</label>
+            <input type="text" id="template-package" placeholder="org.firstinspires.ftc.teamcode" class="text-input" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal-close="template">Cancel</button>
+      <button class="btn-primary" id="btn-insert-template">Insert Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clone Modal -->
+<div id="modal-clone" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Clone Repository</h2>
+      <button class="modal-close" data-modal="clone">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Repository URL</label>
+        <input type="text" id="clone-url" placeholder="https://github.com/user/repo.git" class="text-input" />
+      </div>
+      <div class="form-group">
+        <label>Destination</label>
+        <div class="input-with-btn">
+          <input type="text" id="clone-dest" placeholder="/home/user/projects" class="text-input" />
+          <button class="btn-secondary small" id="btn-clone-browse">Browse</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>GitHub Token (optional)</label>
+        <input type="password" id="clone-token" placeholder="ghp_..." class="text-input" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal-close="clone">Cancel</button>
+      <button class="btn-primary" id="btn-do-clone">Clone</button>
+    </div>
+  </div>
+</div>
+
+<!-- Commit Modal -->
+<div id="modal-commit" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Commit Changes</h2>
+      <button class="modal-close" data-modal="commit">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Commit Message</label>
+        <textarea id="modal-commit-message" placeholder="Describe your changes..." class="textarea-input" rows="3"></textarea>
+      </div>
+      <div id="modal-changes-preview" class="changes-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal-close="commit">Cancel</button>
+      <button class="btn-primary" id="btn-do-commit">Commit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu" style="display:none">
+  <ul id="context-menu-list"></ul>
+</div>
+
+<!-- Scripts -->
+<script>
+  // Load Monaco Editor from CDN
+  const monacoScript = document.createElement('script');
+  monacoScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
+  monacoScript.onload = () => {
+    require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], () => {
+      window.monacoReady = true;
+      document.dispatchEvent(new Event('monaco-ready'));
+    });
+  };
+  document.head.appendChild(monacoScript);
+</script>
+<script src="app.js"></script>
+</body>
+</html>

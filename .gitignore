@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Electron build output
+dist/
+out/
+
+# Android/Gradle
+ftc-project/.gradle/
+ftc-project/build/
+ftc-project/*/build/
+ftc-project/local.properties
+ftc-project/*.keystore
+
+# JDT Language Server (downloaded at runtime)
+.ftcide/
+
+# IDE files
+.idea/
+*.iml
+*.class
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Electron-store data
+app-state.json
