@@ -13,11 +13,17 @@ class BuildManager {
   constructor() {
     this.currentProcess = null;
     this.gradleArgs = [];
+    this.slothMode = false;
   }
 
   /** Set extra Gradle arguments (e.g. --stacktrace) */
   setGradleArgs(args) {
     this.gradleArgs = args ? args.split(' ').filter(Boolean) : [];
+  }
+
+  /** Enable or disable Sloth Mode (build speed optimizations) */
+  setSlothMode(enabled) {
+    this.slothMode = !!enabled;
   }
 
   /** Run ./gradlew assembleDebug */
@@ -64,7 +70,15 @@ class BuildManager {
       return { success: false, error: `Gradle wrapper not found in ${projectPath}` };
     }
 
-    const args = [...tasks, ...this.gradleArgs];
+    // Sloth Mode: ensure gradle.properties exists and inject speed flags
+    if (this.slothMode) {
+      await this._ensureSlothProperties(projectPath, outputCallback);
+    }
+
+    const slothFlags = this.slothMode
+      ? ['--daemon', '--parallel', '--build-cache']
+      : [];
+    const args = [...tasks, ...slothFlags, ...this.gradleArgs];
     const javaHome = process.env.JAVA_HOME;
 
     return new Promise((resolve) => {
@@ -126,6 +140,51 @@ class BuildManager {
     }
 
     return null;
+  }
+
+  /**
+   * Sloth Mode: ensure a gradle.properties file with speed optimizations
+   * exists in the project root.
+   */
+  async _ensureSlothProperties(projectPath, outputCallback) {
+    const propsPath = path.join(projectPath, 'gradle.properties');
+    const slothProps = [
+      'org.gradle.daemon=true',
+      'org.gradle.parallel=true',
+      'org.gradle.caching=true',
+      'org.gradle.configureondemand=true'
+    ];
+
+    try {
+      let content = '';
+      if (await fs.pathExists(propsPath)) {
+        content = await fs.readFile(propsPath, 'utf8');
+      }
+
+      let updated = false;
+      for (const prop of slothProps) {
+        const key = prop.split('=')[0];
+        if (!content.includes(key)) {
+          content += `\n${prop}`;
+          updated = true;
+        }
+      }
+
+      // Ensure JVM args for speed if not already present
+      if (!content.includes('org.gradle.jvmargs')) {
+        content += '\norg.gradle.jvmargs=-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8';
+        updated = true;
+      }
+
+      if (updated) {
+        await fs.writeFile(propsPath, content.trim() + '\n');
+        outputCallback && outputCallback('🦥 Sloth Mode: gradle.properties optimized for speed\n');
+      } else {
+        outputCallback && outputCallback('🦥 Sloth Mode: speed optimizations active\n');
+      }
+    } catch (e) {
+      outputCallback && outputCallback(`🦥 Sloth Mode warning: could not update gradle.properties: ${e.message}\n`);
+    }
   }
 }
 

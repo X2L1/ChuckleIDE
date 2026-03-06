@@ -122,6 +122,9 @@ class ProjectManager {
     // gradlew scripts (minimal stubs – real ones should be from SDK)
     await fs.writeFile(path.join(projectPath, 'gradlew'), this._gradlewScript(), { mode: 0o755 });
     await fs.writeFile(path.join(projectPath, 'gradlew.bat'), this._gradlewBatScript());
+
+    // gradle.properties (Sloth Mode speed optimizations)
+    await fs.writeFile(path.join(projectPath, 'gradle.properties'), this._gradleProperties());
   }
 
   async _customizeBuildGradle(projectPath, libs) {
@@ -290,6 +293,30 @@ exec "$(dirname "$0")/gradle/wrapper/gradle-wrapper.jar" "$@"
 setlocal
 set DIRNAME=%~dp0
 call "%DIRNAME%gradle\\wrapper\\gradlew.bat" %*
+`;
+  }
+
+  _gradleProperties() {
+    return `# ─── Sloth Mode: Gradle Performance Optimizations ───
+# These settings significantly speed up builds on FTC Control Hub projects.
+
+# Keep the Gradle daemon running between builds to avoid JVM startup overhead.
+org.gradle.daemon=true
+
+# Build independent modules in parallel.
+org.gradle.parallel=true
+
+# Enable the Gradle build cache to reuse outputs from previous builds.
+org.gradle.caching=true
+
+# Only configure modules that are needed for the requested tasks.
+org.gradle.configureondemand=true
+
+# Allocate more memory to the Gradle JVM for faster compilation.
+org.gradle.jvmargs=-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+
+# Use AndroidX libraries.
+android.useAndroidX=true
 `;
   }
 }
