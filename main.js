@@ -11,6 +11,7 @@ const CopilotManager = require('./src/main/copilot');
 const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
+const Updater = require('./src/main/updater');
 const templates = require('./src/templates/index');
 
 const store = new Store();
@@ -18,6 +19,7 @@ let mainWindow;
 let adbManager;
 let gitManager;
 let copilotManager;
+let updater;
 let lspManager;
 let buildManager;
 let projectManager;
@@ -274,6 +276,11 @@ function buildApplicationMenu() {
         {
           label: 'About FTC IDE',
           click: () => mainWindow.webContents.send('menu-action', 'about')
+        },
+        {
+          label: 'Check for Updates…',
+          accelerator: 'CmdOrCtrl+Shift+U',
+          click: () => mainWindow.webContents.send('menu-action', 'check-updates')
         },
         {
           label: 'FTC IDE Documentation',
@@ -551,6 +558,25 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
   return true;
 });
 
+// ── IPC: Updater ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('update:check', async () => {
+  return updater.checkForUpdates();
+});
+
+ipcMain.handle('update:install', async () => {
+  return updater.installUpdate((msg) => {
+    if (mainWindow) mainWindow.webContents.send('update:progress', msg);
+  });
+});
+
+ipcMain.handle('update:status', async () => {
+  return {
+    updateAvailable: updater.updateAvailable,
+    changelog: updater.changelog
+  };
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
@@ -560,8 +586,14 @@ app.whenReady().then(() => {
   lspManager = new LspManager(store);
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
+  updater = new Updater();
 
   createWindow();
+
+  // Start background update checks; notify the renderer when an update lands.
+  updater.startAutoCheck((updateInfo) => {
+    if (mainWindow) mainWindow.webContents.send('update:available', updateInfo);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -571,10 +603,12 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   lspManager && lspManager.stop();
   adbManager && adbManager.cleanup();
+  updater && updater.stopAutoCheck();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
   lspManager && lspManager.stop();
   adbManager && adbManager.cleanup();
+  updater && updater.stopAutoCheck();
 });

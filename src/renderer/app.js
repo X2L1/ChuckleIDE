@@ -50,6 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
   window.ftcIDE.on('open-file', (p) => openFile(p));
   window.ftcIDE.on('build:output', appendBuildOutput);
   window.ftcIDE.on('project:progress', (msg) => appendOutput(msg, 'info'));
+
+  // Auto-update events pushed from the main process
+  window.ftcIDE.on('update:available', (info) => showUpdateNotification(info));
+  window.ftcIDE.on('update:progress', (msg) => setUpdateProgress(msg));
+
+  initUpdateUI();
 });
 
 // ── Monaco Initialization ─────────────────────────────────
@@ -271,7 +277,8 @@ function handleMenuAction(action) {
     'git-pull': () => gitPull(),
     'git-push': () => gitPush(),
     'git-status': () => { switchPanel('git'); refreshGitStatus(); },
-    'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info')
+    'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info'),
+    'check-updates': () => manualCheckForUpdates()
   };
   (handlers[action] || (() => appendOutput(`Unknown action: ${action}`, 'warn')))();
 }
@@ -1387,4 +1394,137 @@ function setInputVal(id, val) {
   if (!el) return;
   if (el.type === 'checkbox') el.checked = Boolean(val);
   else el.value = val;
+}
+
+// ── Auto-Update UI ────────────────────────────────────────────────────────────
+
+/** Wire up the update modal buttons once the DOM is ready. */
+function initUpdateUI() {
+  const installBtn = document.getElementById('btn-update-install');
+  const statusBadge = document.getElementById('status-update');
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      document.getElementById('btn-update-later').disabled = true;
+      const progressArea = document.getElementById('update-progress-area');
+      if (progressArea) progressArea.classList.remove('hidden');
+      setUpdateProgress('Starting update…');
+
+      const result = await window.ftcIDE.update.install();
+      if (result && !result.success) {
+        showToast(`Update failed: ${result.error}`, 'error');
+        installBtn.disabled = false;
+        document.getElementById('btn-update-later').disabled = false;
+        if (progressArea) progressArea.classList.add('hidden');
+      }
+      // On success the app relaunches, so nothing more to do here.
+    });
+  }
+
+  // Status-bar badge also opens the update modal.
+  if (statusBadge) {
+    statusBadge.addEventListener('click', () => showModal('update'));
+  }
+}
+
+/**
+ * Called when the main process detects a new commit on origin.
+ * @param {{ hasUpdate, currentCommit, latestCommit, changelog }} info
+ */
+function showUpdateNotification(info) {
+  if (!info || !info.hasUpdate) return;
+
+  // Populate modal content.
+  const versionInfo = document.getElementById('update-version-info');
+  if (versionInfo) {
+    versionInfo.textContent =
+      `Current: ${info.currentCommit || 'unknown'}  →  Latest: ${info.latestCommit || 'unknown'}`;
+  }
+
+  const changelogEl = document.getElementById('update-changelog');
+  if (changelogEl) {
+    changelogEl.innerHTML = '';
+    const entries = Array.isArray(info.changelog) ? info.changelog : [];
+    if (entries.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'New commits available.';
+      changelogEl.appendChild(li);
+    } else {
+      entries.forEach(({ hash, subject, author, date }) => {
+        const li = document.createElement('li');
+        li.style.marginBottom = '4px';
+        li.innerHTML = `<span style="font-family:monospace;color:var(--accent-blue)">${hash}</span> `
+          + `<span>${escapeHtml(subject)}</span> `
+          + `<span style="color:var(--fg-dim);font-size:11px">(${escapeHtml(author)}, ${date})</span>`;
+        changelogEl.appendChild(li);
+      });
+    }
+  }
+
+  // Show badge in status bar.
+  const badge = document.getElementById('status-update');
+  if (badge) badge.classList.remove('hidden');
+
+  // Show toast with action button.
+  showToastWithAction(
+    '↑ FTC IDE update available',
+    'Update now',
+    () => showModal('update'),
+    'info'
+  );
+}
+
+/** Update the progress message inside the update modal. */
+function setUpdateProgress(msg) {
+  const el = document.getElementById('update-progress-msg');
+  if (el) el.textContent = msg;
+}
+
+/** Triggered by Help → Check for Updates menu item. */
+async function manualCheckForUpdates() {
+  showToast('Checking for updates…', 'info');
+  const result = await window.ftcIDE.update.check();
+  if (result.error) {
+    showToast(`Update check failed: ${result.error}`, 'error');
+    return;
+  }
+  if (result.hasUpdate) {
+    showUpdateNotification(result);
+    showModal('update');
+  } else {
+    showToast('FTC IDE is up to date ✓', 'success');
+  }
+}
+
+/** Show a toast that includes a clickable action label. */
+function showToastWithAction(message, actionLabel, onAction, type = 'info') {
+  const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || 'ℹ'}</span>
+    <span class="toast-msg">${escapeHtml(message)}</span>
+    <button class="toast-action btn-link" style="background:none;border:none;color:var(--accent-blue);cursor:pointer;font-size:12px;padding:0 6px;text-decoration:underline">${escapeHtml(actionLabel)}</button>
+    <button class="toast-close">✕</button>`;
+
+  toast.querySelector('.toast-action').addEventListener('click', () => {
+    toast.remove();
+    onAction();
+  });
+  toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 12000);
+}
+
+/** Minimal HTML-escape used when setting innerHTML. */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

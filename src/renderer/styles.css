@@ -5,6 +5,7 @@
 
 /* ── Reset & Variables ─────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
 
 :root {
   --bg-main:        #1e1e1e;
@@ -979,3 +980,43 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
 .ansi-blue    { color: #569cd6; } .ansi-magenta { color: #c586c0; }
 .ansi-cyan    { color: #9cdcfe; } .ansi-white   { color: #d4d4d4; }
 .ansi-bold    { font-weight: bold; }
+
+/* ── Auto-update ─────────────────────────────────────────────────────────────── */
+.update-badge {
+  background: var(--accent-blue);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: update-pulse 2.5s ease infinite;
+  cursor: pointer;
+}
+.update-badge:hover { opacity: 0.85; }
+@keyframes update-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Progress bar used in update modal */
+.progress-bar-track {
+  height: 4px;
+  background: var(--bg-4);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.progress-bar-fill.indeterminate {
+  width: 40%;
+  animation: indeterminate-slide 1.4s ease infinite;
+}
+@keyframes indeterminate-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}

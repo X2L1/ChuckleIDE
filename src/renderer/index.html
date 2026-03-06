@@ -352,10 +352,36 @@
     <span id="status-hub" class="status-item clickable" title="Control Hub">
       <span class="dot red"></span> Hub
     </span>
+    <span id="status-update" class="status-item clickable update-badge hidden" title="Update available — click to install">
+      ↑ Update available
+    </span>
   </div>
 </div>
 
 <!-- ═══════════════════════════ MODALS ═══════════════════════════ -->
+
+<!-- Update Modal -->
+<div id="modal-update" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">🔄 Update Available</span>
+      <button class="modal-close" data-modal-close="update">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="update-version-info" style="color:var(--fg-dim);margin:0 0 12px"></p>
+      <p style="margin:0 0 8px;font-weight:600">What's new:</p>
+      <ul id="update-changelog" style="margin:0 0 16px;padding-left:18px;max-height:220px;overflow-y:auto;color:var(--fg-dim)"></ul>
+      <div id="update-progress-area" class="hidden">
+        <p id="update-progress-msg" style="color:var(--accent-blue);font-size:13px;margin:0 0 6px"></p>
+        <div class="progress-bar-track"><div id="update-progress-bar" class="progress-bar-fill indeterminate"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal-close="update" id="btn-update-later">Later</button>
+      <button class="btn-primary" id="btn-update-install">Install &amp; Relaunch</button>
+    </div>
+  </div>
+</div>
 
 <!-- New Project Modal -->
 <div id="modal-new-project" class="modal-overlay" style="display:none">

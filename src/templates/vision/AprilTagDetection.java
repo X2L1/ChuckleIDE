@@ -3,8 +3,11 @@ package org.firstinspires.ftc.teamcode.vision;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
@@ -20,7 +23,7 @@ import java.util.List;
  *   - USB webcam configured as "Webcam 1" in robot configuration
  */
 @Autonomous(name = "AprilTag Detection", group = "Vision")
-public class AprilTagDetectionOpMode extends LinearOpMode {
+public class AprilTagDetection extends LinearOpMode {
 
     // ── Vision ────────────────────────────────────────────────────────────────
     private VisionPortal visionPortal;

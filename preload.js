@@ -96,6 +96,13 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
   },
 
+  // ── Updater ──────────────────────────────────────────────────────────────────
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.invoke('update:install'),
+    status: () => ipcRenderer.invoke('update:status')
+  },
+
   // ── Event Listeners ──────────────────────────────────────────────────────────
   on: (channel, callback) => {
     const allowedChannels = [
@@ -106,7 +113,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
       'project:progress',
       'adb:deviceChanged',
       'git:statusChanged',
-      'lsp:notification'
+      'lsp:notification',
+      'update:available',
+      'update:progress'
     ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));
