@@ -131,7 +131,7 @@ const TEMPLATES = [
     id: 'apriltag',
     name: 'AprilTag Detection',
     category: 'Vision',
-    description: 'AprilTag detection and pose estimation',
+    description: 'AprilTag detection and pose estimation (Webcam)',
     icon: '👁️',
     file: 'vision/AprilTagDetection.java'
   },
@@ -139,26 +139,34 @@ const TEMPLATES = [
     id: 'tensorflow',
     name: 'TensorFlow Detection',
     category: 'Vision',
-    description: 'TensorFlow Lite object detection',
+    description: 'TensorFlow Lite object detection (Webcam)',
     icon: '👁️',
     file: 'vision/TensorFlowDetection.java'
   },
-  // ── Odometry ─────────────────────────────────────────────────────────────────
   {
-    id: 'three-wheel-odometry',
-    name: 'Three Wheel Odometry',
-    category: 'Odometry',
-    description: 'Three dead-wheel odometry for position tracking',
-    icon: '📐',
-    file: 'odometry/ThreeWheelOdometry.java'
+    id: 'huskylens',
+    name: 'HuskyLens Detection',
+    category: 'Vision',
+    description: 'DFRobot HuskyLens AI camera (I2C)',
+    icon: '👁️',
+    file: 'vision/HuskyLensDetection.java'
   },
   {
-    id: 'two-wheel-odometry',
-    name: 'Two Wheel Odometry',
+    id: 'limelight',
+    name: 'Limelight Detection',
+    category: 'Vision',
+    description: 'Limelight 3A smart camera with AprilTags & neural detection',
+    icon: '👁️',
+    file: 'vision/LimelightDetection.java'
+  },
+  // ── Odometry ─────────────────────────────────────────────────────────────────
+  {
+    id: 'pinpoint-odometry',
+    name: 'Pinpoint Odometry',
     category: 'Odometry',
-    description: 'Two dead-wheel + IMU odometry',
+    description: 'GoBilda Pinpoint odometry computer (modern standard)',
     icon: '📐',
-    file: 'odometry/TwoWheelOdometry.java'
+    file: 'odometry/PinpointOdometry.java'
   },
   // ── PID ──────────────────────────────────────────────────────────────────────
   {
@@ -168,6 +176,39 @@ const TEMPLATES = [
     description: 'Reusable PID controller implementation',
     icon: '📊',
     file: 'pid/PIDController.java'
+  },
+  // ── ChuckleLib Utilities ─────────────────────────────────────────────────────
+  {
+    id: 'gamepad-ex',
+    name: 'GamepadEx',
+    category: 'ChuckleLib',
+    description: 'Enhanced gamepad with edge detection & deadzone (ChuckleLib)',
+    icon: '🎮',
+    file: 'utilities/GamepadEx.java'
+  },
+  {
+    id: 'math-utils',
+    name: 'MathUtils',
+    category: 'ChuckleLib',
+    description: 'Angle wrapping, clamping, interpolation helpers (ChuckleLib)',
+    icon: '🔢',
+    file: 'utilities/MathUtils.java'
+  },
+  {
+    id: 'hardware-creator',
+    name: 'HardwareCreator',
+    category: 'ChuckleLib',
+    description: 'Reduce motor & servo boilerplate (ChuckleLib)',
+    icon: '🔧',
+    file: 'utilities/HardwareCreator.java'
+  },
+  {
+    id: 'timer',
+    name: 'Timer',
+    category: 'ChuckleLib',
+    description: 'Cooldowns, timeouts & periodic events (ChuckleLib)',
+    icon: '⏱️',
+    file: 'utilities/Timer.java'
   }
 ];
 
