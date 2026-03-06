@@ -26,8 +26,8 @@ A comprehensive desktop IDE for [FIRST Tech Challenge (FTC)](https://www.firstin
 
 ```bash
 # Clone the repository
-git clone https://github.com/X2L1/Funny.git
-cd Funny
+git clone https://github.com/X2L1/ChuckleIDE.git
+cd ChuckleIDE
 
 # Install dependencies
 npm install
