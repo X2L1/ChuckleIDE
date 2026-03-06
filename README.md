@@ -2,6 +2,18 @@
 
 A comprehensive desktop IDE for [FIRST Tech Challenge (FTC)](https://www.firstinspires.org/robotics/ftc) robotics programming, built with Electron. Write, build, and deploy Java code to your robot — all from one app.
 
+## Download
+
+Pre-built executables are available on the [Releases page](https://github.com/X2L1/ChuckleIDE/releases).
+
+1. Go to the **[Latest Release](https://github.com/X2L1/ChuckleIDE/releases/latest)**.
+2. Under **Assets**, download the installer or portable `.exe` for Windows.
+3. Run the downloaded file to install or launch FTC IDE.
+
+> **Note:** You still need **Java JDK ≥ 8** and **adb** installed on your system for building and deploying robot code. See [Prerequisites](#prerequisites) below.
+
+---
+
 ## Features
 
 - **Code Editor** — Syntax-highlighted Java editing with find, replace, and go-to-line
@@ -15,14 +27,14 @@ A comprehensive desktop IDE for [FIRST Tech Challenge (FTC)](https://www.firstin
 
 ## Prerequisites
 
-You need four tools installed before running FTC IDE. Follow every step for your operating system below, then move on to **Getting Started**.
+If you downloaded the installer from the [Releases page](https://github.com/X2L1/ChuckleIDE/releases), you only need **Java JDK** and (optionally) **adb**. Git and Node.js are only required if you are running from source.
 
-| Requirement | Why you need it |
-|---|---|
-| **Git** | Clones this repository and powers the built-in Git features |
-| **Node.js** ≥ 18 (includes **npm**) | Runs the Electron desktop app |
-| **Java JDK** ≥ 8 | Used by Gradle to build your robot code and by the Java language server |
-| **Android Debug Bridge (adb)** | Deploys your built code to an FTC Control Hub or phone |
+| Requirement | Downloaded installer | Running from source |
+|---|---|---|
+| **Java JDK** ≥ 8 | ✅ Required | ✅ Required |
+| **Android Debug Bridge (adb)** | Optional (for deploying to robot) | Optional (for deploying to robot) |
+| **Git** | Not needed | ✅ Required |
+| **Node.js** ≥ 18 (includes **npm**) | Not needed | ✅ Required |
 
 ---
 
@@ -235,28 +247,23 @@ If any command fails, go back to the relevant step above and try again.
 
 ## Getting Started
 
-Follow these steps to download and run FTC IDE for the first time.
+### Option A — Download the installer (recommended)
 
-### Step 1 — Clone the repository
+See the [Download](#download) section above. This is the easiest way to get started.
 
-Open a terminal (Command Prompt on Windows, Terminal on macOS/Linux) and run:
+### Option B — Run from source
+
+If you prefer to run from source or want to contribute, you need **Git** and **Node.js ≥ 18** installed (see [Prerequisites](#prerequisites)).
 
 ```bash
 # Clone the repository
 git clone https://github.com/X2L1/ChuckleIDE.git
 cd ChuckleIDE
 
-### Step 3 — Install dependencies
-
-```bash
+# Install dependencies
 npm install
-```
 
-This downloads everything the app needs. It may take a minute or two — wait until you see your command prompt again.
-
-### Step 4 — Start the IDE
-
-```bash
+# Start the IDE
 npm start
 ```
 
