@@ -34,11 +34,15 @@ class ProjectManager {
       await this._generateProjectStructure(projectPath, name, packageName, libs);
     }
 
-    // Create TeamCode source directory
+    // Create TeamCode source directories
     const srcDir = path.join(projectPath, 'TeamCode', 'src', 'main', 'java',
       ...packageName.split('.'));
     await fs.ensureDir(srcDir);
     await fs.writeFile(path.join(srcDir, '.gitkeep'), '');
+    for (const packageDir of ['subsystems', 'commands', 'opmodes', 'util', 'global']) {
+      await fs.ensureDir(path.join(srcDir, packageDir));
+      await fs.writeFile(path.join(srcDir, packageDir, '.gitkeep'), '');
+    }
 
     // Customize build.gradle with selected libs
     await this._customizeBuildGradle(projectPath, libs);
