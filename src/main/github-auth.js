@@ -31,6 +31,7 @@ class GitHubAuth {
         scope: SCOPES
       });
     } catch (err) {
+      console.error('Device flow request failed:', err);
       throw new Error(
         'GitHub device sign-in is unavailable. ' +
         'Please enter a Personal Access Token in the Token field instead.'

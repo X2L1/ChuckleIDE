@@ -471,11 +471,7 @@ async function loadSettings() {
     // Show token status
     try {
       const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
-      const statusEl = document.getElementById('github-token-status');
-      if (statusEl) {
-        statusEl.textContent = hasToken ? '✓ Token saved' : '';
-        statusEl.style.color = hasToken ? 'var(--green, #4caf50)' : 'var(--fg-dim)';
-      }
+      updateGitHubTokenStatus(hasToken);
     } catch { /* ignore */ }
 
     applyFallbackEditorSettings();
@@ -486,6 +482,13 @@ async function loadSettings() {
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
+}
+
+function updateGitHubTokenStatus(saved) {
+  const el = document.getElementById('github-token-status');
+  if (!el) return;
+  el.textContent = saved ? '✓ Token saved' : '';
+  el.style.color = saved ? 'var(--green, #4caf50)' : 'var(--fg-dim)';
 }
 
 function setupSettingsPanel() {
@@ -527,11 +530,7 @@ function setupSettingsPanel() {
     const btn = document.getElementById('btn-github-device-flow');
     btn.disabled = false;
     btn.textContent = 'Sign in with GitHub';
-    const statusEl = document.getElementById('github-token-status');
-    if (statusEl) {
-      statusEl.textContent = '✓ Token saved';
-      statusEl.style.color = 'var(--green, #4caf50)';
-    }
+    updateGitHubTokenStatus(true);
     showToast('Signed in with GitHub!', 'success');
   });
 
@@ -570,11 +569,7 @@ async function saveSettings() {
   if (githubToken) {
     await window.ftcIDE.credentials.setGitHubToken(githubToken);
     document.getElementById('setting-github-token').value = '';
-    const statusEl = document.getElementById('github-token-status');
-    if (statusEl) {
-      statusEl.textContent = '✓ Token saved';
-      statusEl.style.color = 'var(--green, #4caf50)';
-    }
+    updateGitHubTokenStatus(true);
   }
 
   // Apply to Monaco
