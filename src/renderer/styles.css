@@ -1418,6 +1418,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   font-family: var(--font-mono);
 }
 .ob-waypoint span { color: var(--fg-dim); min-width: 24px; }
+.ob-control-point { border-left: 2px solid #da70d6; padding-left: 4px; margin-left: 4px; }
+.ob-path-section-label { font-size: 10px; text-transform: uppercase; color: var(--fg-dim); letter-spacing: 0.06em; margin-top: 6px; }
+.ob-interp-select { font-size: 11px; padding: 2px 4px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--fg-main); }
 .text-input.tiny { width: 60px; padding: 2px 4px; font-size: 11px; }
 .btn-secondary.tiny { font-size: 10px; padding: 2px 8px; }
 .remove-block.tiny { font-size: 11px; padding: 0 2px; }
