@@ -210,7 +210,7 @@ body.platform-linux #window-controls { display: flex; }
   text-align: left;
   font-size: 12px;
   padding: 6px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 .top-menu-item:hover { background: var(--bg-hover); }

@@ -1427,16 +1427,16 @@ function bindMenuActions() {
       if (parentMenu) parentMenu.open = false;
     });
   });
-  document.querySelectorAll('.top-menu-group > summary').forEach((summary) => {
-    summary.addEventListener('click', () => {
-      const current = summary.parentElement;
-      document.querySelectorAll('.top-menu-group').forEach((group) => {
-        if (group !== current) group.open = false;
+  document.querySelectorAll('.top-menu-group').forEach((group) => {
+    group.addEventListener('toggle', () => {
+      if (!group.open) return;
+      document.querySelectorAll('.top-menu-group').forEach((otherGroup) => {
+        if (otherGroup !== group) otherGroup.open = false;
       });
     });
   });
   document.addEventListener('click', (event) => {
-    if (event.target.closest('#top-menu-bar')) return;
+    if (event.target.closest('.top-menu-group')) return;
     document.querySelectorAll('.top-menu-group').forEach((group) => {
       group.open = false;
     });
