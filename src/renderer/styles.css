@@ -681,7 +681,7 @@ body.bottom-panel-hidden #main-layout {
   overflow-y: auto;
 }
 
-.welcome-logo svg { display: block; margin: 0 auto 16px; }
+.welcome-logo svg, .welcome-logo img { display: block; margin: 0 auto 16px; }
 .welcome-screen h1 { font-size: 28px; font-weight: 700; color: var(--fg-bright); margin-bottom: 8px; }
 .welcome-subtitle { color: var(--fg-dim); margin-bottom: 40px; font-size: 15px; }
 .welcome-actions { display: flex; gap: 48px; flex-wrap: wrap; justify-content: center; }
