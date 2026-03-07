@@ -468,13 +468,11 @@ async function loadSettings() {
     setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
 
-    // Show token status (check both stored and external)
+    // Show token status
     try {
-      const hasStored = await window.ftcIDE.credentials.hasGitHubToken();
-      if (hasStored) {
-        // Check if it came from external source (no stored secret, but hasGitHubToken is true)
-        const ext = await window.ftcIDE.credentials.detectExternalToken();
-        updateGitHubTokenStatus(true, ext ? ext.source : undefined);
+      const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
+      if (hasToken) {
+        updateGitHubTokenStatus(true);
       } else {
         updateGitHubTokenStatus(false);
       }
@@ -523,7 +521,7 @@ function setupSettingsPanel() {
         extStatus.style.color = 'var(--green, #4caf50)';
         showToast(`Token imported from ${result.source}`, 'success');
       } else {
-        extStatus.textContent = 'No external token found. Run "gh auth login" in a terminal, or set the GITHUB_TOKEN environment variable, then try again.';
+        extStatus.textContent = 'No external token found. Run "gh auth login" in a terminal, or set GH_TOKEN / GITHUB_TOKEN, then try again.';
         extStatus.style.color = 'var(--fg-dim)';
         showToast('No external token found', 'warning');
       }
