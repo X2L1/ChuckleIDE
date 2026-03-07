@@ -21,7 +21,7 @@ class GitManager {
   }
 
   _buildAuthHeader(token) {
-    const value = Buffer.from(`oauth2:${token}`, 'utf8').toString('base64');
+    const value = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');
     return `Authorization: Basic ${value}`;
   }
 
