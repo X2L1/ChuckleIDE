@@ -20,16 +20,41 @@ class GitManager {
     return this._gitInstances.get(repoPath);
   }
 
-  _buildAuthHeader(token) {
-    const normalized = String(token || '').trim();
-    const username = /^(ghs_|ghu_)/.test(normalized) ? 'x-access-token' : 'git';
-    const value = Buffer.from(`${username}:${normalized}`, 'utf8').toString('base64');
+  _buildAuthHeader(token, username) {
+    const value = Buffer.from(`${username}:${token}`, 'utf8').toString('base64');
     return `Authorization: Basic ${value}`;
+  }
+
+  _isAuthError(error) {
+    const message = String((error && error.message) || '').toLowerCase();
+    return (
+      message.includes('authentication failed') ||
+      message.includes('auth failed') ||
+      message.includes('invalid username or password') ||
+      message.includes('http basic: access denied') ||
+      message.includes('could not read username') ||
+      message.includes('401')
+    );
   }
 
   async _runWithToken(git, args, token) {
     if (!token) return git.raw(args);
-    return git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(token)}`, ...args]);
+    const normalized = String(token).trim();
+    // ghs_/ghu_ tokens are GitHub App/user access tokens and commonly use x-access-token.
+    const usesXAccessTokenUsername = /^(ghs_|ghu_)/.test(normalized);
+    const preferredUsername = usesXAccessTokenUsername ? 'x-access-token' : 'git';
+    const fallbackUsername = usesXAccessTokenUsername ? 'git' : 'x-access-token';
+    try {
+      return await git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(normalized, preferredUsername)}`, ...args]);
+    } catch (firstError) {
+      if (!this._isAuthError(firstError)) throw firstError;
+      try {
+        return await git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(normalized, fallbackUsername)}`, ...args]);
+      } catch (secondError) {
+        const reason = secondError?.message || `Authentication failed (${secondError?.name || 'Error'})`;
+        throw new Error(`Git authentication failed using usernames [${preferredUsername}, ${fallbackUsername}]: ${reason}`);
+      }
+    }
   }
 
   /** Initialize a new git repository */
