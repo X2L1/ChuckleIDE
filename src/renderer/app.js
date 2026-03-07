@@ -1399,35 +1399,51 @@ function applyColorMode(mode) {
 async function promptNewFile() {
   const name = prompt('File name:');
   if (!name) return;
-  const dir = state.projectPath || '.';
+  const dir = state.teamCodePath || state.projectPath || '.';
   const filePath = `${dir}/${name}`;
-  await window.ftcIDE.fs.createFile(filePath, '');
-  refreshFileTree();
-  openFile(filePath);
+  try {
+    await window.ftcIDE.fs.createFile(filePath, '');
+    await refreshFileTree();
+    await openFile(filePath);
+  } catch (err) {
+    showToast(`Failed to create file: ${err.message}`);
+  }
 }
 
 async function promptNewFileIn(dir) {
   const name = prompt('File name:');
   if (!name) return;
   const filePath = `${dir}/${name}`;
-  await window.ftcIDE.fs.createFile(filePath, '');
-  refreshFileTree();
-  openFile(filePath);
+  try {
+    await window.ftcIDE.fs.createFile(filePath, '');
+    await refreshFileTree();
+    await openFile(filePath);
+  } catch (err) {
+    showToast(`Failed to create file: ${err.message}`);
+  }
 }
 
 async function promptNewFolder() {
   const name = prompt('Folder name:');
   if (!name) return;
-  const dir = state.projectPath || '.';
-  await window.ftcIDE.fs.createDir(`${dir}/${name}`);
-  refreshFileTree();
+  const dir = state.teamCodePath || state.projectPath || '.';
+  try {
+    await window.ftcIDE.fs.createDir(`${dir}/${name}`);
+    await refreshFileTree();
+  } catch (err) {
+    showToast(`Failed to create folder: ${err.message}`);
+  }
 }
 
 async function promptNewFolderIn(dir) {
   const name = prompt('Folder name:');
   if (!name) return;
-  await window.ftcIDE.fs.createDir(`${dir}/${name}`);
-  refreshFileTree();
+  try {
+    await window.ftcIDE.fs.createDir(`${dir}/${name}`);
+    await refreshFileTree();
+  } catch (err) {
+    showToast(`Failed to create folder: ${err.message}`);
+  }
 }
 
 async function promptRename(filePath, oldName) {
