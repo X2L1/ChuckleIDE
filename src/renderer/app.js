@@ -22,6 +22,47 @@ let fallbackEditor = null;
 let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
+const FALLBACK_AUTOCOMPLETE_ITEMS = [
+  '@Autonomous',
+  '@TeleOp',
+  'hardwareMap.get',
+  'telemetry.addData',
+  'telemetry.update',
+  'waitForStart',
+  'opModeIsActive',
+  'idle',
+  'sleep',
+  'gamepad1',
+  'gamepad2',
+  'left_stick_x',
+  'left_stick_y',
+  'right_stick_x',
+  'right_stick_y',
+  'DcMotor',
+  'Servo',
+  'ElapsedTime',
+  'RUN_TO_POSITION',
+  'STOP_AND_RESET_ENCODER',
+  'RUN_USING_ENCODER',
+  'BRAKE',
+  'FLOAT',
+  'public',
+  'private',
+  'protected',
+  'class',
+  'extends',
+  'implements',
+  'new',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'switch',
+  'case',
+  'try',
+  'catch'
+];
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -145,6 +186,7 @@ function initFallbackEditor() {
   if (!fallbackEditor) return;
 
   applyFallbackEditorSettings();
+  fallbackEditor.addEventListener('keydown', handleFallbackEditorKeydown);
   fallbackEditor.addEventListener('input', () => {
     if (isSettingFallbackContent || !state.activeFile) return;
     const info = state.openFiles.get(state.activeFile);
@@ -170,6 +212,75 @@ function applyFallbackEditorSettings() {
   const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
   fallbackEditor.style.tabSize = String(tabSize);
   fallbackEditor.style.whiteSpace = state.settings['editor.wordWrap'] === 'on' ? 'pre-wrap' : 'pre';
+}
+
+function handleFallbackEditorKeydown(e) {
+  if (!fallbackEditor || !state.activeFile) return;
+  if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    if (tryApplyFallbackAutocomplete()) return;
+    const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
+    const insertion = ' '.repeat(tabSize);
+    const start = fallbackEditor.selectionStart ?? 0;
+    const end = fallbackEditor.selectionEnd ?? start;
+    isSettingFallbackContent = true;
+    fallbackEditor.setRangeText(insertion, start, end, 'end');
+    isSettingFallbackContent = false;
+    syncFallbackEditorContent();
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === ' ') {
+    e.preventDefault();
+    if (!tryApplyFallbackAutocomplete()) {
+      showToast('No autocomplete suggestions found', 'info');
+    }
+  }
+}
+
+function tryApplyFallbackAutocomplete() {
+  if (!fallbackEditor || fallbackEditor.selectionStart !== fallbackEditor.selectionEnd) return false;
+  const context = getFallbackAutocompleteContext();
+  if (!context) return false;
+  const suggestion = getFallbackAutocompleteSuggestion(context.prefix);
+  if (!suggestion) return false;
+  isSettingFallbackContent = true;
+  fallbackEditor.setRangeText(suggestion, context.start, context.end, 'end');
+  isSettingFallbackContent = false;
+  syncFallbackEditorContent();
+  return true;
+}
+
+function getFallbackAutocompleteContext() {
+  if (!fallbackEditor) return null;
+  const cursor = fallbackEditor.selectionStart ?? 0;
+  const before = fallbackEditor.value.slice(0, cursor);
+  const match = before.match(/[@\w.]+$/);
+  if (!match || !match[0]) return null;
+  return { prefix: match[0], start: cursor - match[0].length, end: cursor };
+}
+
+function getFallbackAutocompleteSuggestion(prefix) {
+  const language = getLanguageForFile(state.activeFile || '');
+  const items = language === 'java'
+    ? FALLBACK_AUTOCOMPLETE_ITEMS
+    : ['function', 'const', 'let', 'class', 'return', 'if', 'else', 'for', 'while'];
+  const lowerPrefix = prefix.toLowerCase();
+  return items.find((item) => {
+    const lowerItem = item.toLowerCase();
+    return lowerItem.startsWith(lowerPrefix) && lowerItem !== lowerPrefix;
+  }) || null;
+}
+
+function syncFallbackEditorContent() {
+  if (!fallbackEditor || !state.activeFile) return;
+  const info = state.openFiles.get(state.activeFile);
+  if (!info) return;
+  info.modified = true;
+  info.content = fallbackEditor.value;
+  updateTabModified(state.activeFile, true);
+  updateOutline();
+  updateFallbackCursorPosition();
 }
 
 function registerJavaCompletions() {
