@@ -20,6 +20,7 @@ const state = {
 let monacoEditor = null;
 let fallbackEditor = null;
 let fallbackHighlight = null;
+let fallbackHighlightFrame = null;
 let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
@@ -79,7 +80,6 @@ const FALLBACK_JAVA_FTC_TERMS = new Set([
   'DcMotor', 'Servo', 'ElapsedTime', 'hardwareMap', 'telemetry', 'waitForStart',
   'opModeIsActive', 'gamepad1', 'gamepad2'
 ]);
-const FALLBACK_JAVA_TOKEN_PATTERN = /\/\/.*$|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|@[A-Za-z_]\w*|\b[A-Za-z_]\w*\b/gm;
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -205,7 +205,7 @@ function initFallbackEditor() {
   if (!fallbackEditor) return;
 
   applyFallbackEditorSettings();
-  updateFallbackHighlight();
+  requestFallbackHighlightUpdate();
   fallbackEditor.addEventListener('keydown', handleFallbackEditorKeydown);
   fallbackEditor.addEventListener('input', () => {
     if (isSettingFallbackContent || !state.activeFile) return;
@@ -216,7 +216,7 @@ function initFallbackEditor() {
     updateTabModified(state.activeFile, true);
     updateOutline();
     updateFallbackCursorPosition();
-    updateFallbackHighlight();
+    requestFallbackHighlightUpdate();
     scheduleActiveDiagnostics(state.activeFile);
   });
   fallbackEditor.addEventListener('scroll', syncFallbackHighlightScroll);
@@ -309,16 +309,31 @@ function syncFallbackEditorContent() {
   updateTabModified(state.activeFile, true);
   updateOutline();
   updateFallbackCursorPosition();
-  updateFallbackHighlight();
+  requestFallbackHighlightUpdate();
+}
+
+function requestFallbackHighlightUpdate() {
+  if (fallbackHighlightFrame !== null) return;
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    updateFallbackHighlight();
+    return;
+  }
+  fallbackHighlightFrame = window.requestAnimationFrame(() => {
+    fallbackHighlightFrame = null;
+    updateFallbackHighlight();
+  });
 }
 
 function updateFallbackHighlight() {
   if (!fallbackEditor || !fallbackHighlight) return;
   const code = fallbackEditor.value || '';
   const language = getLanguageForFile(state.activeFile || '');
-  const highlighted = language === 'java'
-    ? highlightFallbackJavaCode(code)
-    : escapeFallbackHtml(code);
+  if (language !== 'java') {
+    fallbackHighlight.textContent = code || ' ';
+    syncFallbackHighlightScroll();
+    return;
+  }
+  const highlighted = highlightFallbackJavaCode(code);
   fallbackHighlight.innerHTML = highlighted || '&nbsp;';
   syncFallbackHighlightScroll();
 }
@@ -330,10 +345,10 @@ function syncFallbackHighlightScroll() {
 }
 
 function highlightFallbackJavaCode(code) {
+  const tokenPattern = /\/\/.*$|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|@[A-Za-z_]\w*|\b[A-Za-z_]\w*\b/gm;
   let html = '';
   let cursor = 0;
-  FALLBACK_JAVA_TOKEN_PATTERN.lastIndex = 0;
-  for (const match of code.matchAll(FALLBACK_JAVA_TOKEN_PATTERN)) {
+  for (const match of code.matchAll(tokenPattern)) {
     const index = match.index ?? 0;
     const token = match[0];
     html += escapeFallbackHtml(code.slice(cursor, index));
@@ -358,7 +373,9 @@ function escapeFallbackHtml(text) {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function registerJavaCompletions() {
@@ -898,7 +915,7 @@ function activateTab(filePath) {
     isSettingFallbackContent = true;
     fallbackEditor.value = info.content || '';
     isSettingFallbackContent = false;
-    updateFallbackHighlight();
+    requestFallbackHighlightUpdate();
     fallbackEditor.focus();
     updateFallbackCursorPosition();
   }
