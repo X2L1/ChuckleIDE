@@ -22,6 +22,9 @@ let selectedTemplateId = null;
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Tag <body> with the current platform so CSS can respond
+  document.body.classList.add(`platform-${window.ftcIDE.platform}`);
+
   loadSettings();
   bindMenuActions();
   bindSidebarNav();
@@ -33,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindWelcomeLinks();
   bindModals();
   bindKeyboardShortcuts();
+  bindWindowControls();
   setupTemplatePanel();
   setupCopilotPanel();
   setupSettingsPanel();
@@ -1387,6 +1391,59 @@ function bindMenuActions() {
   });
 }
 
+// ── Window Controls (Linux frameless) ─────────────────────
+function bindWindowControls() {
+  const min = document.getElementById('btn-win-minimize');
+  const max = document.getElementById('btn-win-maximize');
+  const cls = document.getElementById('btn-win-close');
+  if (min) min.addEventListener('click', () => window.ftcIDE.window.minimize());
+  if (max) max.addEventListener('click', () => window.ftcIDE.window.maximize());
+  if (cls) cls.addEventListener('click', () => window.ftcIDE.window.close());
+}
+
+// ── Input Prompt (replaces native prompt()) ───────────────
+function showInputPrompt(title, defaultValue) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('modal-input-prompt');
+    const input   = document.getElementById('input-prompt-value');
+    const btnOk   = document.getElementById('btn-input-prompt-ok');
+    const btnCancel = document.getElementById('btn-input-prompt-cancel');
+    const closeBtn  = overlay.querySelector('.modal-close');
+
+    document.getElementById('input-prompt-title').textContent = title || 'Input';
+    input.value = defaultValue || '';
+    overlay.style.display = 'flex';
+    input.focus();
+    input.select();
+
+    function finish(value) {
+      overlay.style.display = 'none';
+      cleanup();
+      resolve(value);
+    }
+    function onOk() { finish(input.value || null); }
+    function onCancel() { finish(null); }
+    function onKey(e) {
+      if (e.key === 'Enter') { e.preventDefault(); onOk(); }
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    }
+    function onOverlay(e) { if (e.target === overlay) onCancel(); }
+    function cleanup() {
+      btnOk.removeEventListener('click', onOk);
+      btnCancel.removeEventListener('click', onCancel);
+      closeBtn.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKey);
+      overlay.removeEventListener('click', onOverlay);
+    }
+
+    btnOk.addEventListener('click', onOk);
+    btnCancel.addEventListener('click', onCancel);
+    closeBtn.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', onOverlay);
+  });
+}
+
 function applyColorMode(mode) {
   if (mode === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
@@ -1397,9 +1454,13 @@ function applyColorMode(mode) {
 
 // ── File Operations Helpers ───────────────────────────────
 async function promptNewFile() {
-  const name = prompt('File name:');
+  if (!state.teamCodePath && !state.projectPath) {
+    showToast('Open a project first', 'warning');
+    return;
+  }
+  const name = await showInputPrompt('New File Name');
   if (!name) return;
-  const dir = state.teamCodePath || state.projectPath || '.';
+  const dir = state.teamCodePath || state.projectPath;
   const filePath = `${dir}/${name}`;
   try {
     await window.ftcIDE.fs.createFile(filePath, '');
@@ -1411,7 +1472,7 @@ async function promptNewFile() {
 }
 
 async function promptNewFileIn(dir) {
-  const name = prompt('File name:');
+  const name = await showInputPrompt('New File Name');
   if (!name) return;
   const filePath = `${dir}/${name}`;
   try {
@@ -1424,9 +1485,13 @@ async function promptNewFileIn(dir) {
 }
 
 async function promptNewFolder() {
-  const name = prompt('Folder name:');
+  if (!state.teamCodePath && !state.projectPath) {
+    showToast('Open a project first', 'warning');
+    return;
+  }
+  const name = await showInputPrompt('New Folder Name');
   if (!name) return;
-  const dir = state.teamCodePath || state.projectPath || '.';
+  const dir = state.teamCodePath || state.projectPath;
   try {
     await window.ftcIDE.fs.createDir(`${dir}/${name}`);
     await refreshFileTree();
@@ -1436,7 +1501,7 @@ async function promptNewFolder() {
 }
 
 async function promptNewFolderIn(dir) {
-  const name = prompt('Folder name:');
+  const name = await showInputPrompt('New Folder Name');
   if (!name) return;
   try {
     await window.ftcIDE.fs.createDir(`${dir}/${name}`);
@@ -1447,15 +1512,19 @@ async function promptNewFolderIn(dir) {
 }
 
 async function promptRename(filePath, oldName) {
-  const newName = prompt('New name:', oldName);
+  const newName = await showInputPrompt('Rename', oldName);
   if (!newName || newName === oldName) return;
   const newPath = filePath.replace(oldName, newName);
-  await window.ftcIDE.fs.rename(filePath, newPath);
-  if (state.openFiles.has(filePath)) {
-    closeTab(filePath);
-    openFile(newPath);
+  try {
+    await window.ftcIDE.fs.rename(filePath, newPath);
+    if (state.openFiles.has(filePath)) {
+      closeTab(filePath);
+      await openFile(newPath);
+    }
+    await refreshFileTree();
+  } catch (err) {
+    showToast(`Rename failed: ${err.message}`);
   }
-  refreshFileTree();
 }
 
 async function confirmDelete(filePath) {

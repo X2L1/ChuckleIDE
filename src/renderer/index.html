@@ -34,6 +34,12 @@
       <span class="icon">↑</span> Update
     </button>
   </div>
+  <!-- Window controls for Linux (macOS/Windows use native overlays) -->
+  <div id="window-controls">
+    <button class="window-ctrl-btn" id="btn-win-minimize" title="Minimize">&#x2500;</button>
+    <button class="window-ctrl-btn" id="btn-win-maximize" title="Maximize">&#x25A1;</button>
+    <button class="window-ctrl-btn close" id="btn-win-close" title="Close">&#x2715;</button>
+  </div>
 </div>
 
 <!-- ═══════════════════════════ MAIN LAYOUT ═══════════════════════ -->
@@ -1021,6 +1027,25 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal-close="commit">Cancel</button>
       <button class="btn-primary" id="btn-do-commit">Commit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Input Prompt Modal (replaces native prompt()) -->
+<div id="modal-input-prompt" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="input-prompt-title">Input</span>
+      <button class="modal-close" data-modal-close="input-prompt">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <input type="text" id="input-prompt-value" class="text-input" placeholder="" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="btn-input-prompt-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-input-prompt-ok">OK</button>
     </div>
   </div>
 </div>
