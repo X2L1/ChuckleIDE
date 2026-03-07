@@ -39,15 +39,16 @@ public class PedroTuningOpMode extends LinearOpMode {
     private static final double FORWARD_DISTANCE  = 48.0;
     private static final double STRAFE_DISTANCE   = 24.0;
     private static final double TURN_ANGLE        = 90.0;
+    private static final double TURN_PATH_EPSILON = 0.01;
 
     // ── Starting pose ──
     private final Pose startPose = new Pose(0, 0, Math.toRadians(0));
 
     @Override
     public void runOpMode() throws InterruptedException {
-        // Initialize follower with your constants
-        // Make sure FConstants and LConstants classes exist in your project.
-        // Constants.setConstants(FConstants.class, LConstants.class);
+        // Initialize follower with your constants.
+        // Uncomment the line below and ensure FConstants and LConstants classes exist in your project.
+        Constants.setConstants(FConstants.class, LConstants.class);
         follower = new Follower(hardwareMap);
         follower.setStartingPose(startPose);
         timer = new Timer();
@@ -148,7 +149,7 @@ public class PedroTuningOpMode extends LinearOpMode {
         currentPose = follower.getPose();
         Path turnPath = new Path(new BezierLine(
                 new Point(currentPose),
-                new Point(currentPose.getX() + 0.01, currentPose.getY(), Point.CARTESIAN)
+                new Point(currentPose.getX() + TURN_PATH_EPSILON, currentPose.getY(), Point.CARTESIAN)
         ));
         turnPath.setLinearHeadingInterpolation(
                 currentPose.getHeading(),

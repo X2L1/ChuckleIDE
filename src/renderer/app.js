@@ -2648,7 +2648,7 @@ function generateLUTCode() {
   code += `    public static ${valueType} getOrDefault(${keyType} key, ${valueType} defaultValue) {\n`;
   code += '        return TABLE.getOrDefault(key, defaultValue);\n';
   code += '    }\n\n';
-  code += '    public static boolean containsKey(' + keyType + ' key) {\n';
+  code += `    public static boolean containsKey(${keyType} key) {\n`;
   code += '        return TABLE.containsKey(key);\n';
   code += '    }\n';
   code += '}\n';
