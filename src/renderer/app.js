@@ -1399,35 +1399,51 @@ function applyColorMode(mode) {
 async function promptNewFile() {
   const name = prompt('File name:');
   if (!name) return;
-  const dir = state.projectPath || '.';
+  const dir = state.teamCodePath || state.projectPath || '.';
   const filePath = `${dir}/${name}`;
-  await window.ftcIDE.fs.createFile(filePath, '');
-  refreshFileTree();
-  openFile(filePath);
+  try {
+    await window.ftcIDE.fs.createFile(filePath, '');
+    await refreshFileTree();
+    await openFile(filePath);
+  } catch (err) {
+    showToast(`Failed to create file: ${err.message}`);
+  }
 }
 
 async function promptNewFileIn(dir) {
   const name = prompt('File name:');
   if (!name) return;
   const filePath = `${dir}/${name}`;
-  await window.ftcIDE.fs.createFile(filePath, '');
-  refreshFileTree();
-  openFile(filePath);
+  try {
+    await window.ftcIDE.fs.createFile(filePath, '');
+    await refreshFileTree();
+    await openFile(filePath);
+  } catch (err) {
+    showToast(`Failed to create file: ${err.message}`);
+  }
 }
 
 async function promptNewFolder() {
   const name = prompt('Folder name:');
   if (!name) return;
-  const dir = state.projectPath || '.';
-  await window.ftcIDE.fs.createDir(`${dir}/${name}`);
-  refreshFileTree();
+  const dir = state.teamCodePath || state.projectPath || '.';
+  try {
+    await window.ftcIDE.fs.createDir(`${dir}/${name}`);
+    await refreshFileTree();
+  } catch (err) {
+    showToast(`Failed to create folder: ${err.message}`);
+  }
 }
 
 async function promptNewFolderIn(dir) {
   const name = prompt('Folder name:');
   if (!name) return;
-  await window.ftcIDE.fs.createDir(`${dir}/${name}`);
-  refreshFileTree();
+  try {
+    await window.ftcIDE.fs.createDir(`${dir}/${name}`);
+    await refreshFileTree();
+  } catch (err) {
+    showToast(`Failed to create folder: ${err.message}`);
+  }
 }
 
 async function promptRename(filePath, oldName) {
@@ -1627,6 +1643,11 @@ function bindHomeScreen() {
     'app-git-manager':       () => switchPanel('git'),
     'app-new-project':       () => showModal('new-project'),
     'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
+    'app-pedro-constants':   () => openAppView('pedro-constants'),
+    'app-lut-manager':       () => openAppView('lut-manager'),
+    'app-interplut-manager': () => openAppView('interplut-manager'),
+    'app-enum-manager':      () => openAppView('enum-manager'),
+    'app-object-manager':    () => openAppView('object-manager'),
     'home-open-project':     () => browseForProject(),
     'home-clone-repo':       () => showModal('clone')
   };
@@ -1652,6 +1673,11 @@ function openAppView(name) {
   if (name === 'path-visualizer') initPathVisualizer();
   if (name === 'ftc-dashboard') initDashboardView();
   if (name === 'panels') initPanelsView();
+  if (name === 'pedro-constants') initPedroConstantsManager();
+  if (name === 'lut-manager') initLUTManager();
+  if (name === 'interplut-manager') initInterpLUTManager();
+  if (name === 'enum-manager') initEnumManager();
+  if (name === 'object-manager') initObjectManager();
 }
 
 function closeAppView() {
@@ -2013,10 +2039,12 @@ function initOpModeBuilder() {
     obSteps.push({
       id: ++obIdCounter,
       type: 'path',
+      interpolation: 'linear',
       waypoints: [
         { x: 0, y: 0, heading: 0 },
         { x: 24, y: 0, heading: 0 }
-      ]
+      ],
+      controlPoints: []
     });
     renderOBSequence();
     updateOBPreview();
@@ -2070,6 +2098,8 @@ function renderOBSequence() {
     el.className = 'ob-step';
 
     if (step.type === 'path') {
+      if (!step.controlPoints) step.controlPoints = [];
+      if (!step.interpolation) step.interpolation = 'linear';
       el.innerHTML = `
         <div class="ob-step-header">
           <span class="ob-step-icon">🗺️</span>
@@ -2078,6 +2108,15 @@ function renderOBSequence() {
           <button class="remove-block" title="Remove">✕</button>
         </div>
         <div class="ob-step-body">
+          <div class="ob-step-row">
+            <label>Heading Interpolation:</label>
+            <select class="text-input ob-interp-select">
+              <option value="linear" ${step.interpolation === 'linear' ? 'selected' : ''}>Linear</option>
+              <option value="constant" ${step.interpolation === 'constant' ? 'selected' : ''}>Constant</option>
+              <option value="tangential" ${step.interpolation === 'tangential' ? 'selected' : ''}>Tangential</option>
+            </select>
+          </div>
+          <div class="ob-path-section-label">Waypoints</div>
           ${step.waypoints.map((wp, wi) => `
             <div class="ob-waypoint">
               <span>P${wi}:</span>
@@ -2088,13 +2127,34 @@ function renderOBSequence() {
             </div>
           `).join('')}
           <button class="btn-secondary tiny ob-add-wp">+ Waypoint</button>
+          <div class="ob-path-section-label">Control Points (for Bézier curves)</div>
+          ${step.controlPoints.map((cp, ci) => `
+            <div class="ob-waypoint ob-control-point">
+              <span>C${ci}:</span>
+              <input type="number" value="${cp.x}" data-ci="${ci}" data-field="x" title="X" class="text-input tiny" />
+              <input type="number" value="${cp.y}" data-ci="${ci}" data-field="y" title="Y" class="text-input tiny" />
+              <button class="remove-block tiny" data-remove-cp="${ci}">✕</button>
+            </div>
+          `).join('')}
+          <button class="btn-secondary tiny ob-add-cp">+ Control Point</button>
         </div>
       `;
 
-      el.querySelectorAll('.ob-waypoint input').forEach(input => {
+      el.querySelector('.ob-interp-select').addEventListener('change', (e) => {
+        step.interpolation = e.target.value;
+        updateOBPreview();
+      });
+      el.querySelectorAll('.ob-waypoint:not(.ob-control-point) input').forEach(input => {
         input.addEventListener('input', () => {
           const wi = parseInt(input.dataset.wi);
           step.waypoints[wi][input.dataset.field] = parseFloat(input.value) || 0;
+          updateOBPreview();
+        });
+      });
+      el.querySelectorAll('.ob-control-point input').forEach(input => {
+        input.addEventListener('input', () => {
+          const ci = parseInt(input.dataset.ci);
+          step.controlPoints[ci][input.dataset.field] = parseFloat(input.value) || 0;
           updateOBPreview();
         });
       });
@@ -2105,9 +2165,23 @@ function renderOBSequence() {
           updateOBPreview();
         });
       });
+      el.querySelectorAll('[data-remove-cp]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          step.controlPoints.splice(parseInt(btn.dataset.removeCp), 1);
+          renderOBSequence();
+          updateOBPreview();
+        });
+      });
       el.querySelector('.ob-add-wp').addEventListener('click', () => {
         const last = step.waypoints[step.waypoints.length - 1] || { x: 0, y: 0, heading: 0 };
         step.waypoints.push({ x: last.x + 12, y: last.y, heading: last.heading });
+        renderOBSequence();
+        updateOBPreview();
+      });
+      el.querySelector('.ob-add-cp').addEventListener('click', () => {
+        const first = step.waypoints[0] || { x: 0, y: 0 };
+        const last = step.waypoints[step.waypoints.length - 1] || { x: 24, y: 0 };
+        step.controlPoints.push({ x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 + 12 });
         renderOBSequence();
         updateOBPreview();
       });
@@ -2208,6 +2282,9 @@ function generateOpModeCode() {
     }
   }
 
+  // Check if any path has control points (needs BezierCurve import)
+  const hasControlPoints = obSteps.some(s => s.type === 'path' && s.controlPoints && s.controlPoints.length > 0);
+
   let code = '// Generated by ChuckleIDE OpMode Builder\n';
   code += 'package org.firstinspires.ftc.teamcode;\n\n';
   code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
@@ -2215,6 +2292,9 @@ function generateOpModeCode() {
   code += 'import com.pedropathing.follower.Follower;\n';
   code += 'import com.pedropathing.localization.Pose;\n';
   code += 'import com.pedropathing.pathgen.BezierLine;\n';
+  if (hasControlPoints) {
+    code += 'import com.pedropathing.pathgen.BezierCurve;\n';
+  }
   code += 'import com.pedropathing.pathgen.Path;\n';
   code += 'import com.pedropathing.pathgen.Point;\n\n';
   code += `@Autonomous(name = "${className}")\n`;
@@ -2243,14 +2323,50 @@ function generateOpModeCode() {
   let pathIndex = 0;
   for (const step of obSteps) {
     if (step.type === 'path' && step.waypoints.length >= 2) {
-      code += `        Path path${pathIndex} = new Path(\n`;
-      code += `            new BezierLine(\n`;
-      code += `                new Point(${step.waypoints[0].x}, ${step.waypoints[0].y}, Point.CARTESIAN),\n`;
-      code += `                new Point(${step.waypoints[step.waypoints.length - 1].x}, ${step.waypoints[step.waypoints.length - 1].y}, Point.CARTESIAN)\n`;
-      code += `            )\n`;
-      code += `        );\n`;
-      const lastWp = step.waypoints[step.waypoints.length - 1];
-      code += `        path${pathIndex}.setLinearHeadingInterpolation(Math.toRadians(${step.waypoints[0].heading}), Math.toRadians(${lastWp.heading}));\n\n`;
+      const cps = step.controlPoints || [];
+      const first = step.waypoints[0];
+      const last = step.waypoints[step.waypoints.length - 1];
+      const interp = step.interpolation || 'linear';
+
+      if (cps.length > 0) {
+        // BezierCurve: start, control points..., end
+        code += `        Path path${pathIndex} = new Path(\n`;
+        code += `            new BezierCurve(\n`;
+        code += `                new Point(${first.x}, ${first.y}, Point.CARTESIAN),\n`;
+        for (const cp of cps) {
+          code += `                new Point(${cp.x}, ${cp.y}, Point.CARTESIAN),\n`;
+        }
+        code += `                new Point(${last.x}, ${last.y}, Point.CARTESIAN)\n`;
+        code += `            )\n`;
+        code += `        );\n`;
+      } else if (step.waypoints.length > 2) {
+        // Multiple waypoints without explicit control points → use intermediate as control points in BezierCurve
+        code += `        Path path${pathIndex} = new Path(\n`;
+        code += `            new BezierCurve(\n`;
+        for (let wi = 0; wi < step.waypoints.length; wi++) {
+          const wp = step.waypoints[wi];
+          code += `                new Point(${wp.x}, ${wp.y}, Point.CARTESIAN)${wi < step.waypoints.length - 1 ? ',' : ''}\n`;
+        }
+        code += `            )\n`;
+        code += `        );\n`;
+      } else {
+        // Simple BezierLine for two waypoints
+        code += `        Path path${pathIndex} = new Path(\n`;
+        code += `            new BezierLine(\n`;
+        code += `                new Point(${first.x}, ${first.y}, Point.CARTESIAN),\n`;
+        code += `                new Point(${last.x}, ${last.y}, Point.CARTESIAN)\n`;
+        code += `            )\n`;
+        code += `        );\n`;
+      }
+
+      // Heading interpolation
+      if (interp === 'constant') {
+        code += `        path${pathIndex}.setConstantHeadingInterpolation(Math.toRadians(${first.heading}));\n\n`;
+      } else if (interp === 'tangential') {
+        code += `        path${pathIndex}.setTangentialHeadingInterpolation();\n\n`;
+      } else {
+        code += `        path${pathIndex}.setLinearHeadingInterpolation(Math.toRadians(${first.heading}), Math.toRadians(${last.heading}));\n\n`;
+      }
       pathIndex++;
     }
   }
@@ -2366,4 +2482,500 @@ function initPanelsView() {
     placeholder.style.display = 'none';
     showToast('Connecting to Panels...', 'info');
   });
+}
+
+// ── Pedro Constants Manager ───────────────────────────────
+let pcInitialized = false;
+
+function initPedroConstantsManager() {
+  if (pcInitialized) { updatePCPreview(); return; }
+  pcInitialized = true;
+
+  document.getElementById('pc-close').addEventListener('click', closeAppView);
+  document.getElementById('pc-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generatePedroConstantsCode());
+    showToast('Pedro constants code copied', 'success');
+  });
+  document.getElementById('pc-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generatePedroConstantsCode());
+  });
+  document.getElementById('pc-refresh').addEventListener('click', updatePCPreview);
+
+  // Bind all inputs to update preview
+  document.getElementById('pc-form').querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', updatePCPreview);
+  });
+
+  updatePCPreview();
+}
+
+function updatePCPreview() {
+  const el = document.getElementById('pc-preview');
+  if (el) el.textContent = generatePedroConstantsCode();
+}
+
+function generatePedroConstantsCode() {
+  const v = (id) => document.getElementById(id).value || '0';
+
+  let code = '// Generated by ChuckleIDE Pedro Constants Manager\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import com.pedropathing.localization.constants.ThreeWheelConstants;\n';
+  code += 'import com.pedropathing.follower.FollowerConstants;\n\n';
+
+  // FConstants
+  code += '/**\n * PedroPathing follower constants.\n * Tune these values using the PedroPathing tuning OpModes.\n */\n';
+  code += 'public class FConstants {\n';
+  code += '    static {\n';
+  code += `        FollowerConstants.xMovement = ${v('pc-xMovement')};\n`;
+  code += `        FollowerConstants.yMovement = ${v('pc-yMovement')};\n`;
+  code += `        FollowerConstants.forwardZeroPowerAcceleration = ${v('pc-fwdZeroAccel')};\n`;
+  code += `        FollowerConstants.lateralZeroPowerAcceleration = ${v('pc-latZeroAccel')};\n\n`;
+  code += `        FollowerConstants.translationalPIDFCoefficients.setCoefficients(${v('pc-transP')}, ${v('pc-transI')}, ${v('pc-transD')}, ${v('pc-transF')});\n`;
+  code += `        FollowerConstants.headingPIDFCoefficients.setCoefficients(${v('pc-headP')}, ${v('pc-headI')}, ${v('pc-headD')}, ${v('pc-headF')});\n`;
+  code += `        FollowerConstants.drivePIDFCoefficients.setCoefficients(${v('pc-driveP')}, ${v('pc-driveI')}, ${v('pc-driveD')}, ${v('pc-driveF')});\n`;
+  code += '    }\n';
+  code += '}\n\n';
+
+  // LConstants
+  const ticksPerRev = v('pc-ticksPerRev');
+  const wheelRadius = v('pc-wheelRadius');
+  code += '/**\n * PedroPathing localization constants for three dead-wheel odometry.\n */\n';
+  code += 'public class LConstants {\n';
+  code += '    static {\n';
+  code += `        ThreeWheelConstants.forwardTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
+  code += `        ThreeWheelConstants.strafeTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
+  code += `        ThreeWheelConstants.turnTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
+  code += `        ThreeWheelConstants.leftY = ${v('pc-leftY')};\n`;
+  code += `        ThreeWheelConstants.rightY = ${v('pc-rightY')};\n`;
+  code += `        ThreeWheelConstants.strafeX = ${v('pc-strafeX')};\n`;
+  code += '    }\n';
+  code += '}\n';
+
+  return code;
+}
+
+// ── LUT Manager ───────────────────────────────────────────
+let lutInitialized = false;
+let lutEntries = [];
+
+function initLUTManager() {
+  if (lutInitialized) { updateLUTPreview(); return; }
+  lutInitialized = true;
+
+  lutEntries = [
+    { key: '0', value: '0' },
+    { key: '100', value: '1.0' }
+  ];
+
+  document.getElementById('lut-close').addEventListener('click', closeAppView);
+  document.getElementById('lut-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateLUTCode());
+    showToast('LUT code copied', 'success');
+  });
+  document.getElementById('lut-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateLUTCode());
+  });
+  document.getElementById('lut-refresh').addEventListener('click', updateLUTPreview);
+  document.getElementById('lut-class-name').addEventListener('input', updateLUTPreview);
+  document.getElementById('lut-key-type').addEventListener('change', updateLUTPreview);
+  document.getElementById('lut-value-type').addEventListener('change', updateLUTPreview);
+  document.getElementById('lut-add-row').addEventListener('click', () => {
+    lutEntries.push({ key: '', value: '' });
+    renderLUTTable();
+    updateLUTPreview();
+  });
+
+  renderLUTTable();
+  updateLUTPreview();
+}
+
+function renderLUTTable() {
+  const tbody = document.getElementById('lut-table-body');
+  tbody.innerHTML = '';
+  lutEntries.forEach((entry, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeHtml(entry.key)}" data-idx="${i}" data-field="key" class="text-input" /></td>
+      <td><input type="text" value="${escapeHtml(entry.value)}" data-idx="${i}" data-field="value" class="text-input" /></td>
+      <td><button class="remove-block tiny" data-remove-lut="${i}">✕</button></td>
+    `;
+    tr.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => {
+        lutEntries[parseInt(input.dataset.idx)][input.dataset.field] = input.value;
+        updateLUTPreview();
+      });
+    });
+    tr.querySelector('[data-remove-lut]').addEventListener('click', () => {
+      lutEntries.splice(i, 1);
+      renderLUTTable();
+      updateLUTPreview();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function updateLUTPreview() {
+  const el = document.getElementById('lut-preview');
+  if (el) el.textContent = generateLUTCode();
+}
+
+function generateLUTCode() {
+  const className = document.getElementById('lut-class-name').value || 'MyLookupTable';
+  const keyType = document.getElementById('lut-key-type').value;
+  const valueType = document.getElementById('lut-value-type').value;
+
+  const boxedKey = keyType === 'int' ? 'Integer' : keyType === 'double' ? 'Double' : 'String';
+  const boxedVal = valueType === 'int' ? 'Integer' : valueType === 'double' ? 'Double' : 'String';
+
+  let code = '// Generated by ChuckleIDE LUT Manager\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import java.util.HashMap;\n';
+  code += 'import java.util.Map;\n\n';
+  code += `public class ${className} {\n\n`;
+  code += `    private static final Map<${boxedKey}, ${boxedVal}> TABLE = new HashMap<>();\n\n`;
+  code += '    static {\n';
+  for (const entry of lutEntries) {
+    if (entry.key !== '') {
+      const k = keyType === 'String' ? `"${entry.key}"` : entry.key;
+      const v = valueType === 'String' ? `"${entry.value}"` : entry.value;
+      code += `        TABLE.put(${k}, ${v});\n`;
+    }
+  }
+  code += '    }\n\n';
+  code += `    public static ${valueType} get(${keyType} key) {\n`;
+  code += '        return TABLE.get(key);\n';
+  code += '    }\n\n';
+  code += `    public static ${valueType} getOrDefault(${keyType} key, ${valueType} defaultValue) {\n`;
+  code += '        return TABLE.getOrDefault(key, defaultValue);\n';
+  code += '    }\n\n';
+  code += `    public static boolean containsKey(${keyType} key) {\n`;
+  code += '        return TABLE.containsKey(key);\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+// ── Interpolated LUT Manager ──────────────────────────────
+let ilutInitialized = false;
+let ilutEntries = [];
+
+function initInterpLUTManager() {
+  if (ilutInitialized) { updateILUTPreview(); return; }
+  ilutInitialized = true;
+
+  ilutEntries = [
+    { input: '0', output: '0' },
+    { input: '50', output: '0.5' },
+    { input: '100', output: '1.0' }
+  ];
+
+  document.getElementById('ilut-close').addEventListener('click', closeAppView);
+  document.getElementById('ilut-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateILUTCode());
+    showToast('InterpLUT code copied', 'success');
+  });
+  document.getElementById('ilut-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateILUTCode());
+  });
+  document.getElementById('ilut-refresh').addEventListener('click', updateILUTPreview);
+  document.getElementById('ilut-class-name').addEventListener('input', updateILUTPreview);
+  document.getElementById('ilut-description').addEventListener('input', updateILUTPreview);
+  document.getElementById('ilut-add-row').addEventListener('click', () => {
+    ilutEntries.push({ input: '', output: '' });
+    renderILUTTable();
+    updateILUTPreview();
+  });
+
+  renderILUTTable();
+  updateILUTPreview();
+}
+
+function renderILUTTable() {
+  const tbody = document.getElementById('ilut-table-body');
+  tbody.innerHTML = '';
+  ilutEntries.forEach((entry, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" step="any" value="${entry.input}" data-idx="${i}" data-field="input" class="text-input" /></td>
+      <td><input type="number" step="any" value="${entry.output}" data-idx="${i}" data-field="output" class="text-input" /></td>
+      <td><button class="remove-block tiny" data-remove-ilut="${i}">✕</button></td>
+    `;
+    tr.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => {
+        ilutEntries[parseInt(input.dataset.idx)][input.dataset.field] = input.value;
+        updateILUTPreview();
+      });
+    });
+    tr.querySelector('[data-remove-ilut]').addEventListener('click', () => {
+      ilutEntries.splice(i, 1);
+      renderILUTTable();
+      updateILUTPreview();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function updateILUTPreview() {
+  const el = document.getElementById('ilut-preview');
+  if (el) el.textContent = generateILUTCode();
+}
+
+function generateILUTCode() {
+  const className = document.getElementById('ilut-class-name').value || 'MyInterpLUT';
+  const desc = document.getElementById('ilut-description').value || '';
+
+  let code = '// Generated by ChuckleIDE Interpolated LUT Manager\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import java.util.TreeMap;\n';
+  code += 'import java.util.Map;\n\n';
+  if (desc) code += `/** ${desc} */\n`;
+  code += `public class ${className} {\n\n`;
+  code += '    private static final TreeMap<Double, Double> TABLE = new TreeMap<>();\n\n';
+  code += '    static {\n';
+  for (const entry of ilutEntries) {
+    if (entry.input !== '') {
+      code += `        TABLE.put(${entry.input}, ${entry.output});\n`;
+    }
+  }
+  code += '    }\n\n';
+
+  code += '    /**\n';
+  code += '     * Get the interpolated value for the given input.\n';
+  code += '     * If the input is between two known points, linearly interpolates.\n';
+  code += '     * If outside the range, returns the nearest boundary value.\n';
+  code += '     */\n';
+  code += '    public static double get(double input) {\n';
+  code += '        if (TABLE.containsKey(input)) return TABLE.get(input);\n';
+  code += '        Map.Entry<Double, Double> floor = TABLE.floorEntry(input);\n';
+  code += '        Map.Entry<Double, Double> ceil = TABLE.ceilingEntry(input);\n';
+  code += '        if (floor == null) return ceil.getValue();\n';
+  code += '        if (ceil == null) return floor.getValue();\n';
+  code += '        double t = (input - floor.getKey()) / (ceil.getKey() - floor.getKey());\n';
+  code += '        return floor.getValue() + t * (ceil.getValue() - floor.getValue());\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+// ── Enum Manager ──────────────────────────────────────────
+let enumInitialized = false;
+let enumEntries = [];
+
+function initEnumManager() {
+  if (enumInitialized) { updateEnumPreview(); return; }
+  enumInitialized = true;
+
+  enumEntries = [
+    { name: 'IDLE', value: '' },
+    { name: 'RUNNING', value: '' },
+    { name: 'DONE', value: '' }
+  ];
+
+  document.getElementById('enum-close').addEventListener('click', closeAppView);
+  document.getElementById('enum-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateEnumCode());
+    showToast('Enum code copied', 'success');
+  });
+  document.getElementById('enum-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateEnumCode());
+  });
+  document.getElementById('enum-refresh').addEventListener('click', updateEnumPreview);
+  document.getElementById('enum-class-name').addEventListener('input', updateEnumPreview);
+  document.getElementById('enum-has-value').addEventListener('change', () => {
+    renderEnumTable();
+    updateEnumPreview();
+  });
+  document.getElementById('enum-add-row').addEventListener('click', () => {
+    enumEntries.push({ name: '', value: '' });
+    renderEnumTable();
+    updateEnumPreview();
+  });
+
+  renderEnumTable();
+  updateEnumPreview();
+}
+
+function renderEnumTable() {
+  const hasValue = document.getElementById('enum-has-value').value;
+  const valueHeader = document.getElementById('enum-value-header');
+  valueHeader.style.display = hasValue !== 'none' ? '' : 'none';
+
+  const tbody = document.getElementById('enum-table-body');
+  tbody.innerHTML = '';
+  enumEntries.forEach((entry, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeHtml(entry.name)}" data-idx="${i}" data-field="name" class="text-input" /></td>
+      ${hasValue !== 'none' ? `<td><input type="text" value="${escapeHtml(entry.value)}" data-idx="${i}" data-field="value" class="text-input" /></td>` : ''}
+      <td><button class="remove-block tiny" data-remove-enum="${i}">✕</button></td>
+    `;
+    tr.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => {
+        enumEntries[parseInt(input.dataset.idx)][input.dataset.field] = input.value;
+        updateEnumPreview();
+      });
+    });
+    tr.querySelector('[data-remove-enum]').addEventListener('click', () => {
+      enumEntries.splice(i, 1);
+      renderEnumTable();
+      updateEnumPreview();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function updateEnumPreview() {
+  const el = document.getElementById('enum-preview');
+  if (el) el.textContent = generateEnumCode();
+}
+
+function generateEnumCode() {
+  const className = document.getElementById('enum-class-name').value || 'RobotState';
+  const hasValue = document.getElementById('enum-has-value').value;
+
+  let code = '// Generated by ChuckleIDE Enum Manager\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += `public enum ${className} {\n`;
+
+  const validEntries = enumEntries.filter(e => e.name.trim());
+  if (hasValue === 'none') {
+    code += validEntries.map(e => `    ${e.name}`).join(',\n');
+    if (validEntries.length > 0) code += ';\n';
+  } else {
+    code += validEntries.map(e => {
+      const val = hasValue === 'String' ? `"${e.value}"` : (e.value || '0');
+      return `    ${e.name}(${val})`;
+    }).join(',\n');
+    if (validEntries.length > 0) code += ';\n';
+
+    code += `\n    private final ${hasValue} value;\n\n`;
+    code += `    ${className}(${hasValue} value) {\n`;
+    code += '        this.value = value;\n';
+    code += '    }\n\n';
+    code += `    public ${hasValue} getValue() {\n`;
+    code += '        return value;\n';
+    code += '    }\n';
+  }
+
+  code += '}\n';
+  return code;
+}
+
+// ── Object Manager ────────────────────────────────────────
+let objInitialized = false;
+let objFields = [];
+
+function initObjectManager() {
+  if (objInitialized) { updateObjPreview(); return; }
+  objInitialized = true;
+
+  objFields = [
+    { type: 'double', name: 'speed', defaultValue: '1.0' },
+    { type: 'double', name: 'turnSpeed', defaultValue: '0.5' },
+    { type: 'boolean', name: 'isEnabled', defaultValue: 'true' }
+  ];
+
+  document.getElementById('obj-close').addEventListener('click', closeAppView);
+  document.getElementById('obj-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateObjectCode());
+    showToast('Object code copied', 'success');
+  });
+  document.getElementById('obj-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateObjectCode());
+  });
+  document.getElementById('obj-refresh').addEventListener('click', updateObjPreview);
+  document.getElementById('obj-class-name').addEventListener('input', updateObjPreview);
+  document.getElementById('obj-static').addEventListener('change', updateObjPreview);
+  document.getElementById('obj-add-row').addEventListener('click', () => {
+    objFields.push({ type: 'double', name: '', defaultValue: '' });
+    renderObjTable();
+    updateObjPreview();
+  });
+
+  renderObjTable();
+  updateObjPreview();
+}
+
+function renderObjTable() {
+  const tbody = document.getElementById('obj-table-body');
+  tbody.innerHTML = '';
+  objFields.forEach((field, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <select data-idx="${i}" data-field="type" class="text-input">
+          <option value="double" ${field.type === 'double' ? 'selected' : ''}>double</option>
+          <option value="int" ${field.type === 'int' ? 'selected' : ''}>int</option>
+          <option value="boolean" ${field.type === 'boolean' ? 'selected' : ''}>boolean</option>
+          <option value="String" ${field.type === 'String' ? 'selected' : ''}>String</option>
+          <option value="long" ${field.type === 'long' ? 'selected' : ''}>long</option>
+          <option value="float" ${field.type === 'float' ? 'selected' : ''}>float</option>
+        </select>
+      </td>
+      <td><input type="text" value="${escapeHtml(field.name)}" data-idx="${i}" data-field="name" class="text-input" /></td>
+      <td><input type="text" value="${escapeHtml(field.defaultValue)}" data-idx="${i}" data-field="defaultValue" class="text-input" /></td>
+      <td><button class="remove-block tiny" data-remove-obj="${i}">✕</button></td>
+    `;
+    tr.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('input', () => {
+        objFields[parseInt(input.dataset.idx)][input.dataset.field] = input.value;
+        updateObjPreview();
+      });
+      input.addEventListener('change', () => {
+        objFields[parseInt(input.dataset.idx)][input.dataset.field] = input.value;
+        updateObjPreview();
+      });
+    });
+    tr.querySelector('[data-remove-obj]').addEventListener('click', () => {
+      objFields.splice(i, 1);
+      renderObjTable();
+      updateObjPreview();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function updateObjPreview() {
+  const el = document.getElementById('obj-preview');
+  if (el) el.textContent = generateObjectCode();
+}
+
+function generateObjectCode() {
+  const className = document.getElementById('obj-class-name').value || 'RobotConfig';
+  const isStatic = document.getElementById('obj-static').value === 'yes';
+
+  let code = '// Generated by ChuckleIDE Object Manager\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += `public class ${className} {\n\n`;
+
+  const validFields = objFields.filter(f => f.name.trim());
+  const staticMod = isStatic ? 'static ' : '';
+
+  // Fields
+  for (const f of validFields) {
+    if (f.defaultValue) {
+      const val = f.type === 'String' ? `"${f.defaultValue}"` : f.defaultValue;
+      code += `    public ${staticMod}${f.type} ${f.name} = ${val};\n`;
+    } else {
+      code += `    public ${staticMod}${f.type} ${f.name};\n`;
+    }
+  }
+
+  if (!isStatic && validFields.length > 0) {
+    // Constructor
+    code += `\n    public ${className}() {\n`;
+    code += '        // Default constructor\n';
+    code += '    }\n';
+
+    // Parameterized constructor
+    const params = validFields.map(f => `${f.type} ${f.name}`).join(', ');
+    code += `\n    public ${className}(${params}) {\n`;
+    for (const f of validFields) {
+      code += `        this.${f.name} = ${f.name};\n`;
+    }
+    code += '    }\n';
+  }
+
+  code += '}\n';
+  return code;
 }
