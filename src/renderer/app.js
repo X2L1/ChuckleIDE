@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTemplatePanel();
   setupCopilotPanel();
   setupSettingsPanel();
+  bindHomeScreen();
 
   // Wait for Monaco
   if (window.monacoReady) {
@@ -197,6 +198,8 @@ async function loadSettings() {
     setInputVal('setting-tab-size', state.settings['editor.tabSize'] || 4);
     setInputVal('setting-word-wrap', state.settings['editor.wordWrap'] || 'off');
     setInputVal('setting-theme', state.settings['editor.theme'] || 'vs-dark');
+    setInputVal('setting-color-mode', state.settings['ui.colorMode'] || 'dark');
+    applyColorMode(state.settings['ui.colorMode'] || 'dark');
     setInputVal('setting-java-home', state.settings['build.javaHome'] || '');
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
@@ -228,7 +231,8 @@ async function saveSettings() {
     ['git.username', document.getElementById('setting-github-user').value],
     ['git.email', document.getElementById('setting-github-email').value],
     ['git.token', document.getElementById('setting-github-token').value],
-    ['adb.path', document.getElementById('setting-adb-path').value]
+    ['adb.path', document.getElementById('setting-adb-path').value],
+    ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
 
   for (const [k, v] of kvPairs) {
@@ -246,6 +250,7 @@ async function saveSettings() {
     monaco.editor.setTheme(state.settings['editor.theme']);
   }
 
+  applyColorMode(state.settings['ui.colorMode']);
   showToast('Settings saved', 'success');
 }
 
@@ -603,6 +608,7 @@ function closeTab(filePath) {
 }
 
 function showWelcomeScreen() {
+  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
   document.getElementById('welcome-screen').style.display = '';
   document.getElementById('monaco-editor-wrapper').style.display = 'none';
   if (monacoEditor) monacoEditor.setModel(null);
@@ -1303,15 +1309,42 @@ function bindKeyboardShortcuts() {
 
 // ── Welcome Links ─────────────────────────────────────────
 function bindWelcomeLinks() {
-  document.getElementById('wl-new-project').addEventListener('click', (e) => { e.preventDefault(); showModal('new-project'); });
-  document.getElementById('wl-open-project').addEventListener('click', (e) => { e.preventDefault(); browseForProject(); });
-  document.getElementById('wl-clone').addEventListener('click', (e) => { e.preventDefault(); showModal('clone'); });
-  document.getElementById('wl-template-auto').addEventListener('click', async (e) => { e.preventDefault(); selectedTemplateId = 'basic-autonomous'; showModal('template'); });
-  document.getElementById('wl-template-teleop').addEventListener('click', async (e) => { e.preventDefault(); selectedTemplateId = 'basic-teleop'; showModal('template'); });
-  document.getElementById('wl-template-pedro').addEventListener('click', async (e) => { e.preventDefault(); selectedTemplateId = 'pedro-autonomous'; showModal('template'); });
-  document.getElementById('wl-ftc-docs').addEventListener('click', (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'); });
-  document.getElementById('wl-pedro-docs').addEventListener('click', (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://pedropathing.com/'); });
-  document.getElementById('wl-nextftc-docs').addEventListener('click', (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://github.com/rowan-mcalpin/nextftc'); });
+  const ids = ['wl-new-project','wl-open-project','wl-clone','wl-template-auto','wl-template-teleop','wl-template-pedro','wl-ftc-docs','wl-pedro-docs','wl-nextftc-docs'];
+  const handlers = {
+    'wl-new-project': (e) => { e.preventDefault(); showModal('new-project'); },
+    'wl-open-project': (e) => { e.preventDefault(); browseForProject(); },
+    'wl-clone': (e) => { e.preventDefault(); showModal('clone'); },
+    'wl-template-auto': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-autonomous'; showModal('template'); },
+    'wl-template-teleop': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-teleop'; showModal('template'); },
+    'wl-template-pedro': async (e) => { e.preventDefault(); selectedTemplateId = 'pedro-autonomous'; showModal('template'); },
+    'wl-ftc-docs': (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'); },
+    'wl-pedro-docs': (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://pedropathing.com/'); },
+    'wl-nextftc-docs': (e) => { e.preventDefault(); window.ftcIDE.shell.openExternal('https://github.com/rowan-mcalpin/nextftc'); }
+  };
+  for (const [id, fn] of Object.entries(handlers)) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+}
+
+function bindMenuActions() {
+  document.getElementById('btn-build').addEventListener('click', () => triggerBuild('assemble'));
+  document.getElementById('btn-deploy').addEventListener('click', () => triggerBuild('install'));
+  document.getElementById('btn-split-editor').addEventListener('click', () => {
+    showToast('Split editor view is not yet available', 'info');
+  });
+  document.getElementById('btn-close-all-tabs').addEventListener('click', () => {
+    const paths = [...state.openFiles.keys()];
+    paths.forEach(p => closeTab(p));
+  });
+}
+
+function applyColorMode(mode) {
+  if (mode === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
 }
 
 // ── File Operations Helpers ───────────────────────────────
@@ -1529,4 +1562,428 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Home Screen App Launcher ──────────────────────────────
+function bindHomeScreen() {
+  const handlers = {
+    'app-code-builder':    () => openAppView('code-builder'),
+    'app-pedro-visualizer':() => openAppView('path-visualizer'),
+    'app-template-gallery':() => { switchPanel('templates'); showModal('template'); },
+    'app-open-editor':     () => browseForProject(),
+    'app-device-manager':  () => switchPanel('devices'),
+    'app-git-manager':     () => switchPanel('git'),
+    'app-new-project':     () => showModal('new-project'),
+    'app-learn':           () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
+    'home-open-project':   () => browseForProject(),
+    'home-clone-repo':     () => showModal('clone')
+  };
+  for (const [id, fn] of Object.entries(handlers)) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+}
+
+function openAppView(name) {
+  // Hide welcome & editor
+  document.getElementById('welcome-screen').style.display = 'none';
+  document.getElementById('monaco-editor-wrapper').style.display = 'none';
+  // Hide all app views
+  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+  // Show target
+  const view = document.getElementById(`app-view-${name}`);
+  if (view) view.classList.add('active');
+
+  if (name === 'code-builder') initCodeBuilder();
+  if (name === 'path-visualizer') initPathVisualizer();
+}
+
+function closeAppView() {
+  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+  if (state.activeFile) {
+    document.getElementById('monaco-editor-wrapper').style.display = '';
+  } else {
+    document.getElementById('welcome-screen').style.display = '';
+  }
+}
+
+// ── Code Builder (Drag & Drop) ────────────────────────────
+const codeBlocks = [
+  { cat: 'motor', label: 'Set Motor Power', code: '{{name}}.setPower({{value}});', defaults: { name: 'motor', value: '1.0' } },
+  { cat: 'motor', label: 'Get Motor (Hardware Map)', code: '{{name}} = hardwareMap.get(DcMotor.class, "{{hwName}}");', defaults: { name: 'motor', hwName: 'motor0' } },
+  { cat: 'motor', label: 'Set Motor Direction', code: '{{name}}.setDirection(DcMotor.Direction.{{dir}});', defaults: { name: 'motor', dir: 'FORWARD' } },
+  { cat: 'motor', label: 'Set Zero Power Behavior', code: '{{name}}.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.{{mode}});', defaults: { name: 'motor', mode: 'BRAKE' } },
+  { cat: 'motor', label: 'Set Motor Run Mode', code: '{{name}}.setMode(DcMotor.RunMode.{{mode}});', defaults: { name: 'motor', mode: 'RUN_USING_ENCODER' } },
+  { cat: 'motor', label: 'Set Target Position', code: '{{name}}.setTargetPosition({{pos}});', defaults: { name: 'motor', pos: '0' } },
+  { cat: 'servo', label: 'Set Servo Position', code: '{{name}}.setPosition({{pos}});', defaults: { name: 'servo', pos: '0.5' } },
+  { cat: 'servo', label: 'Get Servo (Hardware Map)', code: '{{name}} = hardwareMap.get(Servo.class, "{{hwName}}");', defaults: { name: 'servo', hwName: 'servo0' } },
+  { cat: 'sensor', label: 'Read Distance (cm)', code: 'double {{var}} = {{name}}.getDistance(DistanceUnit.CM);', defaults: { var: 'distance', name: 'distSensor' } },
+  { cat: 'sensor', label: 'Read Color Sensor', code: 'int {{var}} = {{name}}.argb();', defaults: { var: 'color', name: 'colorSensor' } },
+  { cat: 'sensor', label: 'Is Touch Pressed', code: 'boolean {{var}} = {{name}}.isPressed();', defaults: { var: 'pressed', name: 'touchSensor' } },
+  { cat: 'control', label: 'If / Else', code: 'if ({{condition}}) {\n    {{body}}\n} else {\n    {{elseBody}}\n}', defaults: { condition: 'gamepad1.a', body: '// do something', elseBody: '// do something else' } },
+  { cat: 'control', label: 'While Loop', code: 'while ({{condition}}) {\n    {{body}}\n}', defaults: { condition: 'opModeIsActive()', body: '// loop body' } },
+  { cat: 'control', label: 'For Loop', code: 'for (int {{var}} = 0; {{var}} < {{count}}; {{var}}++) {\n    {{body}}\n}', defaults: { var: 'i', count: '10', body: '// loop body' } },
+  { cat: 'control', label: 'Wait For Start', code: 'waitForStart();', defaults: {} },
+  { cat: 'timing', label: 'Sleep (ms)', code: 'sleep({{ms}});', defaults: { ms: '1000' } },
+  { cat: 'timing', label: 'Reset Runtime', code: 'resetRuntime();', defaults: {} },
+  { cat: 'telemetry', label: 'Telemetry Add Data', code: 'telemetry.addData("{{key}}", {{value}});', defaults: { key: 'Status', value: '"Running"' } },
+  { cat: 'telemetry', label: 'Telemetry Update', code: 'telemetry.update();', defaults: {} },
+  { cat: 'telemetry', label: 'Telemetry Add Line', code: 'telemetry.addLine("{{text}}");', defaults: { text: 'Hello FTC!' } },
+];
+
+let placedBlocks = [];
+let blockIdCounter = 0;
+
+function initCodeBuilder() {
+  const palette = document.getElementById('block-palette');
+  const workspace = document.getElementById('block-workspace');
+
+  // Build palette
+  palette.innerHTML = '';
+  const categories = [...new Set(codeBlocks.map(b => b.cat))];
+  for (const cat of categories) {
+    const title = document.createElement('div');
+    title.className = 'block-palette-title';
+    title.textContent = cat.toUpperCase();
+    palette.appendChild(title);
+
+    for (const block of codeBlocks.filter(b => b.cat === cat)) {
+      const el = document.createElement('div');
+      el.className = 'block-item';
+      el.setAttribute('data-category', block.cat);
+      el.draggable = true;
+      el.innerHTML = `<div class="block-label">${escapeHtml(block.label)}</div>`;
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify(block));
+        e.dataTransfer.effectAllowed = 'copy';
+      });
+      // Also allow click to add
+      el.addEventListener('dblclick', () => addBlockToWorkspace(block));
+      palette.appendChild(el);
+    }
+  }
+
+  // Workspace drop zone
+  workspace.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; workspace.classList.add('drag-over'); });
+  workspace.addEventListener('dragleave', () => workspace.classList.remove('drag-over'));
+  workspace.addEventListener('drop', (e) => {
+    e.preventDefault();
+    workspace.classList.remove('drag-over');
+    try {
+      const block = JSON.parse(e.dataTransfer.getData('text/plain'));
+      addBlockToWorkspace(block);
+    } catch(err) {}
+  });
+
+  // Buttons
+  document.getElementById('cb-close').addEventListener('click', closeAppView);
+  document.getElementById('cb-copy-code').addEventListener('click', () => {
+    const code = generateCodeFromBlocks();
+    navigator.clipboard.writeText(code);
+    showToast('Code copied to clipboard', 'success');
+  });
+  document.getElementById('cb-insert-code').addEventListener('click', () => {
+    const code = generateCodeFromBlocks();
+    if (monacoEditor && state.activeFile) {
+      const pos = monacoEditor.getPosition();
+      monacoEditor.executeEdits('code-builder', [{
+        range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+        text: code
+      }]);
+      closeAppView();
+      showToast('Code inserted into editor', 'success');
+    } else {
+      navigator.clipboard.writeText(code);
+      showToast('No file open — code copied to clipboard instead', 'info');
+    }
+  });
+  document.getElementById('cb-refresh-preview').addEventListener('click', updateCodePreview);
+
+  renderWorkspace();
+  updateCodePreview();
+}
+
+function addBlockToWorkspace(block) {
+  const instance = {
+    ...block,
+    id: ++blockIdCounter,
+    params: { ...block.defaults }
+  };
+  placedBlocks.push(instance);
+  renderWorkspace();
+  updateCodePreview();
+}
+
+function renderWorkspace() {
+  const workspace = document.getElementById('block-workspace');
+  const hint = document.getElementById('workspace-hint');
+
+  // Remove existing placed blocks
+  workspace.querySelectorAll('.placed-block').forEach(el => el.remove());
+
+  if (placedBlocks.length === 0) {
+    hint.classList.remove('hidden');
+    return;
+  }
+  hint.classList.add('hidden');
+
+  placedBlocks.forEach((block, index) => {
+    const el = document.createElement('div');
+    el.className = 'placed-block';
+    el.setAttribute('data-category', block.cat);
+    el.draggable = true;
+
+    // Build editable params
+    let paramHtml = '';
+    for (const [key, val] of Object.entries(block.params)) {
+      paramHtml += ` <input type="text" value="${escapeHtml(val)}" data-param="${key}" title="${key}" />`;
+    }
+
+    el.innerHTML = `
+      <span class="block-text"><strong>${escapeHtml(block.label)}</strong>${paramHtml}</span>
+      <button class="remove-block" title="Remove">✕</button>
+    `;
+
+    // Param changes
+    el.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => {
+        block.params[input.dataset.param] = input.value;
+        updateCodePreview();
+      });
+    });
+
+    // Remove
+    el.querySelector('.remove-block').addEventListener('click', () => {
+      const idx = placedBlocks.findIndex(b => b.id === block.id);
+      if (idx !== -1) placedBlocks.splice(idx, 1);
+      renderWorkspace();
+      updateCodePreview();
+    });
+
+    // Drag to reorder
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', String(index));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    workspace.appendChild(el);
+  });
+}
+
+function updateCodePreview() {
+  const el = document.getElementById('code-preview');
+  if (el) el.textContent = generateCodeFromBlocks();
+}
+
+function generateCodeFromBlocks() {
+  if (placedBlocks.length === 0) return '// Drag blocks from the palette to build code';
+
+  let lines = [];
+  lines.push('// Generated by ChuckleIDE Code Builder');
+  lines.push('');
+
+  for (const block of placedBlocks) {
+    let code = block.code;
+    for (const [key, val] of Object.entries(block.params)) {
+      code = code.replaceAll(`{{${key}}}`, val);
+    }
+    // Indent multi-line code
+    const codeLines = code.split('\n');
+    for (const line of codeLines) {
+      lines.push('    ' + line);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+// ── Path Visualizer ───────────────────────────────────────
+let pathPoints = [];
+let pvCanvas = null;
+let pvCtx = null;
+
+function initPathVisualizer() {
+  pvCanvas = document.getElementById('pv-canvas');
+  pvCtx = pvCanvas.getContext('2d');
+  pathPoints = [];
+
+  drawField();
+
+  pvCanvas.addEventListener('click', (e) => {
+    const rect = pvCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
+    const scale = pvCanvas.width / fieldSize;
+    const fieldX = (x / scale).toFixed(1);
+    const fieldY = (fieldSize - y / scale).toFixed(1);
+    pathPoints.push({ x: parseFloat(fieldX), y: parseFloat(fieldY), heading: parseFloat(document.getElementById('pv-heading').value) || 0 });
+    drawField();
+    renderPointList();
+  });
+
+  pvCanvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    // Remove nearest point
+    if (pathPoints.length === 0) return;
+    const rect = pvCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
+    const scale = pvCanvas.width / fieldSize;
+
+    let minDist = Infinity, minIdx = -1;
+    pathPoints.forEach((p, i) => {
+      const px = p.x * scale;
+      const py = (fieldSize - p.y) * scale;
+      const d = Math.hypot(mx - px, my - py);
+      if (d < minDist) { minDist = d; minIdx = i; }
+    });
+    if (minIdx >= 0 && minDist < 20) {
+      pathPoints.splice(minIdx, 1);
+      drawField();
+      renderPointList();
+    }
+  });
+
+  // Buttons
+  document.getElementById('pv-close').addEventListener('click', closeAppView);
+  document.getElementById('pv-clear').addEventListener('click', () => {
+    pathPoints = [];
+    drawField();
+    renderPointList();
+  });
+  document.getElementById('pv-export').addEventListener('click', () => {
+    const code = generatePathCode();
+    navigator.clipboard.writeText(code);
+    showToast('PedroPathing code copied to clipboard', 'success');
+  });
+  document.getElementById('pv-generate').addEventListener('click', () => {
+    const code = generatePathCode();
+    navigator.clipboard.writeText(code);
+    showToast('PedroPathing code copied to clipboard', 'success');
+  });
+}
+
+function drawField() {
+  if (!pvCtx) return;
+  const w = pvCanvas.width;
+  const h = pvCanvas.height;
+  const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
+  const scale = w / fieldSize;
+
+  // Background
+  const isDark = !document.documentElement.hasAttribute('data-theme');
+  pvCtx.fillStyle = isDark ? '#1a1a1a' : '#f0f0e8';
+  pvCtx.fillRect(0, 0, w, h);
+
+  // Grid
+  pvCtx.strokeStyle = isDark ? '#2a2020' : '#e0d0d0';
+  pvCtx.lineWidth = 0.5;
+  for (let i = 0; i <= fieldSize; i += 12) {
+    const pos = i * scale;
+    pvCtx.beginPath(); pvCtx.moveTo(pos, 0); pvCtx.lineTo(pos, h); pvCtx.stroke();
+    pvCtx.beginPath(); pvCtx.moveTo(0, pos); pvCtx.lineTo(w, pos); pvCtx.stroke();
+  }
+
+  // Center lines
+  pvCtx.strokeStyle = isDark ? '#3a2030' : '#d0b0b8';
+  pvCtx.lineWidth = 1;
+  pvCtx.beginPath(); pvCtx.moveTo(w/2, 0); pvCtx.lineTo(w/2, h); pvCtx.stroke();
+  pvCtx.beginPath(); pvCtx.moveTo(0, h/2); pvCtx.lineTo(w, h/2); pvCtx.stroke();
+
+  // Axis labels
+  pvCtx.fillStyle = isDark ? '#5a4050' : '#8a6070';
+  pvCtx.font = '10px sans-serif';
+  pvCtx.fillText('0', 2, h - 2);
+  pvCtx.fillText(String(fieldSize), w - 24, h - 2);
+  pvCtx.fillText(String(fieldSize), 2, 12);
+
+  if (pathPoints.length === 0) return;
+
+  // Draw path lines
+  pvCtx.strokeStyle = '#ff69b4';
+  pvCtx.lineWidth = 2;
+  pvCtx.beginPath();
+  pathPoints.forEach((p, i) => {
+    const px = p.x * scale;
+    const py = (fieldSize - p.y) * scale;
+    if (i === 0) pvCtx.moveTo(px, py);
+    else pvCtx.lineTo(px, py);
+  });
+  pvCtx.stroke();
+
+  // Draw points
+  pathPoints.forEach((p, i) => {
+    const px = p.x * scale;
+    const py = (fieldSize - p.y) * scale;
+
+    // Point circle
+    pvCtx.beginPath();
+    pvCtx.arc(px, py, 6, 0, Math.PI * 2);
+    pvCtx.fillStyle = i === 0 ? '#4ec9b0' : '#ff69b4';
+    pvCtx.fill();
+    pvCtx.strokeStyle = '#fff';
+    pvCtx.lineWidth = 1.5;
+    pvCtx.stroke();
+
+    // Heading arrow
+    const headRad = (p.heading || 0) * Math.PI / 180;
+    const arrowLen = 14;
+    pvCtx.strokeStyle = '#ffe4b5';
+    pvCtx.lineWidth = 2;
+    pvCtx.beginPath();
+    pvCtx.moveTo(px, py);
+    pvCtx.lineTo(px + Math.cos(headRad) * arrowLen, py - Math.sin(headRad) * arrowLen);
+    pvCtx.stroke();
+
+    // Label
+    pvCtx.fillStyle = isDark ? '#e0d0d8' : '#4a2030';
+    pvCtx.font = '10px monospace';
+    pvCtx.fillText(`P${i}`, px + 8, py - 8);
+  });
+}
+
+function renderPointList() {
+  const list = document.getElementById('pv-point-list');
+  if (pathPoints.length === 0) {
+    list.innerHTML = '<div style="padding:12px;color:var(--fg-dim);font-size:11px;text-align:center">No waypoints yet</div>';
+    return;
+  }
+  list.innerHTML = pathPoints.map((p, i) => `
+    <div class="path-point-item">
+      <span style="color:${i === 0 ? '#4ec9b0' : 'var(--accent)'}">P${i}</span>
+      <span>(${p.x}, ${p.y})</span>
+      <span style="color:var(--fg-dim)">${p.heading}°</span>
+      <button class="remove-point" data-idx="${i}">✕</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.remove-point').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pathPoints.splice(parseInt(btn.dataset.idx), 1);
+      drawField();
+      renderPointList();
+    });
+  });
+}
+
+function generatePathCode() {
+  if (pathPoints.length < 2) return '// Add at least 2 waypoints to generate a path';
+
+  let code = '// Generated by ChuckleIDE Path Visualizer\n';
+  code += '// PedroPathing autonomous path\n\n';
+  code += 'PathBuilder path = new PathBuilder()\n';
+
+  for (let i = 0; i < pathPoints.length; i++) {
+    const p = pathPoints[i];
+    if (i === 0) {
+      code += `    .setStartPose(new Pose(${p.x}, ${p.y}, Math.toRadians(${p.heading})))\n`;
+    } else {
+      code += `    .addWaypoint(new Pose(${p.x}, ${p.y}, Math.toRadians(${p.heading})))\n`;
+    }
+  }
+
+  code += '    .build();\n';
+  return code;
 }
