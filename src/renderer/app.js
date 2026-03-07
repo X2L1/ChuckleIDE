@@ -86,7 +86,7 @@ function initMonaco() {
       scrollBeyondLastLine: false,
       minimap: { enabled: true, maxColumn: 80 },
       wordWrap: state.settings['editor.wordWrap'] || 'off',
-      tabSize: parseInt(state.settings['editor.tabSize']) || 4,
+      tabSize: parseInt(state.settings['editor.tabSize'], 10) || 4,
       insertSpaces: true,
       autoIndent: 'full',
       formatOnType: false,
