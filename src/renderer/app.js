@@ -2691,16 +2691,34 @@ function getGeneratedClassName(inputId, fallbackName) {
   return value.replace(/\.java$/i, '');
 }
 
+// Renderer does not have direct Node.js `path` access, so normalize/join paths here.
+function joinProjectPath(basePath, ...segments) {
+  const sep = window.ftcIDE.platform === 'win32' ? '\\' : '/';
+  const leadingSep = (basePath.match(/^[\\/]+/) || [''])[0].replace(/[\\/]/g, sep);
+  const baseParts = basePath.replace(/^[\\/]+|[\\/]+$/g, '').split(/[\\/]+/).filter(Boolean);
+  const segmentParts = segments
+    .flatMap((segment) => segment.split(/[\\/]+/))
+    .filter(Boolean);
+  return `${leadingSep}${[...baseParts, ...segmentParts].join(sep)}`;
+}
+
+/**
+ * Creates/updates a generated Java class file in its package directory and opens it.
+ * @param {string} code Java source to persist.
+ * @param {string} packageFolder TeamCode package folder (e.g. subsystems).
+ * @param {string} className Java class name (without .java).
+ * @param {string} kindLabel User-facing class type label.
+ */
 async function insertGeneratedClass(code, packageFolder, className, kindLabel) {
-  if (!state.teamCodePath && !state.projectPath) {
+  if (!state.teamCodePath) {
     navigator.clipboard.writeText(code);
-    showToast(`No project open — ${kindLabel} code copied to clipboard`, 'info');
+    showToast(`Open a TeamCode project first — ${kindLabel} code copied to clipboard`, 'warning');
     return;
   }
 
-  const rootDir = state.teamCodePath || state.projectPath;
-  const packageDir = `${rootDir}/${packageFolder}`;
-  const filePath = `${packageDir}/${className}.java`;
+  const rootDir = state.teamCodePath;
+  const packageDir = joinProjectPath(rootDir, packageFolder);
+  const filePath = joinProjectPath(packageDir, `${className}.java`);
 
   try {
     await window.ftcIDE.fs.createDir(packageDir);

@@ -3,6 +3,8 @@
 const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
+// Standard Java package folders created under TeamCode on new project initialization.
+const DEFAULT_TEAMCODE_PACKAGES = ['subsystems', 'commands', 'opmodes', 'util', 'global'];
 
 /**
  * Manages FTC project creation, configuration, and lifecycle.
@@ -39,7 +41,7 @@ class ProjectManager {
       ...packageName.split('.'));
     await fs.ensureDir(srcDir);
     await fs.writeFile(path.join(srcDir, '.gitkeep'), '');
-    for (const packageDir of ['subsystems', 'commands', 'opmodes', 'util', 'global']) {
+    for (const packageDir of DEFAULT_TEAMCODE_PACKAGES) {
       await fs.ensureDir(path.join(srcDir, packageDir));
       await fs.writeFile(path.join(srcDir, packageDir, '.gitkeep'), '');
     }
