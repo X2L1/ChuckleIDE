@@ -92,6 +92,14 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     status: () => ipcRenderer.invoke('update:status')
   },
 
+  // ── GitHub Auth ─────────────────────────────────────────────────────────────
+  auth: {
+    startDeviceFlow: () => ipcRenderer.invoke('auth:startDeviceFlow'),
+    cancelDeviceFlow: () => ipcRenderer.invoke('auth:cancelDeviceFlow'),
+    getUser: () => ipcRenderer.invoke('auth:getUser'),
+    signOut: () => ipcRenderer.invoke('auth:signOut')
+  },
+
   // ── Event Listeners ──────────────────────────────────────────────────────────
   on: (channel, callback) => {
     const allowedChannels = [
@@ -103,7 +111,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
       'adb:deviceChanged',
       'lsp:notification',
       'update:available',
-      'update:progress'
+      'update:progress',
+      'auth:deviceFlowSuccess',
+      'auth:deviceFlowError'
     ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));

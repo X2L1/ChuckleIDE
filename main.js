@@ -10,6 +10,7 @@ const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
 const Updater = require('./src/main/updater');
+const GitHubAuth = require('./src/main/github-auth');
 const templates = require('./src/templates/index');
 
 const store = new Store();
@@ -20,6 +21,7 @@ let updater;
 let lspManager;
 let buildManager;
 let projectManager;
+let githubAuth;
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
@@ -466,6 +468,47 @@ ipcMain.handle('settings:delete', async (_, key) => {
   store.delete(key);
   return true;
 });
+
+// ── IPC: GitHub OAuth Device Flow ─────────────────────────────────────────────
+
+ipcMain.handle('auth:startDeviceFlow', async () => {
+  const flowInfo = await githubAuth.startDeviceFlow();
+
+  // Open the verification page in the user's default browser.
+  shell.openExternal(flowInfo.verificationUri);
+
+  // Start polling in the background; notify the renderer when complete.
+  githubAuth.pollForToken(flowInfo.deviceCode, flowInfo.interval)
+    .then(async (token) => {
+      store.set('github.token', token);
+      // Fetch the user's profile and store it.
+      try {
+        const user = await githubAuth.fetchUser(token);
+        store.set('github.user', { login: user.login, name: user.name || '', avatar_url: user.avatar_url || '' });
+      } catch { /* profile fetch is best-effort */ }
+      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowSuccess');
+    })
+    .catch((err) => {
+      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowError', err.message);
+    });
+
+  return { userCode: flowInfo.userCode, verificationUri: flowInfo.verificationUri };
+});
+
+ipcMain.handle('auth:cancelDeviceFlow', async () => {
+  githubAuth.cancelDeviceFlow();
+  return true;
+});
+
+ipcMain.handle('auth:getUser', async () => {
+  const user = store.get('github.user');
+  const hasToken = Boolean(store.get('github.token'));
+  return { signedIn: hasToken && Boolean(user), user: user || null };
+});
+
+ipcMain.handle('auth:signOut', async () => {
+  store.delete('github.token');
+  store.delete('github.user');
   return true;
 });
 
@@ -538,6 +581,7 @@ app.whenReady().then(async () => {
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
   updater = new Updater(store);
+  githubAuth = new GitHubAuth();
 
   createWindow();
 
