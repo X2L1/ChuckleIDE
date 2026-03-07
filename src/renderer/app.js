@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.ftcIDE.on('update:progress', (msg) => setUpdateProgress(msg));
 
   initUpdateUI();
+  restoreUpdateStatus();
 });
 
 // ── Monaco Initialization ─────────────────────────────────
@@ -1637,7 +1638,7 @@ function initUpdateUI() {
  * Called when the main process detects a new commit on origin.
  * @param {{ hasUpdate, currentCommit, latestCommit, changelog }} info
  */
-function showUpdateNotification(info) {
+function showUpdateNotification(info, { silent = false } = {}) {
   if (!info || !info.hasUpdate) return;
 
   // Populate modal content.
@@ -1672,12 +1673,14 @@ function showUpdateNotification(info) {
   if (badge) badge.classList.remove('hidden');
 
   // Show toast with action button.
-  showToastWithAction(
-    '↑ FTC IDE update available',
-    'Update now',
-    () => showModal('update'),
-    'info'
-  );
+  if (!silent) {
+    showToastWithAction(
+      '↑ FTC IDE update available',
+      'Update now',
+      () => showModal('update'),
+      'info'
+    );
+  }
 }
 
 /** Update the progress message inside the update modal. */
@@ -1699,6 +1702,22 @@ async function manualCheckForUpdates() {
     showModal('update');
   } else {
     showToast('FTC IDE is up to date ✓', 'success');
+  }
+}
+
+async function restoreUpdateStatus() {
+  try {
+    const status = await window.ftcIDE.update.status();
+    if (status && status.updateAvailable) {
+      showUpdateNotification({
+        hasUpdate: true,
+        currentCommit: status.currentCommit,
+        latestCommit: status.latestCommit,
+        changelog: status.changelog
+      }, { silent: true });
+    }
+  } catch (_) {
+    // Best-effort restore; ignore errors.
   }
 }
 
