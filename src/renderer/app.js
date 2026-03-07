@@ -255,7 +255,7 @@ function getFallbackAutocompleteContext() {
   if (!fallbackEditor) return null;
   const cursor = fallbackEditor.selectionStart ?? 0;
   const before = fallbackEditor.value.slice(0, cursor);
-  const match = before.match(/[@\w.$]+$/);
+  const match = before.match(/[@\w.]+$/);
   if (!match || !match[0]) return null;
   return { prefix: match[0], start: cursor - match[0].length, end: cursor };
 }
@@ -266,7 +266,10 @@ function getFallbackAutocompleteSuggestion(prefix) {
     ? FALLBACK_AUTOCOMPLETE_ITEMS
     : ['function', 'const', 'let', 'class', 'return', 'if', 'else', 'for', 'while'];
   const lowerPrefix = prefix.toLowerCase();
-  return items.find(item => item.toLowerCase().startsWith(lowerPrefix) && item !== prefix) || null;
+  return items.find((item) => {
+    const lowerItem = item.toLowerCase();
+    return lowerItem.startsWith(lowerPrefix) && lowerItem !== lowerPrefix;
+  }) || null;
 }
 
 function syncFallbackEditorContent() {
