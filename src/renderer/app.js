@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Monaco Initialization ─────────────────────────────────
 function initMonaco() {
+  if (monacoEditor) return;
   const container = document.getElementById('monaco-editor-wrapper');
   const theme = state.settings['editor.theme'] || 'vs-dark';
 
@@ -506,6 +507,9 @@ function getFileIcon(name) {
 
 // ── File Opening / Saving ─────────────────────────────────
 async function openFile(filePath) {
+  if (!monacoEditor) {
+    await waitForEditorReady();
+  }
   if (!monacoEditor) { showToast('Editor not ready', 'warning'); return; }
 
   // Save current view state
@@ -530,6 +534,31 @@ async function openFile(filePath) {
   } catch (e) {
     showToast(`Cannot open file: ${e.message}`, 'error');
   }
+}
+
+async function waitForEditorReady(timeoutMs = 4000) {
+  if (monacoEditor) return true;
+  if (window.monacoReady) {
+    initMonaco();
+    if (monacoEditor) return true;
+  }
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      document.removeEventListener('monaco-ready', onReady);
+      resolve(ok);
+    };
+    const onReady = () => {
+      initMonaco();
+      finish(!!monacoEditor);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    document.addEventListener('monaco-ready', onReady, { once: true });
+  });
 }
 
 function getLanguageForFile(filePath) {

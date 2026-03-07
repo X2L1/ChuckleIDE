@@ -77,6 +77,10 @@ function createWindow() {
   });
 
   buildApplicationMenu();
+  if (process.platform !== 'darwin') {
+    mainWindow.setAutoHideMenuBar(false);
+    mainWindow.setMenuBarVisibility(true);
+  }
 }
 
 function buildApplicationMenu() {
