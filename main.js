@@ -25,14 +25,16 @@ let buildManager;
 let projectManager;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+
+  const windowOpts = {
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     show: false,
     backgroundColor: '#0a0a0a',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -41,7 +43,24 @@ function createWindow() {
       webSecurity: true
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
-  });
+  };
+
+  if (isMac) {
+    windowOpts.titleBarStyle = 'hidden';
+    windowOpts.trafficLightPosition = { x: 12, y: 10 };
+  } else if (isWin) {
+    windowOpts.titleBarStyle = 'hidden';
+    windowOpts.titleBarOverlay = {
+      color: '#0f0f0f',
+      symbolColor: '#e0d0d8',
+      height: 40
+    };
+  } else {
+    // Linux – no native hidden-title support; go frameless
+    windowOpts.frame = false;
+  }
+
+  mainWindow = new BrowserWindow(windowOpts);
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
 
@@ -567,6 +586,16 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
   shell.openExternal(url);
   return true;
 });
+
+// ── IPC: Window Controls ──────────────────────────────────────────────────────
+
+ipcMain.handle('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
+ipcMain.handle('window:maximize', () => {
+  if (!mainWindow) return;
+  mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+});
+ipcMain.handle('window:close', () => { if (mainWindow) mainWindow.close(); });
+ipcMain.handle('window:isMaximized', () => mainWindow ? mainWindow.isMaximized() : false);
 
 // ── IPC: Updater ──────────────────────────────────────────────────────────────
 

@@ -4,6 +4,17 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('ftcIDE', {
 
+  // ── Platform ────────────────────────────────────────────────────────────────
+  platform: process.platform,
+
+  // ── Window Controls ─────────────────────────────────────────────────────────
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
+  },
+
   // ── File System ─────────────────────────────────────────────────────────────
   fs: {
     readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
