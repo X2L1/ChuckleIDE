@@ -96,7 +96,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
   credentials: {
     getGitHubToken: () => ipcRenderer.invoke('credentials:getGitHubToken'),
     setGitHubToken: (token) => ipcRenderer.invoke('credentials:setGitHubToken', token),
-    hasGitHubToken: () => ipcRenderer.invoke('credentials:hasGitHubToken')
+    hasGitHubToken: () => ipcRenderer.invoke('credentials:hasGitHubToken'),
+    detectExternalToken: () => ipcRenderer.invoke('credentials:detectExternalToken'),
+    importExternalToken: () => ipcRenderer.invoke('credentials:importExternalToken')
   },
 
   // ── GitHub OAuth ────────────────────────────────────────────────────────────

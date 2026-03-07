@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, ipcMain, Menu, dialog, shell, safeStorage } = require('electron');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const Store = require('electron-store');
@@ -88,6 +89,38 @@ function scrubSensitiveSettings(settings) {
   delete sanitized[SECRET_KEYS.copilotToken];
   return sanitized;
 }
+
+// ── External token detection (gh CLI & environment variables) ──────────────────
+
+function _runGhAuthToken() {
+  return new Promise((resolve) => {
+    const cmd = process.platform === 'win32' ? 'gh.exe' : 'gh';
+    execFile(cmd, ['auth', 'token'], { timeout: 5000 }, (err, stdout) => {
+      if (err) return resolve('');
+      const token = (stdout || '').trim();
+      resolve(token || '');
+    });
+  });
+}
+
+/**
+ * Try to find a GitHub token from external sources (outside the app).
+ * Checks in order: GH_TOKEN env, GITHUB_TOKEN env, `gh auth token` CLI.
+ * Returns { token, source } or null.
+ */
+async function detectExternalToken() {
+  const envGH = (process.env.GH_TOKEN || '').trim();
+  if (envGH) return { token: envGH, source: 'GH_TOKEN environment variable' };
+
+  const envGitHub = (process.env.GITHUB_TOKEN || '').trim();
+  if (envGitHub) return { token: envGitHub, source: 'GITHUB_TOKEN environment variable' };
+
+  const ghToken = await _runGhAuthToken();
+  if (ghToken) return { token: ghToken, source: 'GitHub CLI (gh auth token)' };
+
+  return null;
+}
+
 let mainWindow;
 let adbManager;
 let gitManager;
@@ -545,7 +578,20 @@ ipcMain.handle('copilot:setToken', async (_, token) => {
 });
 
 ipcMain.handle('copilot:isAuthenticated', async () => {
-  return copilotManager.isAuthenticated();
+  const authed = await copilotManager.isAuthenticated();
+  if (authed) return true;
+
+  // If not authenticated, try falling back to the git token or external token
+  let fallback = getSecret(SECRET_KEYS.gitToken);
+  if (!fallback) {
+    const ext = await detectExternalToken();
+    if (ext) fallback = ext.token;
+  }
+  if (fallback && fallback !== copilotManager.token) {
+    copilotManager.setToken(fallback);
+    return copilotManager.isAuthenticated();
+  }
+  return false;
 });
 
 // ── IPC: Build ────────────────────────────────────────────────────────────────
@@ -658,7 +704,13 @@ ipcMain.handle('settings:delete', async (_, key) => {
 // ── IPC: Credentials ───────────────────────────────────────────────────────────
 
 ipcMain.handle('credentials:getGitHubToken', async () => {
-  return getSecret(SECRET_KEYS.gitToken);
+  // First check stored (in-app) token
+  const stored = getSecret(SECRET_KEYS.gitToken);
+  if (stored) return stored;
+
+  // Fall back to external sources (env vars, gh CLI)
+  const ext = await detectExternalToken();
+  return ext ? ext.token : '';
 });
 
 ipcMain.handle('credentials:setGitHubToken', async (_, token) => {
@@ -666,7 +718,22 @@ ipcMain.handle('credentials:setGitHubToken', async (_, token) => {
 });
 
 ipcMain.handle('credentials:hasGitHubToken', async () => {
-  return hasSecret(SECRET_KEYS.gitToken);
+  if (hasSecret(SECRET_KEYS.gitToken)) return true;
+
+  // Also check external sources
+  const ext = await detectExternalToken();
+  return ext !== null;
+});
+
+ipcMain.handle('credentials:detectExternalToken', async () => {
+  return detectExternalToken();
+});
+
+ipcMain.handle('credentials:importExternalToken', async () => {
+  const ext = await detectExternalToken();
+  if (!ext) return { imported: false, source: null };
+  setSecret(SECRET_KEYS.gitToken, ext.token);
+  return { imported: true, source: ext.source };
 });
 
 // ── IPC: GitHub OAuth Device Flow ─────────────────────────────────────────────
@@ -758,12 +825,23 @@ ipcMain.handle('update:status', async () => {
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   migrateLegacySecrets();
   adbManager = new AdbManager();
   gitManager = new GitManager();
   copilotManager = new CopilotManager();
-  copilotManager.setToken(getSecret(SECRET_KEYS.copilotToken));
+
+  // Use stored copilot token, fall back to stored git token, then external sources
+  let cpToken = getSecret(SECRET_KEYS.copilotToken);
+  if (!cpToken) {
+    cpToken = getSecret(SECRET_KEYS.gitToken);
+  }
+  if (!cpToken) {
+    const ext = await detectExternalToken();
+    if (ext) cpToken = ext.token;
+  }
+  copilotManager.setToken(cpToken || '');
+
   lspManager = new LspManager(store);
   buildManager = new BuildManager();
   projectManager = new ProjectManager();

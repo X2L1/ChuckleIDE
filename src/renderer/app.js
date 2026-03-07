@@ -471,7 +471,11 @@ async function loadSettings() {
     // Show token status
     try {
       const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
-      updateGitHubTokenStatus(hasToken);
+      if (hasToken) {
+        updateGitHubTokenStatus(true);
+      } else {
+        updateGitHubTokenStatus(false);
+      }
     } catch { /* ignore */ }
 
     applyFallbackEditorSettings();
@@ -484,15 +488,62 @@ async function loadSettings() {
   }
 }
 
-function updateGitHubTokenStatus(saved) {
+function updateGitHubTokenStatus(saved, source) {
   const el = document.getElementById('github-token-status');
   if (!el) return;
-  el.textContent = saved ? '✓ Token saved' : '';
-  el.style.color = saved ? 'var(--green, #4caf50)' : 'var(--fg-dim)';
+  if (saved && source) {
+    el.textContent = `✓ Using token from ${source}`;
+    el.style.color = 'var(--green, #4caf50)';
+  } else if (saved) {
+    el.textContent = '✓ Token saved';
+    el.style.color = 'var(--green, #4caf50)';
+  } else {
+    el.textContent = '';
+    el.style.color = 'var(--fg-dim)';
+  }
 }
 
 function setupSettingsPanel() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+
+  // ── External token detection ────────────────────────────────────────────────
+  document.getElementById('btn-import-external-token').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-import-external-token');
+    const extStatus = document.getElementById('external-token-status');
+    btn.disabled = true;
+    btn.textContent = 'Detecting…';
+    extStatus.textContent = '';
+    try {
+      const result = await window.ftcIDE.credentials.importExternalToken();
+      if (result.imported) {
+        updateGitHubTokenStatus(true, result.source);
+        extStatus.textContent = `✓ Imported from ${result.source}`;
+        extStatus.style.color = 'var(--green, #4caf50)';
+        showToast(`Token imported from ${result.source}`, 'success');
+      } else {
+        extStatus.textContent = 'No external token found. Run "gh auth login" in a terminal, or set GH_TOKEN / GITHUB_TOKEN, then try again.';
+        extStatus.style.color = 'var(--fg-dim)';
+        showToast('No external token found', 'warning');
+      }
+    } catch (e) {
+      extStatus.textContent = `Detection failed: ${e.message}`;
+      extStatus.style.color = 'var(--red, #f44336)';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Use token from system';
+  });
+
+  // Probe for external token on panel load
+  (async () => {
+    try {
+      const ext = await window.ftcIDE.credentials.detectExternalToken();
+      const extStatus = document.getElementById('external-token-status');
+      if (ext) {
+        extStatus.textContent = `Found: ${ext.source}`;
+        extStatus.style.color = 'var(--fg-dim)';
+      }
+    } catch { /* ignore */ }
+  })();
 
   // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
   document.getElementById('btn-github-device-flow').addEventListener('click', async () => {
