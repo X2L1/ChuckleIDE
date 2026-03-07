@@ -2083,7 +2083,7 @@ function bindKeyboardShortcuts() {
     if (ctrl && e.key === 'Tab') {
       e.preventDefault();
       const tabs = [...document.querySelectorAll('.editor-tab')];
-      const idx = tabs.findIndex(t => t.dataset.path === state.activeFile);
+      const idx = tabs.findIndex(t => t.dataset.path === state.activeTab);
       const nextIdx = (idx + 1) % tabs.length;
       if (tabs[nextIdx]) activateTab(tabs[nextIdx].dataset.path);
     }
@@ -3349,7 +3349,12 @@ function insertGeneratedCode(code) {
 }
 
 // ── Path Visualizer (embedded pedropathing.com) ───────────
+let pvInitialized = false;
+
 function initPathVisualizer() {
+  if (pvInitialized) return;
+  pvInitialized = true;
+
   document.getElementById('pv-close').addEventListener('click', closeAppView);
   document.getElementById('pv-open-external').addEventListener('click', () => {
     window.ftcIDE.shell.openExternal('https://visualizer.pedropathing.com');
