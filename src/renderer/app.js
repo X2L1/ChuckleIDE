@@ -4352,8 +4352,8 @@ const utilMethods = {
         }
 
         /** Returns true if the specified number of seconds have elapsed. */
-        public boolean hasElapsed(double seconds) {
-            return seconds() >= seconds;
+        public boolean hasElapsed(double duration) {
+            return seconds() >= duration;
         }
     }`
     },
@@ -4508,7 +4508,7 @@ function generateUtilCode() {
   }
 
   code += `public class ${className} {\n\n`;
-  code += `    private ${className}() {} // Utility class — no instances\n`;
+  code += `    private ${className}() {} // Utility class -- no instances\n`;
 
   for (const m of selected) {
     code += '\n' + m.code + '\n';
