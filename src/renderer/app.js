@@ -11,7 +11,6 @@ const state = {
   activeFile: null,
   activeTab: null,           // current tab id (filePath or 'app:<name>')
   settings: {},
-  gitStatus: null,
   devices: [],
   editorFontSize: 14,
   bottomHeight: 200,
@@ -91,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindMenuActions();
   bindSidebarNav();
   bindFileExplorer();
-  bindGitPanel();
   bindDevicePanel();
   bindBottomPanel();
   bindResizeHandles();
@@ -100,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindKeyboardShortcuts();
   bindWindowControls();
   setupTemplatePanel();
-  setupCopilotPanel();
   setupSettingsPanel();
   bindHomeScreen();
 
@@ -464,19 +461,7 @@ async function loadSettings() {
     setInputVal('setting-java-home', state.settings['build.javaHome'] || '');
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
-    setInputVal('setting-github-user', state.settings['git.username'] || '');
-    setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
-
-    // Show token status
-    try {
-      const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
-      if (hasToken) {
-        updateGitHubTokenStatus(true);
-      } else {
-        updateGitHubTokenStatus(false);
-      }
-    } catch { /* ignore */ }
 
     applyFallbackEditorSettings();
 
@@ -488,112 +473,8 @@ async function loadSettings() {
   }
 }
 
-function updateGitHubTokenStatus(saved, source) {
-  const el = document.getElementById('github-token-status');
-  if (!el) return;
-  if (saved && source) {
-    el.textContent = `✓ Using token from ${source}`;
-    el.style.color = 'var(--green, #4caf50)';
-  } else if (saved) {
-    el.textContent = '✓ Token saved';
-    el.style.color = 'var(--green, #4caf50)';
-  } else {
-    el.textContent = '';
-    el.style.color = 'var(--fg-dim)';
-  }
-}
-
 function setupSettingsPanel() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-
-  // ── External token detection ────────────────────────────────────────────────
-  document.getElementById('btn-import-external-token').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-import-external-token');
-    const extStatus = document.getElementById('external-token-status');
-    btn.disabled = true;
-    btn.textContent = 'Detecting…';
-    extStatus.textContent = '';
-    try {
-      const result = await window.ftcIDE.credentials.importExternalToken();
-      if (result.imported) {
-        updateGitHubTokenStatus(true, result.source);
-        extStatus.textContent = `✓ Imported from ${result.source}`;
-        extStatus.style.color = 'var(--green, #4caf50)';
-        showToast(`Token imported from ${result.source}`, 'success');
-      } else {
-        extStatus.textContent = 'No external token found. Run "gh auth login" in a terminal, or set GH_TOKEN / GITHUB_TOKEN, then try again.';
-        extStatus.style.color = 'var(--fg-dim)';
-        showToast('No external token found', 'warning');
-      }
-    } catch (e) {
-      extStatus.textContent = `Detection failed: ${e.message}`;
-      extStatus.style.color = 'var(--red, #f44336)';
-    }
-    btn.disabled = false;
-    btn.textContent = 'Use token from system';
-  });
-
-  // Probe for external token on panel load
-  (async () => {
-    try {
-      const ext = await window.ftcIDE.credentials.detectExternalToken();
-      const extStatus = document.getElementById('external-token-status');
-      if (ext) {
-        extStatus.textContent = `Found: ${ext.source}`;
-        extStatus.style.color = 'var(--fg-dim)';
-      }
-    } catch { /* ignore */ }
-  })();
-
-  // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
-  document.getElementById('btn-github-device-flow').addEventListener('click', async () => {
-    const statusEl = document.getElementById('device-flow-status');
-    const codeEl   = document.getElementById('device-flow-code');
-    const btn      = document.getElementById('btn-github-device-flow');
-
-    try {
-      btn.disabled = true;
-      btn.textContent = 'Starting…';
-      const { userCode, verificationUri } = await window.ftcIDE.auth.startDeviceFlow();
-
-      codeEl.textContent = userCode;
-      statusEl.style.display = '';
-      btn.textContent = 'Waiting for authorization…';
-    } catch (e) {
-      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Sign in with GitHub';
-    }
-  });
-
-  document.getElementById('btn-cancel-device-flow').addEventListener('click', async () => {
-    await window.ftcIDE.auth.cancelDeviceFlow();
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    showToast('GitHub sign-in cancelled', 'info');
-  });
-
-  window.ftcIDE.on('auth:deviceFlowSuccess', () => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    updateGitHubTokenStatus(true);
-    showToast('Signed in with GitHub!', 'success');
-  });
-
-  window.ftcIDE.on('auth:deviceFlowError', (msg) => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    if (msg !== 'cancelled') {
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
-    }
-  });
 }
 
 async function saveSettings() {
@@ -605,8 +486,6 @@ async function saveSettings() {
     ['build.javaHome', document.getElementById('setting-java-home').value],
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
-    ['git.username', document.getElementById('setting-github-user').value],
-    ['git.email', document.getElementById('setting-github-email').value],
     ['adb.path', document.getElementById('setting-adb-path').value],
     ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
@@ -614,13 +493,6 @@ async function saveSettings() {
   for (const [k, v] of kvPairs) {
     await window.ftcIDE.settings.set(k, v);
     state.settings[k] = v;
-  }
-
-  const githubToken = document.getElementById('setting-github-token').value.trim();
-  if (githubToken) {
-    await window.ftcIDE.credentials.setGitHubToken(githubToken);
-    document.getElementById('setting-github-token').value = '';
-    updateGitHubTokenStatus(true);
   }
 
   // Apply to Monaco
@@ -662,12 +534,6 @@ function handleMenuAction(action) {
     'disconnect-hub': () => adbDisconnectAll(),
     'insert-template': () => showModal('template'),
     'new-from-template': () => showModal('template'),
-    'git-init': () => gitInit(),
-    'git-clone': () => showModal('clone'),
-    'git-commit': () => showModal('commit'),
-    'git-pull': () => gitPull(),
-    'git-push': () => gitPush(),
-    'git-status': () => { switchPanel('git'); refreshGitStatus(); },
     'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info'),
     'check-updates': () => manualCheckForUpdates()
   };
@@ -738,7 +604,6 @@ async function openProject(projectPath) {
     state.showingDeps = false;
 
     await refreshFileTree();
-    await refreshGitStatus();
 
     // Show Dependencies button if project has TeamCode
     const depsSection = document.getElementById('deps-section');
@@ -1283,166 +1148,6 @@ async function promptGotoLine() {
   goToLineInFallbackEditor(line);
 }
 
-// ── Git Panel ─────────────────────────────────────────────
-function bindGitPanel() {
-  document.getElementById('btn-git-refresh').addEventListener('click', refreshGitStatus);
-  document.getElementById('btn-git-commit-shortcut').addEventListener('click', () => showModal('commit'));
-  document.getElementById('btn-git-stage-all').addEventListener('click', gitStageAll);
-  document.getElementById('btn-git-commit').addEventListener('click', () => {
-    const msg = document.getElementById('git-commit-message').value;
-    if (msg) gitCommit(msg);
-    else showModal('commit');
-  });
-  document.getElementById('btn-git-pull').addEventListener('click', gitPull);
-  document.getElementById('btn-git-push').addEventListener('click', gitPush);
-  document.getElementById('btn-do-commit').addEventListener('click', async () => {
-    const msg = document.getElementById('modal-commit-message').value;
-    if (!msg) { showToast('Please enter a commit message', 'warning'); return; }
-    await gitCommit(msg);
-    closeModal('commit');
-  });
-}
-
-async function refreshGitStatus() {
-  if (!state.projectPath) return;
-  try {
-    const status = await window.ftcIDE.git.status(state.projectPath);
-    state.gitStatus = status;
-    renderGitChanges(status);
-    renderGitBranches();
-    renderGitLog();
-    document.getElementById('branch-name').textContent = status.current || 'unknown';
-  } catch (e) {
-    document.getElementById('branch-name').textContent = 'No repo';
-  }
-}
-
-function renderGitChanges(status) {
-  const list = document.getElementById('git-changes-list');
-  if (!status || (!status.modified.length && !status.not_added.length && !status.deleted.length)) {
-    list.innerHTML = '<div class="git-change-item"><span style="color:var(--fg-dim);font-size:11px">No changes</span></div>';
-    return;
-  }
-
-  const items = [
-    ...status.modified.map(f => ({ file: f, type: 'M' })),
-    ...status.not_added.map(f => ({ file: f, type: 'A' })),
-    ...status.deleted.map(f => ({ file: f, type: 'D' })),
-    ...((status.renamed || []).map(f => ({ file: f.to, type: 'R' })))
-  ];
-
-  list.innerHTML = items.map(({ file, type }) => `
-    <div class="git-change-item" title="${file}">
-      <span class="change-letter ${type}">${type}</span>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.split('/').pop()}</span>
-    </div>
-  `).join('');
-}
-
-async function renderGitBranches() {
-  if (!state.projectPath) return;
-  try {
-    const branches = await window.ftcIDE.git.branches(state.projectPath);
-    const list = document.getElementById('git-branches-list');
-    const all = branches.all || [];
-    list.innerHTML = all.map(b => `
-      <div class="git-branch-item ${b === branches.current ? 'current' : ''}">
-        <span class="branch-icon">⎇</span> ${b}
-      </div>
-    `).join('');
-    list.querySelectorAll('.git-branch-item').forEach((el, i) => {
-      el.addEventListener('click', () => gitCheckout(all[i]));
-    });
-  } catch (e) {}
-}
-
-async function renderGitLog() {
-  if (!state.projectPath) return;
-  try {
-    const log = await window.ftcIDE.git.log(state.projectPath, 10);
-    const list = document.getElementById('git-log-list');
-    if (!log || !log.all) return;
-    list.innerHTML = log.all.slice(0, 8).map(c => `
-      <div class="git-log-item" title="${c.message}">
-        <span class="git-log-hash">${c.hash.substring(0, 7)}</span>
-        <span class="git-log-msg">${c.message.substring(0, 40)}</span>
-        <div class="git-log-author">${c.author_name} · ${new Date(c.date).toLocaleDateString()}</div>
-      </div>
-    `).join('');
-  } catch (e) {}
-}
-
-async function gitStageAll() {
-  if (!state.projectPath) return;
-  try {
-    await window.ftcIDE.git.add(state.projectPath, ['.']);
-    showToast('All changes staged', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Stage failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitCommit(message) {
-  if (!state.projectPath || !message) return;
-  try {
-    await window.ftcIDE.git.add(state.projectPath, ['.']);
-    await window.ftcIDE.git.commit(state.projectPath, message);
-    document.getElementById('git-commit-message').value = '';
-    showToast('Committed successfully', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Commit failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitPull() {
-  if (!state.projectPath) return;
-  try {
-    showToast('Pulling...', 'info');
-    const token = await window.ftcIDE.credentials.getGitHubToken();
-    await window.ftcIDE.git.pull(state.projectPath, 'origin', '', token);
-    showToast('Pull complete', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Pull failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitPush() {
-  if (!state.projectPath) return;
-  try {
-    showToast('Pushing...', 'info');
-    const token = await window.ftcIDE.credentials.getGitHubToken();
-    await window.ftcIDE.git.push(state.projectPath, 'origin', '', token);
-    showToast('Push complete', 'success');
-  } catch (e) {
-    showToast(`Push failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitInit() {
-  if (!state.projectPath) { showToast('Open a project first', 'warning'); return; }
-  try {
-    await window.ftcIDE.git.init(state.projectPath);
-    showToast('Git repository initialized', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Git init failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitCheckout(branch) {
-  if (!state.projectPath) return;
-  try {
-    await window.ftcIDE.git.checkout(state.projectPath, branch);
-    refreshGitStatus();
-    showToast(`Switched to ${branch}`, 'success');
-  } catch (e) {
-    showToast(`Checkout failed: ${e.message}`, 'error');
-  }
-}
-
 // ── Device Panel ──────────────────────────────────────────
 function bindDevicePanel() {
   document.getElementById('btn-refresh-devices').addEventListener('click', refreshDevices);
@@ -1947,25 +1652,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-// ── Copilot ───────────────────────────────────────────────
-function setupCopilotPanel() {
-  document.getElementById('btn-copilot-auth').addEventListener('click', async () => {
-    const token = document.getElementById('copilot-token-input').value.trim();
-    if (!token) { showToast('Enter a GitHub token', 'warning'); return; }
-    try {
-      await window.ftcIDE.copilot.setToken(token);
-      const ok = await window.ftcIDE.copilot.isAuthenticated();
-      const msg = document.getElementById('copilot-status-msg');
-      msg.className = `status-msg ${ok ? 'success' : 'error'}`;
-      msg.textContent = ok ? '✓ Authenticated with GitHub Copilot' : '✗ Authentication failed';
-      if (ok) showToast('Copilot authenticated!', 'success');
-    } catch (e) {
-      document.getElementById('copilot-status-msg').className = 'status-msg error';
-      document.getElementById('copilot-status-msg').textContent = `Error: ${e.message}`;
-    }
-  });
-}
-
 // ── Bottom Panel ──────────────────────────────────────────
 function bindBottomPanel() {
   document.querySelectorAll('.bottom-tab').forEach(tab => {
@@ -2038,13 +1724,6 @@ function bindModals() {
     if (!r.canceled) document.getElementById('new-project-path').value = r.filePaths[0];
   });
   document.getElementById('btn-create-project').addEventListener('click', createNewProject);
-
-  // Clone
-  document.getElementById('btn-clone-browse').addEventListener('click', async () => {
-    const r = await window.ftcIDE.fs.openDialog({ properties: ['openDirectory'] });
-    if (!r.canceled) document.getElementById('clone-dest').value = r.filePaths[0];
-  });
-  document.getElementById('btn-do-clone').addEventListener('click', doClone);
 }
 
 function showModal(name) {
@@ -2082,31 +1761,6 @@ async function createNewProject() {
     showToast(`Project "${name}" created!`, 'success');
   } catch (e) {
     showToast(`Failed: ${e.message}`, 'error');
-  }
-}
-
-async function doClone() {
-  const url = document.getElementById('clone-url').value.trim();
-  const dest = document.getElementById('clone-dest').value.trim();
-  let token = document.getElementById('clone-token').value.trim();
-
-  if (!url || !dest) { showToast('Enter URL and destination', 'warning'); return; }
-
-  // Fall back to stored token when none entered in clone dialog
-  if (!token) {
-    token = await window.ftcIDE.credentials.getGitHubToken();
-  }
-
-  closeModal('clone');
-  showToast('Cloning...', 'info');
-
-  try {
-    await window.ftcIDE.git.clone(url, dest, token);
-    const repoName = url.split('/').pop().replace('.git', '');
-    await openProject(`${dest}/${repoName}`);
-    showToast('Clone complete!', 'success');
-  } catch (e) {
-    showToast(`Clone failed: ${e.message}`, 'error');
   }
 }
 
@@ -2208,11 +1862,10 @@ function bindKeyboardShortcuts() {
 
 // ── Welcome Links ─────────────────────────────────────────
 function bindWelcomeLinks() {
-  const ids = ['wl-new-project','wl-open-project','wl-clone','wl-template-auto','wl-template-teleop','wl-template-pedro','wl-ftc-docs','wl-pedro-docs','wl-nextftc-docs'];
+  const ids = ['wl-new-project','wl-open-project','wl-template-auto','wl-template-teleop','wl-template-pedro','wl-ftc-docs','wl-pedro-docs','wl-nextftc-docs'];
   const handlers = {
     'wl-new-project': (e) => { e.preventDefault(); showModal('new-project'); },
     'wl-open-project': (e) => { e.preventDefault(); browseForProject(); },
-    'wl-clone': (e) => { e.preventDefault(); showModal('clone'); },
     'wl-template-auto': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-autonomous'; showModal('template'); },
     'wl-template-teleop': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-teleop'; showModal('template'); },
     'wl-template-pedro': async (e) => { e.preventDefault(); selectedTemplateId = 'pedro-autonomous'; showModal('template'); },
@@ -2600,7 +2253,6 @@ function bindHomeScreen() {
     'app-template-gallery':  () => { switchPanel('templates'); showModal('template'); },
     'app-open-editor':       () => browseForProject(),
     'app-device-manager':    () => switchPanel('devices'),
-    'app-git-manager':       () => switchPanel('git'),
     'app-new-project':       () => showModal('new-project'),
     'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
     'app-pedro-constants':   () => openAppView('pedro-constants'),
@@ -2608,8 +2260,7 @@ function bindHomeScreen() {
     'app-interplut-manager': () => openAppView('interplut-manager'),
     'app-enum-manager':      () => openAppView('enum-manager'),
     'app-object-manager':    () => openAppView('object-manager'),
-    'home-open-project':     () => browseForProject(),
-    'home-clone-repo':       () => showModal('clone')
+    'home-open-project':     () => browseForProject()
   };
   for (const [id, fn] of Object.entries(handlers)) {
     const el = document.getElementById(id);
