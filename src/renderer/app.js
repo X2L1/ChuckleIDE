@@ -19,6 +19,7 @@ const state = {
 
 let monacoEditor = null;
 let selectedTemplateId = null;
+const EDITOR_READY_TIMEOUT_MS = 4000;
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -65,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Monaco Initialization ─────────────────────────────────
 function initMonaco() {
+  if (monacoEditor) return;
   const container = document.getElementById('monaco-editor-wrapper');
   const theme = state.settings['editor.theme'] || 'vs-dark';
 
@@ -506,7 +508,10 @@ function getFileIcon(name) {
 
 // ── File Opening / Saving ─────────────────────────────────
 async function openFile(filePath) {
-  if (!monacoEditor) { showToast('Editor not ready', 'warning'); return; }
+  if (!monacoEditor) {
+    const ready = await waitForEditorReady();
+    if (!ready) { showToast('Editor not ready', 'warning'); return; }
+  }
 
   // Save current view state
   if (state.activeFile && state.openFiles.has(state.activeFile)) {
@@ -530,6 +535,35 @@ async function openFile(filePath) {
   } catch (e) {
     showToast(`Cannot open file: ${e.message}`, 'error');
   }
+}
+
+async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
+  if (monacoEditor) return true;
+
+  return new Promise((resolve) => {
+    let done = false;
+    let timer = null;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('monaco-ready', onReady);
+      resolve(ok);
+    };
+    const onReady = () => {
+      initMonaco();
+      finish(!!monacoEditor);
+    };
+    document.addEventListener('monaco-ready', onReady);
+    if (window.monacoReady) {
+      initMonaco();
+      if (monacoEditor) {
+        finish(true);
+        return;
+      }
+    }
+    timer = setTimeout(() => finish(false), timeoutMs);
+  });
 }
 
 function getLanguageForFile(filePath) {
