@@ -919,7 +919,7 @@
             <div class="lut-form-panel">
               <div class="form-group">
                 <label>Class Name</label>
-                <input type="text" id="vis-class-name" value="VisionOpMode" class="text-input" />
+                <input type="text" id="vis-class-name" value="VisionSubsystem" class="text-input" />
               </div>
               <div class="form-group">
                 <label>Vision Type</label>
@@ -928,6 +928,8 @@
                   <option value="tensorflow">TensorFlow Object Detection</option>
                   <option value="huskylens">HuskyLens</option>
                   <option value="limelight">Limelight 3A</option>
+                  <option value="opencv">OpenCV Custom Pipeline</option>
+                  <option value="colorblob">Color Blob Detection</option>
                 </select>
               </div>
               <div id="vis-options-apriltag" class="vis-options-group">
@@ -1077,6 +1079,69 @@
                     <option value="true" selected>Yes</option>
                     <option value="false">No</option>
                   </select>
+                </div>
+              </div>
+              <div id="vis-options-opencv" class="vis-options-group" style="display:none">
+                <div class="form-group">
+                  <label>Camera Name</label>
+                  <input type="text" id="vis-cv-camera" value="Webcam 1" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select id="vis-cv-resolution" class="text-input">
+                    <option value="640,480" selected>640 × 480</option>
+                    <option value="1280,720">1280 × 720</option>
+                    <option value="320,240">320 × 240</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include Sample Color Filter</label>
+                  <select id="vis-cv-samplefilter" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div id="vis-options-colorblob" class="vis-options-group" style="display:none">
+                <div class="form-group">
+                  <label>Camera Name</label>
+                  <input type="text" id="vis-cb-camera" value="Webcam 1" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select id="vis-cb-resolution" class="text-input">
+                    <option value="640,480" selected>640 × 480</option>
+                    <option value="1280,720">1280 × 720</option>
+                    <option value="320,240">320 × 240</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Lower Hue (0–179)</label>
+                  <input type="number" id="vis-cb-lh" value="100" min="0" max="179" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Lower Saturation (0–255)</label>
+                  <input type="number" id="vis-cb-ls" value="150" min="0" max="255" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Lower Value (0–255)</label>
+                  <input type="number" id="vis-cb-lv" value="50" min="0" max="255" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Upper Hue (0–179)</label>
+                  <input type="number" id="vis-cb-uh" value="130" min="0" max="179" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Upper Saturation (0–255)</label>
+                  <input type="number" id="vis-cb-us" value="255" min="0" max="255" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Upper Value (0–255)</label>
+                  <input type="number" id="vis-cb-uv" value="255" min="0" max="255" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Min Contour Area</label>
+                  <input type="number" id="vis-cb-minarea" value="500" min="0" class="text-input" />
                 </div>
               </div>
             </div>
