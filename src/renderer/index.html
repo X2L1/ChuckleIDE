@@ -338,6 +338,11 @@
             <div class="app-name">Global Objects</div>
             <div class="app-desc">Create shared data classes and configuration objects</div>
           </div>
+          <div class="home-app-card" id="app-vision-builder">
+            <div class="app-icon">👁️</div>
+            <div class="app-name">Vision Builder</div>
+            <div class="app-desc">Build vision pipelines for AprilTags, object tracking, and more</div>
+          </div>
         </div>
 
         <div class="home-quick-actions">
@@ -817,6 +822,191 @@
                 <button class="icon-btn" id="obj-refresh" title="Refresh">↻</button>
               </div>
               <div class="code-preview-content" id="obj-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="app-view-vision-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">👁️</span>
+          <h2>Vision Builder</h2>
+          <button class="btn-secondary small" id="vis-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="vis-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="vis-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Class Name</label>
+                <input type="text" id="vis-class-name" value="VisionOpMode" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Vision Type</label>
+                <select id="vis-type" class="text-input">
+                  <option value="apriltag">AprilTag Detection</option>
+                  <option value="tensorflow">TensorFlow Object Detection</option>
+                  <option value="huskylens">HuskyLens</option>
+                  <option value="limelight">Limelight 3A</option>
+                </select>
+              </div>
+              <div id="vis-options-apriltag" class="vis-options-group">
+                <div class="form-group">
+                  <label>Camera Name</label>
+                  <input type="text" id="vis-at-camera" value="Webcam 1" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select id="vis-at-resolution" class="text-input">
+                    <option value="640,480" selected>640 × 480</option>
+                    <option value="1280,720">1280 × 720</option>
+                    <option value="320,240">320 × 240</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tag Family</label>
+                  <select id="vis-at-family" class="text-input">
+                    <option value="TAG_36h11" selected>TAG_36h11 (FTC standard)</option>
+                    <option value="TAG_25h9">TAG_25h9</option>
+                    <option value="TAG_16h5">TAG_16h5</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Draw Axes</label>
+                  <select id="vis-at-axes" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Draw Cube Projection</label>
+                  <select id="vis-at-cube" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Draw Tag Outline</label>
+                  <select id="vis-at-outline" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Navigate to Tag</label>
+                  <select id="vis-at-navigate" class="text-input">
+                    <option value="true" selected>Yes — include helper</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div id="vis-options-tensorflow" class="vis-options-group" style="display:none">
+                <div class="form-group">
+                  <label>Camera Name</label>
+                  <input type="text" id="vis-tf-camera" value="Webcam 1" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select id="vis-tf-resolution" class="text-input">
+                    <option value="640,480" selected>640 × 480</option>
+                    <option value="1280,720">1280 × 720</option>
+                    <option value="320,240">320 × 240</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Custom Model Asset</label>
+                  <input type="text" id="vis-tf-model" value="" placeholder="Leave blank for default" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Labels (comma-separated)</label>
+                  <input type="text" id="vis-tf-labels" value="Yellow Pixel, Purple Pixel, Green Pixel, White Pixel" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Min Confidence</label>
+                  <input type="number" id="vis-tf-confidence" value="0.6" step="0.05" min="0" max="1" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Detect Position (left/center/right)</label>
+                  <select id="vis-tf-position" class="text-input">
+                    <option value="true" selected>Yes — include position detection</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div id="vis-options-huskylens" class="vis-options-group" style="display:none">
+                <div class="form-group">
+                  <label>Hardware Name</label>
+                  <input type="text" id="vis-hl-name" value="huskyLens" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Algorithm</label>
+                  <select id="vis-hl-algorithm" class="text-input">
+                    <option value="COLOR_RECOGNITION" selected>Color Recognition</option>
+                    <option value="FACE_RECOGNITION">Face Recognition</option>
+                    <option value="OBJECT_TRACKING">Object Tracking</option>
+                    <option value="OBJECT_RECOGNITION">Object Recognition</option>
+                    <option value="LINE_TRACKING">Line Tracking</option>
+                    <option value="TAG_RECOGNITION">Tag Recognition</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include Centering Logic</label>
+                  <select id="vis-hl-center" class="text-input">
+                    <option value="true" selected>Yes — include proportional centering</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div id="vis-options-limelight" class="vis-options-group" style="display:none">
+                <div class="form-group">
+                  <label>Hardware Name</label>
+                  <input type="text" id="vis-ll-name" value="limelight" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Default Pipeline</label>
+                  <select id="vis-ll-pipeline" class="text-input">
+                    <option value="0" selected>0 — AprilTag</option>
+                    <option value="1">1 — Neural Network</option>
+                    <option value="2">2 — Color/Contour</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include AprilTag Processing</label>
+                  <select id="vis-ll-apriltag" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include Neural Detection</label>
+                  <select id="vis-ll-neural" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include Color Targets</label>
+                  <select id="vis-ll-color" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Include Bot Pose (MegaTag)</label>
+                  <select id="vis-ll-pose" class="text-input">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="vis-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="vis-preview"></div>
             </div>
           </div>
         </div>

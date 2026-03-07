@@ -1622,3 +1622,8 @@ body.bottom-panel-hidden #main-layout {
   width: 100%;
   text-align: center;
 }
+
+/* ── Vision Builder options ──────────────────────────────── */
+.vis-options-group .form-group {
+  margin-bottom: 8px;
+}
