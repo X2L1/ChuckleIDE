@@ -211,6 +211,32 @@
           </div>
         </div>
         <div class="setting-group">
+          <div class="setting-group-title">GitHub</div>
+          <div id="github-signed-out">
+            <div class="setting-row" style="justify-content:center">
+              <button class="btn-primary small" id="btn-github-sign-in">Sign in with GitHub</button>
+            </div>
+            <div id="device-flow-status" class="device-flow-status" style="display:none">
+              <p class="device-flow-instruction">Enter this code on GitHub:</p>
+              <code id="device-flow-code" class="device-flow-code"></code>
+              <p class="device-flow-hint">A browser window has been opened. Paste the code above and authorize the app.</p>
+              <button class="btn-secondary small" id="btn-cancel-device-flow">Cancel</button>
+            </div>
+          </div>
+          <div id="github-signed-in" style="display:none">
+            <div class="github-user-info">
+              <img id="github-avatar" class="github-avatar" src="" alt="GitHub profile avatar" />
+              <div class="github-user-details">
+                <span id="github-display-name" class="github-display-name"></span>
+                <span id="github-username" class="github-username"></span>
+              </div>
+            </div>
+            <div class="setting-row" style="justify-content:center">
+              <button class="btn-secondary small" id="btn-github-sign-out">Sign out</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-group">
           <div class="setting-group-title">ADB</div>
           <div class="setting-row">
             <label>ADB Path</label>

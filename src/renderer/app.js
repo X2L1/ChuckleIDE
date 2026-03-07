@@ -475,6 +475,93 @@ async function loadSettings() {
 
 function setupSettingsPanel() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+
+  // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
+  document.getElementById('btn-github-sign-in').addEventListener('click', async () => {
+    const statusEl = document.getElementById('device-flow-status');
+    const codeEl   = document.getElementById('device-flow-code');
+    const btn      = document.getElementById('btn-github-sign-in');
+
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Starting…';
+      const { userCode } = await window.ftcIDE.auth.startDeviceFlow();
+
+      codeEl.textContent = userCode;
+      statusEl.style.display = '';
+      btn.textContent = 'Waiting for authorization…';
+    } catch (e) {
+      // Electron wraps IPC errors; strip the prefix for a cleaner toast.
+      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
+      showToast(`GitHub sign-in failed: ${msg}`, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Sign in with GitHub';
+    }
+  });
+
+  document.getElementById('btn-cancel-device-flow').addEventListener('click', async () => {
+    await window.ftcIDE.auth.cancelDeviceFlow();
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-sign-in');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    showToast('GitHub sign-in cancelled', 'info');
+  });
+
+  document.getElementById('btn-github-sign-out').addEventListener('click', async () => {
+    await window.ftcIDE.auth.signOut();
+    updateGitHubAuthUI(false, null);
+    showToast('Signed out of GitHub', 'info');
+  });
+
+  window.ftcIDE.on('auth:deviceFlowSuccess', async () => {
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-sign-in');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    showToast('Signed in with GitHub!', 'success');
+    // Refresh the auth UI with current user info
+    try {
+      const { signedIn, user } = await window.ftcIDE.auth.getUser();
+      updateGitHubAuthUI(signedIn, user);
+    } catch (e) { console.error('Failed to refresh GitHub auth UI:', e); }
+  });
+
+  window.ftcIDE.on('auth:deviceFlowError', (msg) => {
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-sign-in');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    if (msg !== 'cancelled') {
+      showToast(`GitHub sign-in failed: ${msg}`, 'error');
+    }
+  });
+
+  // Check initial sign-in state
+  refreshGitHubAuthUI();
+}
+
+async function refreshGitHubAuthUI() {
+  try {
+    const { signedIn, user } = await window.ftcIDE.auth.getUser();
+    updateGitHubAuthUI(signedIn, user);
+  } catch (e) { console.error('Failed to load GitHub auth state:', e); }
+}
+
+function updateGitHubAuthUI(signedIn, user) {
+  const signedOutEl = document.getElementById('github-signed-out');
+  const signedInEl  = document.getElementById('github-signed-in');
+
+  if (signedIn && user) {
+    signedOutEl.style.display = 'none';
+    signedInEl.style.display = '';
+    document.getElementById('github-avatar').src = user.avatar_url || '';
+    document.getElementById('github-display-name').textContent = user.name || user.login;
+    document.getElementById('github-username').textContent = `@${user.login}`;
+  } else {
+    signedOutEl.style.display = '';
+    signedInEl.style.display = 'none';
+  }
 }
 
 async function saveSettings() {
