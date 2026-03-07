@@ -22,6 +22,8 @@ let fallbackEditor = null;
 let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
+const DIAGNOSTICS_DEBOUNCE_MS = 220;
+const MAX_ACTIVE_DIAGNOSTICS = 100;
 const activeDiagnosticsByFile = new Map();
 let diagnosticsTimer = null;
 let previousActiveDiagnosticsCount = 0;
@@ -1282,7 +1284,7 @@ function appendBuildOutput(line, type) {
 function scheduleActiveDiagnostics(filePath) {
   if (!filePath) return;
   if (diagnosticsTimer) clearTimeout(diagnosticsTimer);
-  diagnosticsTimer = setTimeout(() => runActiveDiagnostics(filePath), 220);
+  diagnosticsTimer = setTimeout(() => runActiveDiagnostics(filePath), DIAGNOSTICS_DEBOUNCE_MS);
 }
 
 function runActiveDiagnostics(filePath) {
@@ -1312,7 +1314,7 @@ function renderActiveDiagnosticsForFile(filePath) {
     const item = document.createElement('div');
     item.className = 'problem-item';
     item.innerHTML = `
-      <span class="problem-icon ${diag.severity}">${diag.severity === 'error' ? '⨯' : '⚠'}</span>
+      <span class="problem-icon ${diag.severity === 'error' ? 'error' : 'warn'}">${diag.severity === 'error' ? '⨯' : '⚠'}</span>
       <div class="problem-info">
         <div class="problem-message">${escapeHtml(diag.message)}</div>
         <div class="problem-location">${escapeHtml(diag.location)}</div>
@@ -1488,7 +1490,7 @@ function findApparentCodeIssues(content, language) {
 
   if (inBlockComment && blockCommentStart) {
     diagnostics.push({
-      severity: 'warn',
+      severity: 'warning',
       message: 'Unclosed block comment',
       location: `Line ${blockCommentStart.line}, Col ${blockCommentStart.column}`,
       startLineNumber: blockCommentStart.line,
@@ -1514,7 +1516,7 @@ function findApparentCodeIssues(content, language) {
 
   if (language === 'python' && content.includes('\t')) {
     diagnostics.push({
-      severity: 'warn',
+      severity: 'warning',
       message: 'Mixed indentation may cause errors in Python.',
       location: 'Detected tab characters in file',
       startLineNumber: 1,
@@ -1524,7 +1526,7 @@ function findApparentCodeIssues(content, language) {
     });
   }
 
-  return diagnostics.slice(0, 100);
+  return diagnostics.slice(0, MAX_ACTIVE_DIAGNOSTICS);
 }
 
 function getOffsetForLineColumn(text, lineNumber, columnNumber) {
