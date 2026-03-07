@@ -1421,7 +1421,10 @@ function showInputPrompt(title, defaultValue) {
       cleanup();
       resolve(value);
     }
-    function onOk() { finish(input.value || null); }
+    function onOk() {
+      const val = input.value.trim();
+      finish(val || null);
+    }
     function onCancel() { finish(null); }
     function onKey(e) {
       if (e.key === 'Enter') { e.preventDefault(); onOk(); }
@@ -1523,7 +1526,7 @@ async function promptRename(filePath, oldName) {
     }
     await refreshFileTree();
   } catch (err) {
-    showToast(`Rename failed: ${err.message}`);
+    showToast(`Rename failed: ${err.message}`, 'error');
   }
 }
 
