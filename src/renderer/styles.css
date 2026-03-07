@@ -1715,3 +1715,76 @@ body.bottom-panel-hidden #main-layout {
 .vis-options-group .form-group {
   margin-bottom: 8px;
 }
+
+/* ── Saved Paths Panel ─────────────────────────────────── */
+.pv-saved-paths-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pv-saved-paths-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pv-saved-paths-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg-bright);
+}
+.pv-saved-paths-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.pv-empty-msg {
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 12px;
+  padding: 24px 16px;
+}
+.pv-path-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.pv-path-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.pv-path-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--fg-bright);
+}
+.pv-path-item-date {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.pv-path-item-points {
+  font-size: 11px;
+  color: var(--fg-dim);
+  margin-bottom: 8px;
+}
+.pv-path-actions {
+  display: flex;
+  gap: 6px;
+}
+.pv-path-actions button {
+  font-size: 11px;
+  padding: 3px 8px;
+}

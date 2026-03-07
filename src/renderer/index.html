@@ -521,10 +521,21 @@
         <div class="app-view-header">
           <span style="font-size:18px">🗺️</span>
           <h2>PedroPathing Visualizer</h2>
+          <button class="btn-secondary small" id="pv-save-path" title="Save current path">💾 Save Path</button>
+          <button class="btn-secondary small" id="pv-load-paths" title="View saved paths">📂 Saved Paths</button>
           <button class="btn-secondary small" id="pv-open-external" title="Open in browser">🌐 Open in Browser</button>
           <button class="icon-btn" id="pv-close" title="Close">✕</button>
         </div>
-        <div class="app-view-body" style="padding:0">
+        <div class="app-view-body" style="padding:0; position:relative;">
+          <div id="pv-saved-paths-panel" class="pv-saved-paths-panel" style="display:none;">
+            <div class="pv-saved-paths-header">
+              <h3>Saved Paths</h3>
+              <button class="icon-btn" id="pv-close-saved-panel" title="Close">✕</button>
+            </div>
+            <div id="pv-saved-paths-list" class="pv-saved-paths-list">
+              <div class="pv-empty-msg">No saved paths yet. Design a path in the visualizer, then click "Save Path".</div>
+            </div>
+          </div>
           <iframe id="pv-iframe" src="https://visualizer.pedropathing.com" style="width:100%;height:100%;border:none;"></iframe>
         </div>
       </div>

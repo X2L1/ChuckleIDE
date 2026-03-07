@@ -14,7 +14,8 @@ const state = {
   devices: [],
   editorFontSize: 14,
   bottomHeight: 200,
-  sidebarWidth: 260
+  sidebarWidth: 260,
+  pendingPathForOpMode: null
 };
 
 let monacoEditor = null;
@@ -2762,7 +2763,7 @@ function initOpModeBuilder() {
   document.getElementById('ob-start-heading').addEventListener('input', updateOBPreview);
 
   document.getElementById('ob-add-path').addEventListener('click', () => {
-    obSteps.push({
+    const step = {
       id: ++obIdCounter,
       type: 'path',
       interpolation: 'linear',
@@ -2771,7 +2772,22 @@ function initOpModeBuilder() {
         { x: 24, y: 0, heading: 0 }
       ],
       controlPoints: []
-    });
+    };
+
+    if (state.pendingPathForOpMode) {
+      const pd = state.pendingPathForOpMode;
+      if (pd.waypoints && pd.waypoints.length >= 2) {
+        step.waypoints = pd.waypoints.map(wp => ({
+          x: wp.x, y: wp.y, heading: wp.heading || 0
+        }));
+        if (pd.controlPoints && pd.controlPoints.length > 0) {
+          step.controlPoints = pd.controlPoints.map(cp => ({ x: cp.x, y: cp.y }));
+        }
+      }
+      state.pendingPathForOpMode = null;
+    }
+
+    obSteps.push(step);
     renderOBSequence();
     updateOBPreview();
   });
@@ -3228,6 +3244,224 @@ function initPathVisualizer() {
   document.getElementById('pv-close').addEventListener('click', closeAppView);
   document.getElementById('pv-open-external').addEventListener('click', () => {
     window.ftcIDE.shell.openExternal('https://visualizer.pedropathing.com');
+  });
+
+  document.getElementById('pv-save-path').addEventListener('click', () => {
+    showSavePathDialog();
+  });
+
+  document.getElementById('pv-load-paths').addEventListener('click', () => {
+    const panel = document.getElementById('pv-saved-paths-panel');
+    const isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : '';
+    if (!isVisible) renderSavedPaths();
+  });
+
+  document.getElementById('pv-close-saved-panel').addEventListener('click', () => {
+    document.getElementById('pv-saved-paths-panel').style.display = 'none';
+  });
+}
+
+function showSavePathDialog() {
+  const existing = document.getElementById('pv-save-dialog');
+  if (existing) existing.remove();
+
+  const dialog = document.createElement('div');
+  dialog.id = 'pv-save-dialog';
+  dialog.className = 'modal-overlay';
+  dialog.style.display = 'flex';
+  dialog.innerHTML = `
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <h3>Save Path from Visualizer</h3>
+        <button class="icon-btn" id="pv-save-dialog-close">✕</button>
+      </div>
+      <div class="modal-body" style="max-height:400px; overflow-y:auto;">
+        <p style="color:var(--fg-dim); font-size:12px; margin-bottom:12px;">
+          Enter the path waypoints from the visualizer. Copy the coordinates from the PedroPathing visualizer.
+        </p>
+        <div class="form-group">
+          <label>Path Name</label>
+          <input type="text" id="pv-path-name" value="" placeholder="e.g. Score Specimen" class="text-input" />
+        </div>
+        <div id="pv-waypoints-container">
+          <div class="panel-section-title">WAYPOINTS</div>
+          <div class="pv-waypoint-entry" data-index="0">
+            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+              <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Start:</span>
+              <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+            </div>
+          </div>
+          <div class="pv-waypoint-entry" data-index="1">
+            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+              <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">End:</span>
+              <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <button class="btn-secondary small" id="pv-add-waypoint">+ Add Waypoint</button>
+          <button class="btn-secondary small" id="pv-add-control-point">+ Add Control Point</button>
+        </div>
+        <div id="pv-control-points-container" style="margin-top:8px;">
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid var(--border);">
+        <button class="btn-secondary small" id="pv-save-dialog-cancel">Cancel</button>
+        <button class="btn-primary small" id="pv-save-dialog-confirm">Save Path</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+
+  let controlPointCount = 0;
+
+  document.getElementById('pv-save-dialog-close').addEventListener('click', () => dialog.remove());
+  document.getElementById('pv-save-dialog-cancel').addEventListener('click', () => dialog.remove());
+
+  document.getElementById('pv-add-waypoint').addEventListener('click', () => {
+    const container = document.getElementById('pv-waypoints-container');
+    const entries = container.querySelectorAll('.pv-waypoint-entry');
+    const idx = entries.length;
+    const entry = document.createElement('div');
+    entry.className = 'pv-waypoint-entry';
+    entry.dataset.index = idx;
+    entry.innerHTML = `
+      <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+        <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Pt ${idx}:</span>
+        <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+        <button class="icon-btn pv-remove-wp" title="Remove" style="font-size:12px;">✕</button>
+      </div>
+    `;
+    const lastEntry = entries[entries.length - 1];
+    container.insertBefore(entry, lastEntry);
+    entry.querySelector('.pv-remove-wp').addEventListener('click', () => entry.remove());
+  });
+
+  document.getElementById('pv-add-control-point').addEventListener('click', () => {
+    controlPointCount++;
+    const container = document.getElementById('pv-control-points-container');
+    const entry = document.createElement('div');
+    entry.className = 'pv-control-point-entry';
+    entry.innerHTML = `
+      <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+        <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Ctrl ${controlPointCount}:</span>
+        <input type="number" class="text-input small pv-cp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-cp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+        <button class="icon-btn pv-remove-cp" title="Remove" style="font-size:12px;">✕</button>
+      </div>
+    `;
+    container.appendChild(entry);
+    entry.querySelector('.pv-remove-cp').addEventListener('click', () => entry.remove());
+  });
+
+  document.getElementById('pv-save-dialog-confirm').addEventListener('click', async () => {
+    const name = document.getElementById('pv-path-name').value.trim();
+    if (!name) { showToast('Enter a path name', 'warning'); return; }
+
+    const waypoints = [];
+    document.querySelectorAll('#pv-waypoints-container .pv-waypoint-entry').forEach(entry => {
+      waypoints.push({
+        x: parseFloat(entry.querySelector('.pv-wp-x').value) || 0,
+        y: parseFloat(entry.querySelector('.pv-wp-y').value) || 0,
+        heading: parseFloat(entry.querySelector('.pv-wp-h').value) || 0
+      });
+    });
+
+    const controlPoints = [];
+    document.querySelectorAll('#pv-control-points-container .pv-control-point-entry').forEach(entry => {
+      controlPoints.push({
+        x: parseFloat(entry.querySelector('.pv-cp-x').value) || 0,
+        y: parseFloat(entry.querySelector('.pv-cp-y').value) || 0
+      });
+    });
+
+    if (waypoints.length < 2) { showToast('A path needs at least 2 waypoints', 'warning'); return; }
+
+    const pathData = {
+      name,
+      date: new Date().toISOString(),
+      waypoints,
+      controlPoints
+    };
+
+    let saved = [];
+    try {
+      const raw = await window.ftcIDE.settings.get('paths.saved');
+      if (Array.isArray(raw)) saved = raw;
+    } catch { /* ignore */ }
+
+    saved.push(pathData);
+    await window.ftcIDE.settings.set('paths.saved', saved);
+
+    dialog.remove();
+    showToast(`Path "${name}" saved`, 'success');
+  });
+}
+
+async function renderSavedPaths() {
+  const list = document.getElementById('pv-saved-paths-list');
+  let saved = [];
+  try {
+    const raw = await window.ftcIDE.settings.get('paths.saved');
+    if (Array.isArray(raw)) saved = raw;
+  } catch { /* ignore */ }
+
+  if (saved.length === 0) {
+    list.innerHTML = '<div class="pv-empty-msg">No saved paths yet. Design a path in the visualizer, then click "Save Path".</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  saved.forEach((p, idx) => {
+    const item = document.createElement('div');
+    item.className = 'pv-path-item';
+    const dateStr = p.date ? new Date(p.date).toLocaleDateString() : '';
+    const wpCount = (p.waypoints || []).length;
+    const cpCount = (p.controlPoints || []).length;
+    const escapedName = p.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    item.innerHTML = `
+      <div class="pv-path-item-header">
+        <span class="pv-path-item-name">${escapedName}</span>
+        <span class="pv-path-item-date">${dateStr}</span>
+      </div>
+      <div class="pv-path-item-points">${wpCount} waypoints${cpCount > 0 ? ', ' + cpCount + ' control points' : ''}</div>
+      <div class="pv-path-actions">
+        <button class="btn-primary small pv-use-in-opmode" data-idx="${idx}">Use in OpMode</button>
+        <button class="btn-secondary small pv-delete-path" data-idx="${idx}">Delete</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('.pv-use-in-opmode').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      const pathData = saved[idx];
+      if (pathData) {
+        state.pendingPathForOpMode = pathData;
+        document.getElementById('pv-saved-paths-panel').style.display = 'none';
+        openAppView('opmode-builder');
+        showToast(`Path "${pathData.name}" ready — add a "Follow Path" step to use it`, 'info');
+      }
+    });
+  });
+
+  list.querySelectorAll('.pv-delete-path').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      saved.splice(idx, 1);
+      await window.ftcIDE.settings.set('paths.saved', saved);
+      renderSavedPaths();
+      showToast('Path deleted', 'info');
+    });
   });
 }
 
