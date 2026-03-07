@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * and turns in place to help you verify and tune:
  *   - xMovement / yMovement
  *   - forwardZeroPowerAcceleration / lateralZeroPowerAcceleration
- *   - Translational, heading, and drive PIDF coefficients
- *   - Dead wheel encoder ticks-per-inch and positions
+ *   - Translational, heading, and drive PIDF coefficients (primary and secondary)
+ *   - GoBilda Pinpoint localizer pod offsets and encoder settings
  *
  * Steps:
  *   1. Set your FConstants and LConstants classes before running.

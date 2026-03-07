@@ -569,17 +569,70 @@
                 <div class="const-row"><label>D</label><input type="number" step="any" id="pc-driveD" value="0.00001" class="text-input" /></div>
                 <div class="const-row"><label>F</label><input type="number" step="any" id="pc-driveF" value="0.005" class="text-input" /></div>
               </div>
-              <div class="panel-section-title" style="margin-top:16px">LOCALIZATION CONSTANTS (LConstants)</div>
               <div class="constants-group">
-                <div class="constants-group-title">Dead Wheel Pod Positions (inches)</div>
-                <div class="const-row"><label>leftY</label><input type="number" step="any" id="pc-leftY" value="1.0" class="text-input" /></div>
-                <div class="const-row"><label>rightY</label><input type="number" step="any" id="pc-rightY" value="-1.0" class="text-input" /></div>
-                <div class="const-row"><label>strafeX</label><input type="number" step="any" id="pc-strafeX" value="-4.0" class="text-input" /></div>
+                <div class="constants-group-title">Secondary Translational PIDF</div>
+                <div class="const-row"><label>Enable</label><input type="checkbox" id="pc-useSecTrans" class="checkbox-input" /></div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-secTransP" value="0.02" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-secTransI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-secTransD" value="0" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-secTransF" value="0" class="text-input" /></div>
+                <div class="const-row"><label>Switch (in)</label><input type="number" step="any" id="pc-secTransSwitch" value="3" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Secondary Heading PIDF</div>
+                <div class="const-row"><label>Enable</label><input type="checkbox" id="pc-useSecHead" class="checkbox-input" /></div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-secHeadP" value="0.5" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-secHeadI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-secHeadD" value="0" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-secHeadF" value="0" class="text-input" /></div>
+                <div class="const-row"><label>Switch (deg)</label><input type="number" step="any" id="pc-secHeadSwitch" value="5" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Secondary Drive PIDF</div>
+                <div class="const-row"><label>Enable</label><input type="checkbox" id="pc-useSecDrive" class="checkbox-input" /></div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-secDriveP" value="0.01" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-secDriveI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-secDriveD" value="0" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-secDriveF" value="0" class="text-input" /></div>
+                <div class="const-row"><label>Switch (in)</label><input type="number" step="any" id="pc-secDriveSwitch" value="3" class="text-input" /></div>
+              </div>
+              <div class="panel-section-title" style="margin-top:16px">LOCALIZATION CONSTANTS (LConstants – Pinpoint)</div>
+              <div class="constants-group">
+                <div class="constants-group-title">Pinpoint Configuration</div>
+                <div class="const-row"><label>Hardware Map Name</label><input type="text" id="pc-ppHwName" value="pinpoint" class="text-input" /></div>
+                <div class="const-row"><label>X Offset (mm)</label><input type="number" step="any" id="pc-ppXOffset" value="-84.0" class="text-input" /></div>
+                <div class="const-row"><label>Y Offset (mm)</label><input type="number" step="any" id="pc-ppYOffset" value="-168.0" class="text-input" /></div>
               </div>
               <div class="constants-group">
                 <div class="constants-group-title">Encoder</div>
-                <div class="const-row"><label>Encoder Ticks per Rev</label><input type="number" step="any" id="pc-ticksPerRev" value="8192" class="text-input" /></div>
-                <div class="const-row"><label>Wheel Radius (in)</label><input type="number" step="any" id="pc-wheelRadius" value="0.944882" class="text-input" /></div>
+                <div class="const-row">
+                  <label>Encoder Resolution</label>
+                  <select id="pc-ppEncoderRes" class="text-input">
+                    <option value="goBILDA_SWINGARM_POD">goBILDA Swingarm Pod</option>
+                    <option value="goBILDA_4_BAR_POD">goBILDA 4-Bar Pod</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div class="const-row"><label>Custom Resolution (ticks/mm)</label><input type="number" step="any" id="pc-ppCustomRes" value="13.26291192" class="text-input" /></div>
+                <div class="const-row">
+                  <label>Forward Encoder Direction</label>
+                  <select id="pc-ppFwdDir" class="text-input">
+                    <option value="FORWARD">FORWARD</option>
+                    <option value="REVERSED">REVERSED</option>
+                  </select>
+                </div>
+                <div class="const-row">
+                  <label>Strafe Encoder Direction</label>
+                  <select id="pc-ppStrDir" class="text-input">
+                    <option value="FORWARD">FORWARD</option>
+                    <option value="REVERSED">REVERSED</option>
+                  </select>
+                </div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Yaw Scalar</div>
+                <div class="const-row"><label>Use Yaw Scalar</label><input type="checkbox" id="pc-ppUseYawScalar" class="checkbox-input" /></div>
+                <div class="const-row"><label>Yaw Scalar</label><input type="number" step="any" id="pc-ppYawScalar" value="1.0" class="text-input" /></div>
               </div>
             </div>
             <div class="builder-preview-panel">
