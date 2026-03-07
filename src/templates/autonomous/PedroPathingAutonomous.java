@@ -180,17 +180,56 @@ public class PedroPathingAutonomous extends LinearOpMode {
         public static double drivePIDFCoefficients_i = 0;
         public static double drivePIDFCoefficients_d = 0.00001;
         public static double drivePIDFCoefficients_f = 0.005;
+
+        // Secondary PIDF coefficients – used when the robot is close to the target
+        // Set useSecondary*PID to true and tune the switch thresholds
+        public static boolean useSecondaryTranslationalPID = false;
+        public static double secondaryTranslationalPIDFCoefficients_p = 0.02;
+        public static double secondaryTranslationalPIDFCoefficients_i = 0;
+        public static double secondaryTranslationalPIDFCoefficients_d = 0;
+        public static double secondaryTranslationalPIDFCoefficients_f = 0;
+        public static double secondaryTranslationalPIDFSwitch = 3;  // inches
+
+        public static boolean useSecondaryHeadingPID = false;
+        public static double secondaryHeadingPIDFCoefficients_p = 0.5;
+        public static double secondaryHeadingPIDFCoefficients_i = 0;
+        public static double secondaryHeadingPIDFCoefficients_d = 0;
+        public static double secondaryHeadingPIDFCoefficients_f = 0;
+        public static double secondaryHeadingPIDFSwitch = 5;  // degrees
+
+        public static boolean useSecondaryDrivePID = false;
+        public static double secondaryDrivePIDFCoefficients_p = 0.01;
+        public static double secondaryDrivePIDFCoefficients_i = 0;
+        public static double secondaryDrivePIDFCoefficients_d = 0;
+        public static double secondaryDrivePIDFCoefficients_f = 0;
+        public static double secondaryDrivePIDFSwitch = 3;  // inches
     }
 
     /**
-     * Localization constants for three dead-wheel odometry.
-     * Adjust pod positions for your robot's physical layout.
+     * Localization constants for GoBilda Pinpoint odometry computer.
+     * Adjust pod offsets and encoder settings for your robot's physical layout.
      */
     public static class LConstants {
-        // Dead wheel pod positions (inches from robot center)
-        public static double leftY   = 1.0;   // left pod Y offset
-        public static double rightY  = -1.0;  // right pod Y offset
-        public static double strafeX = -4.0;  // strafe pod X offset
-        public static double ticks_per_inch = 8192.0 / (2 * Math.PI * 0.944882);
+        // Pinpoint device name in robot configuration
+        public static String hardwareMapName = "pinpoint";
+
+        // Pod offsets from robot center (mm)
+        public static double xOffset = -84.0;
+        public static double yOffset = -168.0;
+
+        // Encoder resolution – use a preset or set a custom value
+        // GoBilda Swingarm Pod: GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_SWINGARM_POD
+        // GoBilda 4-Bar Pod:    GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD
+        public static boolean useCustomEncoderResolution = false;
+        public static double customEncoderResolution = 13.26291192;  // ticks per mm
+
+        // Encoder directions – flip if a pod reads in the wrong direction
+        // GoBildaPinpointDriver.EncoderDirection.FORWARD or REVERSED
+        public static boolean forwardEncoderReversed = false;
+        public static boolean strafeEncoderReversed = false;
+
+        // Yaw scalar – set to true and adjust if heading drifts
+        public static boolean useYawScalar = false;
+        public static double yawScalar = 1.0;
     }
 }
