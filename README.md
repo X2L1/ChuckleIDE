@@ -1,4 +1,4 @@
-# FTC IDE
+# ChuckleIDE
 
 A comprehensive desktop IDE for [FIRST Tech Challenge (FTC)](https://www.firstinspires.org/robotics/ftc) robotics programming, built with Electron. Write, build, and deploy Java code to your robot — all from one app.
 
@@ -8,7 +8,7 @@ Pre-built executables are available on the [Releases page](https://github.com/X2
 
 1. Go to the **[Latest Release](https://github.com/X2L1/ChuckleIDE/releases/latest)**.
 2. Under **Assets**, download the installer or portable `.exe` for Windows.
-3. Run the downloaded file to install or launch FTC IDE.
+3. Run the downloaded file to install or launch ChuckleIDE.
 
 > **Note:** You still need **Java JDK ≥ 8** and **adb** installed on your system for building and deploying robot code. See [Prerequisites](#prerequisites) below.
 
@@ -267,7 +267,7 @@ npm install
 npm start
 ```
 
-A window will open with the FTC IDE. You're ready to code! 🎉
+A window will open with ChuckleIDE. You're ready to code! 🎉
 
 ### Development mode (optional)
 
