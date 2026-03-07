@@ -868,7 +868,7 @@ const appTabMeta = {
   'interplut-manager': { icon: '📈', label: 'Interpolated LUTs' },
   'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
   'object-manager':    { icon: '📦', label: 'Global Objects' },
-  'util-builder':      { icon: '🛠️', label: 'Utilities' }
+  'util-builder':      { icon: '🛠️', label: 'Utilities' },
   'vision-builder':    { icon: '👁️', label: 'Vision Builder' }
 };
 
@@ -4210,6 +4210,10 @@ function generateUtilCode() {
   for (const m of selected) {
     code += '\n' + m.code + '\n';
   }
+
+  code += '}\n';
+  return code;
+}
 
 // ── Vision Builder ────────────────────────────────────────
 let visInitialized = false;

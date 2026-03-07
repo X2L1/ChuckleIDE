@@ -466,8 +466,6 @@ ipcMain.handle('settings:delete', async (_, key) => {
   store.delete(key);
   return true;
 });
-  return true;
-});
 
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
 
