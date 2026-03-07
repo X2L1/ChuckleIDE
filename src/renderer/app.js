@@ -467,6 +467,17 @@ async function loadSettings() {
     setInputVal('setting-github-user', state.settings['git.username'] || '');
     setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
+
+    // Show token status
+    try {
+      const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
+      const statusEl = document.getElementById('github-token-status');
+      if (statusEl) {
+        statusEl.textContent = hasToken ? '✓ Token saved' : '';
+        statusEl.style.color = hasToken ? 'var(--green, #4caf50)' : 'var(--fg-dim)';
+      }
+    } catch { /* ignore */ }
+
     applyFallbackEditorSettings();
 
     // Restore last project
@@ -495,7 +506,8 @@ function setupSettingsPanel() {
       statusEl.style.display = '';
       btn.textContent = 'Waiting for authorization…';
     } catch (e) {
-      showToast(`GitHub sign-in failed: ${e.message}`, 'error');
+      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
+      showToast(`GitHub sign-in failed: ${msg}`, 'error');
       btn.disabled = false;
       btn.textContent = 'Sign in with GitHub';
     }
@@ -515,6 +527,11 @@ function setupSettingsPanel() {
     const btn = document.getElementById('btn-github-device-flow');
     btn.disabled = false;
     btn.textContent = 'Sign in with GitHub';
+    const statusEl = document.getElementById('github-token-status');
+    if (statusEl) {
+      statusEl.textContent = '✓ Token saved';
+      statusEl.style.color = 'var(--green, #4caf50)';
+    }
     showToast('Signed in with GitHub!', 'success');
   });
 
@@ -553,6 +570,11 @@ async function saveSettings() {
   if (githubToken) {
     await window.ftcIDE.credentials.setGitHubToken(githubToken);
     document.getElementById('setting-github-token').value = '';
+    const statusEl = document.getElementById('github-token-status');
+    if (statusEl) {
+      statusEl.textContent = '✓ Token saved';
+      statusEl.style.color = 'var(--green, #4caf50)';
+    }
   }
 
   // Apply to Monaco
