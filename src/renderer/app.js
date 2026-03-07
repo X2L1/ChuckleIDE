@@ -604,7 +604,6 @@ async function openProject(projectPath) {
     state.showingDeps = false;
 
     await refreshFileTree();
-    await refreshGitStatus();
 
     // Show Dependencies button if project has TeamCode
     const depsSection = document.getElementById('deps-section');
