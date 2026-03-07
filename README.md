@@ -346,6 +346,48 @@ npm run dev
 | Control | PID Controller |
 | State Machine | State Machine OpMode |
 
+## Cutting a Release
+
+> This section is for maintainers. End users can simply download from [Releases](https://github.com/X2L1/ChuckleIDE/releases).
+
+The build workflow (`.github/workflows/build.yml`) automatically builds installer artifacts for Linux, Windows, and macOS and attaches them to a GitHub Release whenever a version tag is pushed.
+
+### Steps
+
+1. **Bump the version** in `package.json`:
+   ```json
+   "version": "1.2.3"
+   ```
+
+2. **Commit and push** the version bump:
+   ```bash
+   git add package.json
+   git commit -m "chore: bump version to 1.2.3"
+   git push origin main
+   ```
+
+3. **Create and push a version tag** (preferred format: `vX.Y.Z`):
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+
+   Both `vX.Y.Z` (e.g. `v1.2.3`) and `X.Y.Z` (e.g. `1.2.3`) tags trigger the workflow.
+
+4. **GitHub Actions** will build installers on Linux, Windows, and macOS in parallel, then create a GitHub Release with the installer files attached automatically.
+
+### Expected release assets
+
+| File | Platform |
+|---|---|
+| `*.AppImage` | Linux (portable) |
+| `*.deb` | Linux (Debian/Ubuntu) |
+| `*Setup*.exe` | Windows (NSIS installer) |
+| `*.exe` (portable) | Windows (portable) |
+| `*.dmg` | macOS |
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

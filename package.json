@@ -7,14 +7,17 @@
     "start": "electron .",
     "dev": "NODE_ENV=development electron .",
     "build": "electron-builder",
-    "build:linux": "electron-builder --linux",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
     "pack": "electron-builder --dir",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": ["ftc", "robotics", "ide", "electron", "java", "first-tech-challenge"],
-  "author": "FTC IDE Contributors",
+  "author": {
+    "name": "FTC IDE Contributors",
+    "email": "ftcide@noreply.github.com"
+  },
   "license": "MIT",
   "dependencies": {
     "@devicefarmer/adbkit": "^3.2.6",

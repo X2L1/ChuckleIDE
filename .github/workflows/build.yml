@@ -1,9 +1,20 @@
 name: Build and Release
 
+# How to cut a release:
+#   1. Bump the version in package.json (e.g. "version": "1.2.3").
+#   2. Commit the change and push to main.
+#   3. Create and push a tag in vX.Y.Z format (e.g. v1.2.3):
+#        git tag v1.2.3
+#        git push origin v1.2.3
+#   Accepted tag formats: vX.Y.Z (preferred) or X.Y.Z (e.g. 1.2.3).
+#   Tags that do not start with 'v' or a digit followed by '.' will NOT trigger this workflow.
+
 on:
   push:
+    # Trigger on versioned tags: vX.Y.Z (preferred) or X.Y.Z
     tags:
       - 'v*'
+      - '[0-9]*.[0-9]*'
   workflow_dispatch:
 
 permissions:
@@ -35,6 +46,7 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
+          if-no-files-found: warn
           retention-days: 30
 
   build-windows:
@@ -61,6 +73,7 @@ jobs:
           name: windows-build
           path: |
             dist/*.exe
+          if-no-files-found: warn
           retention-days: 30
 
   build-mac:
@@ -87,12 +100,14 @@ jobs:
           name: mac-build
           path: |
             dist/*.dmg
+          if-no-files-found: warn
           retention-days: 30
 
   release:
+    # Only publish a GitHub Release when the workflow was triggered by a tag push
     needs: [build-linux, build-windows, build-mac]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -105,3 +120,5 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
