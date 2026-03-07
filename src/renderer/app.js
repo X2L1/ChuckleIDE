@@ -4087,7 +4087,9 @@ function generateVisionCode() {
 function generateAprilTagCode() {
   const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
   const camera    = document.getElementById('vis-at-camera').value || 'Webcam 1';
-  const res       = document.getElementById('vis-at-resolution').value.split(',');
+  const res       = (document.getElementById('vis-at-resolution').value || '640,480').split(',');
+  const resW      = res[0] || '640';
+  const resH      = res[1] || '480';
   const family    = document.getElementById('vis-at-family').value;
   const axes      = document.getElementById('vis-at-axes').value;
   const cube      = document.getElementById('vis-at-cube').value;
@@ -4167,7 +4169,7 @@ function generateAprilTagCode() {
   code += '                .build();\n\n';
   code += '        visionPortal = new VisionPortal.Builder()\n';
   code += `                .setCamera(hardwareMap.get(WebcamName.class, "${camera}"))\n`;
-  code += `                .setCameraResolution(new android.util.Size(${res[0]}, ${res[1]}))\n`;
+  code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
   code += '                .setStreamFormat(VisionPortal.StreamFormat.YUY2)\n';
   code += '                .addProcessor(aprilTagProcessor)\n';
   code += '                .build();\n\n';
@@ -4184,7 +4186,9 @@ function generateAprilTagCode() {
 function generateTensorFlowCode() {
   const className  = document.getElementById('vis-class-name').value || 'VisionOpMode';
   const camera     = document.getElementById('vis-tf-camera').value || 'Webcam 1';
-  const res        = document.getElementById('vis-tf-resolution').value.split(',');
+  const res        = (document.getElementById('vis-tf-resolution').value || '640,480').split(',');
+  const resW       = res[0] || '640';
+  const resH       = res[1] || '480';
   const model      = document.getElementById('vis-tf-model').value.trim();
   const labelsRaw  = document.getElementById('vis-tf-labels').value;
   const confidence = document.getElementById('vis-tf-confidence').value || '0.6';
@@ -4291,7 +4295,7 @@ function generateTensorFlowCode() {
   code += '        tfodProcessor = tfodBuilder.build();\n\n';
   code += '        visionPortal = new VisionPortal.Builder()\n';
   code += `                .setCamera(hardwareMap.get(WebcamName.class, "${camera}"))\n`;
-  code += `                .setCameraResolution(new android.util.Size(${res[0]}, ${res[1]}))\n`;
+  code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
   code += '                .addProcessor(tfodProcessor)\n';
   code += '                .build();\n\n';
   code += '        while (!isStarted() && !isStopRequested() &&\n';
@@ -4361,6 +4365,7 @@ function generateHuskyLensCode() {
     code += '    }\n';
 
     code += '\n    private HuskyLens.Block getLargestBlock(HuskyLens.Block[] blocks) {\n';
+    code += '        if (blocks.length == 0) return null;\n';
     code += '        HuskyLens.Block largest = blocks[0];\n';
     code += '        int maxArea = largest.width * largest.height;\n';
     code += '        for (int i = 1; i < blocks.length; i++) {\n';
