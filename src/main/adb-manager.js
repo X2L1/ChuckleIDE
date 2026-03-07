@@ -20,7 +20,7 @@ class AdbManager {
   async _initClient() {
     try {
       const adbkit = require('@devicefarmer/adbkit');
-      this.client = adbkit.createClient();
+      this.client = adbkit.Adb.createClient();
     } catch (e) {
       console.warn('adbkit not available, falling back to CLI adb:', e.message);
       this.client = null;
@@ -172,7 +172,7 @@ class AdbManager {
   /** Clean up connections */
   cleanup() {
     if (this.client) {
-      try { this.client.end(); } catch (e) {}
+      try { if (typeof this.client.end === 'function') this.client.end(); } catch (e) {}
     }
   }
 }
