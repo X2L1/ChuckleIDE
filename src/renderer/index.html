@@ -288,6 +288,10 @@
           </div>
           <h1>ChuckleIDE</h1>
           <p class="welcome-subtitle">FTC Development Made Easy</p>
+          <button class="home-customize-btn" id="home-customize-btn" title="Customize home screen" aria-label="Customize home screen">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="3"/><path d="M27 16a2 2 0 0 0-1-1.7l-1.3-.8a9 9 0 0 0 0-2l1.3-.8a2 2 0 0 0 .7-2.7l-1-1.7a2 2 0 0 0-2.7-.7l-1.3.8a9 9 0 0 0-1.7-1V4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v1.4a9 9 0 0 0-1.7 1l-1.3-.8a2 2 0 0 0-2.7.7l-1 1.7a2 2 0 0 0 .7 2.7l1.3.8a9 9 0 0 0 0 2L5 17.3a2 2 0 0 0-.7 2.7l1 1.7a2 2 0 0 0 2.7.7l1.3-.8a9 9 0 0 0 1.7 1V24a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1.4a9 9 0 0 0 1.7-1l1.3.8a2 2 0 0 0 2.7-.7l1-1.7a2 2 0 0 0-.7-2.7z"/></svg>
+            Customize
+          </button>
         </div>
 
         <div class="home-apps-grid">
@@ -380,6 +384,22 @@
             <div class="app-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg></div>
             <div class="app-name">Vision Builder</div>
             <div class="app-desc">Build vision pipelines for AprilTags, object tracking, and more</div>
+          </div>
+        </div>
+
+        <div id="home-customize-panel" class="home-customize-panel" style="display:none;">
+          <div class="home-customize-header">
+            <h3>Customize Home Screen</h3>
+            <button class="icon-btn" id="home-customize-close">✕</button>
+          </div>
+          <p class="home-customize-hint">Toggle apps on/off. Drag to reorder. Create folders to group apps.</p>
+          <div class="home-customize-actions">
+            <button class="btn-secondary small" id="home-add-folder">+ New Folder</button>
+            <button class="btn-secondary small" id="home-reset-layout">Reset to Default</button>
+          </div>
+          <div id="home-customize-list" class="home-customize-list"></div>
+          <div class="home-customize-footer">
+            <button class="btn-primary small" id="home-customize-done">Done</button>
           </div>
         </div>
 

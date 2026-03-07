@@ -18,6 +18,227 @@ const state = {
   pendingPathForOpMode: null
 };
 
+const DEFAULT_HOME_LAYOUT = [
+  { type: 'app', id: 'app-subsystem-builder', visible: true },
+  { type: 'app', id: 'app-command-builder', visible: true },
+  { type: 'app', id: 'app-opmode-builder', visible: true },
+  { type: 'app', id: 'app-pedro-visualizer', visible: true },
+  { type: 'app', id: 'app-ftc-dashboard', visible: true },
+  { type: 'app', id: 'app-panels-view', visible: true },
+  { type: 'app', id: 'app-template-gallery', visible: true },
+  { type: 'app', id: 'app-open-editor', visible: true },
+  { type: 'app', id: 'app-device-manager', visible: true },
+  { type: 'app', id: 'app-new-project', visible: true },
+  { type: 'app', id: 'app-learn', visible: true },
+  { type: 'app', id: 'app-pedro-constants', visible: true },
+  { type: 'app', id: 'app-lut-manager', visible: true },
+  { type: 'app', id: 'app-interplut-manager', visible: true },
+  { type: 'app', id: 'app-enum-manager', visible: true },
+  { type: 'app', id: 'app-object-manager', visible: true },
+  { type: 'app', id: 'app-util-builder', visible: true },
+  { type: 'app', id: 'app-vision-builder', visible: true }
+];
+
+async function getHomeLayout() {
+  try {
+    const saved = await window.ftcIDE.settings.get('home.layout');
+    if (Array.isArray(saved) && saved.length > 0) return saved;
+  } catch { /* ignore */ }
+  return JSON.parse(JSON.stringify(DEFAULT_HOME_LAYOUT));
+}
+
+async function saveHomeLayout(layout) {
+  await window.ftcIDE.settings.set('home.layout', layout);
+}
+
+function applyHomeLayout(layout) {
+  const grid = document.querySelector('.home-apps-grid');
+  if (!grid) return;
+
+  // Hide all app cards first
+  grid.querySelectorAll('.home-app-card').forEach(card => card.style.display = 'none');
+
+  // Remove any existing folder elements
+  grid.querySelectorAll('.home-folder').forEach(f => f.remove());
+
+  // Apply layout: show visible apps in order, create folders
+  let currentFolder = null;
+  let currentFolderGrid = null;
+
+  for (const item of layout) {
+    if (item.type === 'folder') {
+      const folderEl = document.createElement('div');
+      folderEl.className = 'home-folder';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'home-folder-title';
+      titleEl.textContent = item.name || 'Folder';
+      folderEl.appendChild(titleEl);
+      const folderGrid = document.createElement('div');
+      folderGrid.className = 'home-folder-grid';
+      folderEl.appendChild(folderGrid);
+      grid.appendChild(folderEl);
+      currentFolder = folderEl;
+      currentFolderGrid = folderEl.querySelector('.home-folder-grid');
+    } else if (item.type === 'folder-end') {
+      currentFolder = null;
+      currentFolderGrid = null;
+    } else if (item.type === 'app') {
+      const card = document.getElementById(item.id);
+      if (card) {
+        card.style.display = item.visible ? '' : 'none';
+        if (item.visible) {
+          if (currentFolderGrid) {
+            currentFolderGrid.appendChild(card);
+          } else {
+            grid.appendChild(card);
+          }
+        }
+      }
+    }
+  }
+}
+
+async function renderCustomizeList() {
+  const list = document.getElementById('home-customize-list');
+  const layout = await getHomeLayout();
+
+  list.innerHTML = '';
+
+  // Map app IDs to their display names
+  const appNames = {};
+  document.querySelectorAll('.home-app-card').forEach(card => {
+    const nameEl = card.querySelector('.app-name');
+    if (nameEl) appNames[card.id] = nameEl.textContent;
+  });
+
+  layout.forEach((item, idx) => {
+    if (item.type === 'folder') {
+      const folderEl = document.createElement('div');
+      folderEl.className = 'home-customize-folder';
+      folderEl.dataset.idx = idx;
+      const headerEl = document.createElement('div');
+      headerEl.className = 'home-customize-folder-header';
+      headerEl.appendChild(document.createTextNode('📁 '));
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = item.name || 'Folder';
+      nameInput.className = 'folder-name-input';
+      headerEl.appendChild(nameInput);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'icon-btn remove-folder';
+      removeBtn.title = 'Remove folder';
+      removeBtn.style.fontSize = '12px';
+      removeBtn.textContent = '✕';
+      headerEl.appendChild(removeBtn);
+      folderEl.appendChild(headerEl);
+      nameInput.addEventListener('input', async (e) => {
+        const currentLayout = await getHomeLayout();
+        currentLayout[idx].name = e.target.value;
+        await saveHomeLayout(currentLayout);
+      });
+      removeBtn.addEventListener('click', async () => {
+        const currentLayout = await getHomeLayout();
+        // Remove folder start and end markers, keep apps inside
+        let endIdx = currentLayout.findIndex((it, i) => i > idx && it.type === 'folder-end');
+        if (endIdx === -1) endIdx = currentLayout.length;
+        currentLayout.splice(endIdx, 1); // remove folder-end
+        currentLayout.splice(idx, 1); // remove folder
+        await saveHomeLayout(currentLayout);
+        await renderCustomizeList();
+      });
+      list.appendChild(folderEl);
+    } else if (item.type === 'folder-end') {
+      // Visual separator
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:2px;background:var(--border);margin:4px 0 8px;border-radius:1px;';
+      list.appendChild(sep);
+    } else if (item.type === 'app') {
+      const el = document.createElement('div');
+      el.className = 'home-customize-item';
+      el.draggable = true;
+      el.dataset.idx = idx;
+      const name = appNames[item.id] || item.id;
+      el.innerHTML = `
+        <span class="item-grip">⠿</span>
+        <span class="item-name">${name}</span>
+        <input type="checkbox" class="item-toggle" ${item.visible ? 'checked' : ''} />
+      `;
+
+      // Toggle visibility
+      el.querySelector('.item-toggle').addEventListener('change', async (e) => {
+        const currentLayout = await getHomeLayout();
+        currentLayout[idx].visible = e.target.checked;
+        await saveHomeLayout(currentLayout);
+      });
+
+      // Drag and drop reordering
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', idx.toString());
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.style.borderTop = '2px solid var(--accent)';
+      });
+      el.addEventListener('dragleave', () => {
+        el.style.borderTop = '';
+      });
+      el.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        el.style.borderTop = '';
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIdx = parseInt(el.dataset.idx);
+        if (fromIdx !== toIdx) {
+          const currentLayout = await getHomeLayout();
+          const [moved] = currentLayout.splice(fromIdx, 1);
+          currentLayout.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
+          await saveHomeLayout(currentLayout);
+          await renderCustomizeList();
+        }
+      });
+
+      list.appendChild(el);
+    }
+  });
+}
+
+function bindHomeCustomization() {
+  document.getElementById('home-customize-btn').addEventListener('click', async () => {
+    const panel = document.getElementById('home-customize-panel');
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    if (panel.style.display !== 'none') {
+      await renderCustomizeList();
+    }
+  });
+
+  document.getElementById('home-customize-close').addEventListener('click', () => {
+    document.getElementById('home-customize-panel').style.display = 'none';
+  });
+
+  document.getElementById('home-customize-done').addEventListener('click', async () => {
+    document.getElementById('home-customize-panel').style.display = 'none';
+    const layout = await getHomeLayout();
+    applyHomeLayout(layout);
+  });
+
+  document.getElementById('home-reset-layout').addEventListener('click', async () => {
+    await saveHomeLayout(JSON.parse(JSON.stringify(DEFAULT_HOME_LAYOUT)));
+    await renderCustomizeList();
+    applyHomeLayout(await getHomeLayout());
+    showToast('Home screen reset to default', 'info');
+  });
+
+  document.getElementById('home-add-folder').addEventListener('click', async () => {
+    const layout = await getHomeLayout();
+    const folderName = 'New Folder';
+    layout.push({ type: 'folder', name: folderName, id: 'folder-' + Date.now() });
+    layout.push({ type: 'folder-end' });
+    await saveHomeLayout(layout);
+    await renderCustomizeList();
+  });
+}
+
 let monacoEditor = null;
 let fallbackEditor = null;
 let fallbackHighlight = null;
@@ -2366,6 +2587,10 @@ function bindHomeScreen() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', fn);
   }
+
+  bindHomeCustomization();
+  // Apply saved layout
+  getHomeLayout().then(applyHomeLayout);
 }
 
 function openAppView(name) {
