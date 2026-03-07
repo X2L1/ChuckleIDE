@@ -13,7 +13,14 @@
     "pack": "electron-builder --dir",
     "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["ftc", "robotics", "ide", "electron", "java", "first-tech-challenge"],
+  "keywords": [
+    "ftc",
+    "robotics",
+    "ide",
+    "electron",
+    "java",
+    "first-tech-challenge"
+  ],
   "author": "FTC IDE Contributors",
   "license": "MIT",
   "dependencies": {
@@ -23,6 +30,7 @@
     "electron-store": "^8.1.0",
     "express": "^4.18.2",
     "fs-extra": "^11.2.0",
+    "monaco-editor": "^0.45.0",
     "simple-git": "^3.22.0",
     "ws": "^8.16.0"
   },
@@ -44,16 +52,27 @@
       "ftc-project/**/*"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.developer-tools"
     },
-    "icon": "assets/icon.png"
+    "icon": "assets/icon.png",
+    "asarUnpack": [
+      "node_modules/monaco-editor/min/**"
+    ]
   }
 }

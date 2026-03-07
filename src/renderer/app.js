@@ -70,38 +70,45 @@ function initMonaco() {
   if (monacoEditor) return;
   if (typeof monaco === 'undefined' || !monaco?.editor) return;
   const container = document.getElementById('monaco-editor-wrapper');
+  if (!container) return;
   const theme = state.settings['editor.theme'] || 'vs-dark';
 
-  monacoEditor = monaco.editor.create(container, {
-    value: '',
-    language: 'java',
-    theme,
-    fontSize: state.editorFontSize,
-    fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
-    fontLigatures: true,
-    lineNumbers: 'on',
-    roundedSelection: false,
-    scrollBeyondLastLine: false,
-    minimap: { enabled: true, maxColumn: 80 },
-    wordWrap: state.settings['editor.wordWrap'] || 'off',
-    tabSize: parseInt(state.settings['editor.tabSize']) || 4,
-    insertSpaces: true,
-    autoIndent: 'full',
-    formatOnType: false,
-    formatOnPaste: true,
-    renderWhitespace: 'selection',
-    bracketPairColorization: { enabled: true },
-    guides: { bracketPairs: true, indentation: true },
-    smoothScrolling: true,
-    cursorSmoothCaretAnimation: 'on',
-    contextmenu: true,
-    suggest: { insertMode: 'replace', showClasses: true, showFunctions: true },
-    quickSuggestions: { other: true, comments: false, strings: false },
-    suggestOnTriggerCharacters: true,
-    acceptSuggestionOnEnter: 'on',
-    inlineSuggest: { enabled: true },
-    padding: { top: 8, bottom: 8 }
-  });
+  try {
+    monacoEditor = monaco.editor.create(container, {
+      value: '',
+      language: 'java',
+      theme,
+      fontSize: state.editorFontSize,
+      fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
+      fontLigatures: true,
+      lineNumbers: 'on',
+      roundedSelection: false,
+      scrollBeyondLastLine: false,
+      minimap: { enabled: true, maxColumn: 80 },
+      wordWrap: state.settings['editor.wordWrap'] || 'off',
+      tabSize: parseInt(state.settings['editor.tabSize']) || 4,
+      insertSpaces: true,
+      autoIndent: 'full',
+      formatOnType: false,
+      formatOnPaste: true,
+      renderWhitespace: 'selection',
+      bracketPairColorization: { enabled: true },
+      guides: { bracketPairs: true, indentation: true },
+      smoothScrolling: true,
+      cursorSmoothCaretAnimation: 'on',
+      contextmenu: true,
+      suggest: { insertMode: 'replace', showClasses: true, showFunctions: true },
+      quickSuggestions: { other: true, comments: false, strings: false },
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: 'on',
+      inlineSuggest: { enabled: true },
+      padding: { top: 8, bottom: 8 }
+    });
+  } catch (e) {
+    console.error('Failed to create Monaco editor:', e);
+    monacoEditor = null;
+    return;
+  }
 
   // Register Java-specific completions
   registerJavaCompletions();
@@ -130,7 +137,7 @@ function initMonaco() {
     if (state.activeFile) autoSave(state.activeFile);
   });
 
-  window.addEventListener('resize', () => monacoEditor.layout());
+  window.addEventListener('resize', () => { if (monacoEditor) monacoEditor.layout(); });
   appendOutput('Monaco Editor initialized.', 'success');
 }
 
@@ -654,7 +661,7 @@ function activateTab(filePath) {
 
   // Switch model
   const info = state.openFiles.get(filePath);
-  if (info && info.model) {
+  if (info && info.model && monacoEditor) {
     monacoEditor.setModel(info.model);
     if (info.viewState) monacoEditor.restoreViewState(info.viewState);
     monacoEditor.focus();
