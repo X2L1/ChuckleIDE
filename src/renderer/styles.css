@@ -541,6 +541,24 @@ body.bottom-panel-hidden #main-layout {
 .setting-hint { font-size: 10px; color: var(--fg-dim); flex-basis: 100%; margin-top: -2px; }
 .setting-row:has(.setting-hint) { flex-wrap: wrap; }
 
+/* ── DEVICE FLOW STATUS ────────────────────────────────── */
+.device-flow-status { text-align: center; padding: 8px 0 4px; }
+.device-flow-instruction { font-size: 11px; color: var(--fg-dim); margin: 0 0 6px; }
+.device-flow-code {
+  display: inline-block;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  padding: 6px 16px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--accent-blue);
+  user-select: all;
+  cursor: text;
+}
+.device-flow-hint { font-size: 10px; color: var(--fg-dim); margin: 6px 0; }
+
 /* ── RESIZE HANDLE ──────────────────────────────────────── */
 .resize-handle {
   width: 4px;
