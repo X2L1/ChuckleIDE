@@ -12,6 +12,7 @@ const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
 const Updater = require('./src/main/updater');
+const GitHubAuth = require('./src/main/github-auth');
 const templates = require('./src/templates/index');
 
 const store = new Store();
@@ -95,6 +96,7 @@ let updater;
 let lspManager;
 let buildManager;
 let projectManager;
+let githubAuth;
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
@@ -667,6 +669,32 @@ ipcMain.handle('credentials:hasGitHubToken', async () => {
   return hasSecret(SECRET_KEYS.gitToken);
 });
 
+// ── IPC: GitHub OAuth Device Flow ─────────────────────────────────────────────
+
+ipcMain.handle('auth:startDeviceFlow', async () => {
+  const flowInfo = await githubAuth.startDeviceFlow();
+
+  // Open the verification page in the user's default browser.
+  shell.openExternal(flowInfo.verificationUri);
+
+  // Start polling in the background; notify the renderer when complete.
+  githubAuth.pollForToken(flowInfo.deviceCode, flowInfo.interval)
+    .then(async (token) => {
+      setSecret(SECRET_KEYS.gitToken, token);
+      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowSuccess');
+    })
+    .catch((err) => {
+      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowError', err.message);
+    });
+
+  return { userCode: flowInfo.userCode, verificationUri: flowInfo.verificationUri };
+});
+
+ipcMain.handle('auth:cancelDeviceFlow', async () => {
+  githubAuth.cancelDeviceFlow();
+  return true;
+});
+
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
 
 ipcMain.handle('lsp:start', async (_, projectPath) => {
@@ -740,6 +768,7 @@ app.whenReady().then(() => {
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
   updater = new Updater(store);
+  githubAuth = new GitHubAuth();
 
   createWindow();
 

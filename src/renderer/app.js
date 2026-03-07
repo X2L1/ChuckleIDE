@@ -470,6 +470,54 @@ async function loadSettings() {
 
 function setupSettingsPanel() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+
+  // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
+  document.getElementById('btn-github-device-flow').addEventListener('click', async () => {
+    const statusEl = document.getElementById('device-flow-status');
+    const codeEl   = document.getElementById('device-flow-code');
+    const btn      = document.getElementById('btn-github-device-flow');
+
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Starting…';
+      const { userCode, verificationUri } = await window.ftcIDE.auth.startDeviceFlow();
+
+      codeEl.textContent = userCode;
+      statusEl.style.display = '';
+      btn.textContent = 'Waiting for authorization…';
+    } catch (e) {
+      showToast(`GitHub sign-in failed: ${e.message}`, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Sign in with GitHub';
+    }
+  });
+
+  document.getElementById('btn-cancel-device-flow').addEventListener('click', async () => {
+    await window.ftcIDE.auth.cancelDeviceFlow();
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-device-flow');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    showToast('GitHub sign-in cancelled', 'info');
+  });
+
+  window.ftcIDE.on('auth:deviceFlowSuccess', () => {
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-device-flow');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    showToast('Signed in with GitHub!', 'success');
+  });
+
+  window.ftcIDE.on('auth:deviceFlowError', (msg) => {
+    document.getElementById('device-flow-status').style.display = 'none';
+    const btn = document.getElementById('btn-github-device-flow');
+    btn.disabled = false;
+    btn.textContent = 'Sign in with GitHub';
+    if (msg !== 'cancelled') {
+      showToast(`GitHub sign-in failed: ${msg}`, 'error');
+    }
+  });
 }
 
 async function saveSettings() {

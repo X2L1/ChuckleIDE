@@ -289,6 +289,18 @@
             <label>Token</label>
             <input type="password" id="setting-github-token" placeholder="ghp_..." class="text-input" />
           </div>
+          <div class="setting-row" style="justify-content:center; padding-top:6px">
+            <span style="font-size:11px; color:var(--fg-dim)">or</span>
+          </div>
+          <div class="setting-row" style="justify-content:center">
+            <button class="btn-primary small" id="btn-github-device-flow">Sign in with GitHub</button>
+          </div>
+          <div id="device-flow-status" class="device-flow-status" style="display:none">
+            <p class="device-flow-instruction">Enter this code on GitHub:</p>
+            <code id="device-flow-code" class="device-flow-code"></code>
+            <p class="device-flow-hint">A browser window has been opened. Paste the code above and authorize the app.</p>
+            <button class="btn-secondary small" id="btn-cancel-device-flow">Cancel</button>
+          </div>
         </div>
         <div class="setting-group">
           <div class="setting-group-title">ADB</div>

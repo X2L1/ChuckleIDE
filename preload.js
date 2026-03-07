@@ -99,6 +99,12 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     hasGitHubToken: () => ipcRenderer.invoke('credentials:hasGitHubToken')
   },
 
+  // ── GitHub OAuth ────────────────────────────────────────────────────────────
+  auth: {
+    startDeviceFlow: () => ipcRenderer.invoke('auth:startDeviceFlow'),
+    cancelDeviceFlow: () => ipcRenderer.invoke('auth:cancelDeviceFlow')
+  },
+
   // ── LSP ──────────────────────────────────────────────────────────────────────
   lsp: {
     start: (projectPath) => ipcRenderer.invoke('lsp:start', projectPath),
@@ -132,7 +138,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
       'git:statusChanged',
       'lsp:notification',
       'update:available',
-      'update:progress'
+      'update:progress',
+      'auth:deviceFlowSuccess',
+      'auth:deviceFlowError'
     ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));
