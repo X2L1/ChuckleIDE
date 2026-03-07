@@ -565,7 +565,7 @@ async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
       tryInit();
       if (monacoEditor) return;
     }
-    poll = setInterval(tryInit, 100);
+    poll = setInterval(tryInit, 250);
     timer = setTimeout(() => finish(false), timeoutMs);
   });
 }
