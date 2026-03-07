@@ -1095,17 +1095,29 @@
 
 <!-- Scripts -->
 <script>
-  // Load Monaco Editor from CDN
-  const monacoScript = document.createElement('script');
-  monacoScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
-  monacoScript.onload = () => {
-    require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-    require(['vs/editor/editor.main'], () => {
+  // Configure Monaco worker environment before loading
+  const monacoBase = new URL('../../node_modules/monaco-editor/min', window.location.href).href;
+  window.MonacoEnvironment = {
+    getWorkerUrl: function(workerId, label) {
+      return `data:text/javascript;charset=utf-8,${encodeURIComponent(
+        "self.MonacoEnvironment = { baseUrl: '" + monacoBase + "/' };\n" +
+        "importScripts('" + monacoBase + "/vs/base/worker/workerMain.js');"
+      )}`;
+    }
+  };
+</script>
+<script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
+<script>
+  // Load Monaco Editor from local node_modules
+  if (typeof require !== 'undefined' && typeof require.config === 'function') {
+    require.config({ paths: { 'vs': '../../node_modules/monaco-editor/min/vs' } });
+    require(['vs/editor/editor.main'], function() {
       window.monacoReady = true;
       document.dispatchEvent(new Event('monaco-ready'));
     });
-  };
-  document.head.appendChild(monacoScript);
+  } else {
+    console.error('Monaco AMD loader failed to load');
+  }
 </script>
 <script src="app.js"></script>
 </body>
