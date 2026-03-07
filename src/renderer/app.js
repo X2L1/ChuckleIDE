@@ -19,6 +19,7 @@ const state = {
 
 let monacoEditor = null;
 let selectedTemplateId = null;
+const EDITOR_READY_TIMEOUT_MS = 4000;
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -508,9 +509,9 @@ function getFileIcon(name) {
 // ── File Opening / Saving ─────────────────────────────────
 async function openFile(filePath) {
   if (!monacoEditor) {
-    await waitForEditorReady();
+    const ready = await waitForEditorReady();
+    if (!ready) { showToast('Editor not ready', 'warning'); return; }
   }
-  if (!monacoEditor) { showToast('Editor not ready', 'warning'); return; }
 
   // Save current view state
   if (state.activeFile && state.openFiles.has(state.activeFile)) {
@@ -536,19 +537,16 @@ async function openFile(filePath) {
   }
 }
 
-async function waitForEditorReady(timeoutMs = 4000) {
+async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
   if (monacoEditor) return true;
-  if (window.monacoReady) {
-    initMonaco();
-    if (monacoEditor) return true;
-  }
 
   return new Promise((resolve) => {
     let done = false;
+    let timer = null;
     const finish = (ok) => {
       if (done) return;
       done = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       document.removeEventListener('monaco-ready', onReady);
       resolve(ok);
     };
@@ -556,8 +554,15 @@ async function waitForEditorReady(timeoutMs = 4000) {
       initMonaco();
       finish(!!monacoEditor);
     };
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    document.addEventListener('monaco-ready', onReady, { once: true });
+    document.addEventListener('monaco-ready', onReady);
+    if (window.monacoReady) {
+      initMonaco();
+      if (monacoEditor) {
+        finish(true);
+        return;
+      }
+    }
+    timer = setTimeout(() => finish(false), timeoutMs);
   });
 }
 
