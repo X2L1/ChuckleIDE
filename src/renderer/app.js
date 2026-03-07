@@ -2139,7 +2139,7 @@ function bindMenuActions() {
     showToast('Split editor view is not yet available', 'info');
   });
   document.getElementById('btn-close-all-tabs').addEventListener('click', () => {
-    const allTabs = [...document.querySelectorAll('.editor-tab')].map(t => t.dataset.path);
+    const allTabs = [...document.querySelectorAll('.editor-tab')].map(t => t.dataset.path).filter(Boolean);
     allTabs.forEach(p => closeTab(p));
   });
 }
