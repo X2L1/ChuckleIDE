@@ -159,6 +159,7 @@ body.platform-linux #window-controls { display: flex; }
   color: var(--accent);
   -webkit-app-region: no-drag;
   user-select: none;
+  cursor: pointer;
 }
 
 #top-menu-bar {
@@ -611,7 +612,6 @@ body.bottom-panel-hidden #main-layout {
   color: var(--fg-dim);
   font-size: 13px;
   white-space: nowrap;
-  overflow: hidden;
   flex-shrink: 0;
   position: relative;
   transition: background var(--transition);
@@ -620,7 +620,7 @@ body.bottom-panel-hidden #main-layout {
 .editor-tab:hover { background: var(--bg-tab-hover); color: var(--fg-main); }
 .editor-tab.active { background: var(--bg-tab-active); color: var(--fg-bright); border-bottom: 2px solid var(--accent); }
 .tab-icon { font-size: 14px; flex-shrink: 0; }
-.tab-name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.tab-name { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .tab-modified { color: var(--accent-yellow); font-size: 8px; }
 .tab-close {
   opacity: 0;
@@ -628,10 +628,12 @@ body.bottom-panel-hidden #main-layout {
   border: none;
   color: var(--fg-dim);
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 2px;
+  padding: 4px 6px;
+  border-radius: 3px;
   font-size: 12px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   transition: opacity var(--transition), background var(--transition), color var(--transition);
 }
 .editor-tab:hover .tab-close,

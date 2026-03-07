@@ -9,6 +9,7 @@ const state = {
   projectPath: null,
   openFiles: new Map(),      // filePath → { content, modified, model, viewState }
   activeFile: null,
+  activeTab: null,           // current tab id (filePath or 'app:<name>')
   settings: {},
   gitStatus: null,
   devices: [],
@@ -102,6 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCopilotPanel();
   setupSettingsPanel();
   bindHomeScreen();
+
+  // Logo click → return to welcome/home screen
+  document.getElementById('app-logo').addEventListener('click', () => {
+    state.activeFile = null;
+    state.activeTab = null;
+    document.querySelectorAll('.editor-tab').forEach(t => t.classList.remove('active'));
+    showWelcomeScreen();
+  });
 
   // Use a built-in editor backend that is always available
   initFallbackEditor();
@@ -913,6 +922,29 @@ async function autoSave(filePath) {
 }
 
 // ── Tab Management ────────────────────────────────────────
+const APP_TAB_PREFIX = 'app:';
+const appTabMeta = {
+  'subsystem-builder': { icon: '⚙️', label: 'Subsystem Builder' },
+  'command-builder':   { icon: '📦', label: 'Command Builder' },
+  'opmode-builder':    { icon: '🧩', label: 'OpMode Builder' },
+  'path-visualizer':   { icon: '🗺️', label: 'Path Visualizer' },
+  'ftc-dashboard':     { icon: '📊', label: 'FTC Dashboard' },
+  'panels':            { icon: '📋', label: 'Panels' },
+  'pedro-constants':   { icon: '🔧', label: 'Pedro Constants' },
+  'lut-manager':       { icon: '📊', label: 'Lookup Tables' },
+  'interplut-manager': { icon: '📈', label: 'Interpolated LUTs' },
+  'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
+  'object-manager':    { icon: '📦', label: 'Global Objects' }
+};
+
+function isAppTab(tabId) {
+  return tabId && tabId.startsWith(APP_TAB_PREFIX);
+}
+
+function appNameFromTabId(tabId) {
+  return tabId.slice(APP_TAB_PREFIX.length);
+}
+
 function addTab(filePath) {
   const tabsList = document.getElementById('tabs-list');
   const existing = tabsList.querySelector(`[data-path="${CSS.escape(filePath)}"]`);
@@ -922,9 +954,18 @@ function addTab(filePath) {
   tab.className = 'editor-tab';
   tab.dataset.path = filePath;
 
-  const name = filePath.split(/[/\\]/).pop();
+  let icon, name;
+  if (isAppTab(filePath)) {
+    const meta = appTabMeta[appNameFromTabId(filePath)];
+    icon = meta ? meta.icon : '🔧';
+    name = meta ? meta.label : appNameFromTabId(filePath);
+  } else {
+    name = filePath.split(/[/\\]/).pop();
+    icon = getFileIcon(name);
+  }
+
   tab.innerHTML = `
-    <span class="tab-icon">${getFileIcon(name)}</span>
+    <span class="tab-icon">${icon}</span>
     <span class="tab-name">${name}</span>
     <span class="tab-modified" style="display:none">●</span>
     <button class="tab-close" title="Close">✕</button>
@@ -941,67 +982,105 @@ function addTab(filePath) {
 }
 
 function activateTab(filePath) {
-  // Update active file
-  state.activeFile = filePath;
+  // Save current editor view state before switching
+  if (monacoEditor && state.activeFile && state.openFiles.has(state.activeFile)) {
+    state.openFiles.get(state.activeFile).viewState = monacoEditor.saveViewState();
+  }
+
+  // Hide all app views first
+  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
 
   // Update tab UI
+  state.activeTab = filePath;
   document.querySelectorAll('.editor-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.path === filePath));
 
-  // Show editor
-  document.getElementById('welcome-screen').style.display = 'none';
-  document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
-  document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
+  if (isAppTab(filePath)) {
+    // Activate an app tab – keep state.activeFile so code insertion still works
+    document.getElementById('welcome-screen').style.display = 'none';
+    document.getElementById('monaco-editor-wrapper').style.display = 'none';
+    document.getElementById('fallback-editor-wrapper').style.display = 'none';
 
-  // Switch model
-  const info = state.openFiles.get(filePath);
-  if (info && info.model && monacoEditor) {
-    monacoEditor.setModel(info.model);
-    if (info.viewState) monacoEditor.restoreViewState(info.viewState);
-    monacoEditor.focus();
-  } else if (info && fallbackEditor) {
-    isSettingFallbackContent = true;
-    fallbackEditor.value = info.content || '';
-    isSettingFallbackContent = false;
-    requestFallbackHighlightUpdate();
-    fallbackEditor.focus();
-    updateFallbackCursorPosition();
+    const appName = appNameFromTabId(filePath);
+    const view = document.getElementById(`app-view-${appName}`);
+    if (view) view.classList.add('active');
+    initAppIfNeeded(appName);
+
+    updateBreadcrumb(null);
+    document.getElementById('status-language').textContent = '';
+  } else {
+    // Activate a file tab
+    state.activeFile = filePath;
+
+    // Show editor
+    document.getElementById('welcome-screen').style.display = 'none';
+    document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
+    document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
+
+    // Switch model
+    const info = state.openFiles.get(filePath);
+    if (info && info.model && monacoEditor) {
+      monacoEditor.setModel(info.model);
+      if (info.viewState) monacoEditor.restoreViewState(info.viewState);
+      monacoEditor.focus();
+    } else if (info && fallbackEditor) {
+      isSettingFallbackContent = true;
+      fallbackEditor.value = info.content || '';
+      isSettingFallbackContent = false;
+      requestFallbackHighlightUpdate();
+      fallbackEditor.focus();
+      updateFallbackCursorPosition();
+    }
+
+    // Update breadcrumb
+    updateBreadcrumb(filePath);
+    // Update language in status bar
+    document.getElementById('status-language').textContent = getLanguageForFile(filePath).toUpperCase();
+    // Update outline
+    updateOutline();
+    renderActiveDiagnosticsForFile(filePath);
+    scheduleActiveDiagnostics(filePath);
   }
-
-  // Update breadcrumb
-  updateBreadcrumb(filePath);
-  // Update language in status bar
-  document.getElementById('status-language').textContent = getLanguageForFile(filePath).toUpperCase();
-  // Update outline
-  updateOutline();
-  renderActiveDiagnosticsForFile(filePath);
-  scheduleActiveDiagnostics(filePath);
 }
 
 function closeTab(filePath) {
-  const info = state.openFiles.get(filePath);
-  if (info && info.modified) {
-    if (!confirm(`Save changes to ${filePath.split(/[/\\]/).pop()}?`)) {
-      // Discard
-    } else {
-      saveFile(filePath);
+  if (isAppTab(filePath)) {
+    // Close an app tab
+    const appName = appNameFromTabId(filePath);
+    const view = document.getElementById(`app-view-${appName}`);
+    if (view) view.classList.remove('active');
+  } else {
+    // Close a file tab
+    const info = state.openFiles.get(filePath);
+    if (info && info.modified) {
+      if (!confirm(`Save changes to ${filePath.split(/[/\\]/).pop()}?`)) {
+        // Discard
+      } else {
+        saveFile(filePath);
+      }
+    }
+
+    if (info && info.model && typeof info.model.dispose === 'function') info.model.dispose();
+    state.openFiles.delete(filePath);
+    activeDiagnosticsByFile.delete(filePath);
+
+    // If this was the active file, clear it
+    if (state.activeFile === filePath) {
+      state.activeFile = null;
     }
   }
-
-  if (info && info.model && typeof info.model.dispose === 'function') info.model.dispose();
-  state.openFiles.delete(filePath);
-  activeDiagnosticsByFile.delete(filePath);
 
   const tab = document.querySelector(`.editor-tab[data-path="${CSS.escape(filePath)}"]`);
   if (tab) tab.remove();
 
-  // Switch to another tab if this was active
-  if (state.activeFile === filePath) {
+  // Switch to another tab if this was the active tab
+  if (state.activeTab === filePath) {
     const tabs = document.querySelectorAll('.editor-tab');
     if (tabs.length > 0) {
       activateTab(tabs[tabs.length - 1].dataset.path);
     } else {
       state.activeFile = null;
+      state.activeTab = null;
       showWelcomeScreen();
     }
   }
@@ -2041,7 +2120,7 @@ function bindKeyboardShortcuts() {
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && e.key === 's') { e.preventDefault(); saveCurrentFile(); }
     if (ctrl && e.shiftKey && e.key === 'S') { e.preventDefault(); saveAllFiles(); }
-    if (ctrl && e.key === 'w') { e.preventDefault(); if (state.activeFile) closeTab(state.activeFile); }
+    if (ctrl && e.key === 'w') { e.preventDefault(); if (state.activeTab) closeTab(state.activeTab); }
     if (ctrl && e.key === 'n') { e.preventDefault(); promptNewFile(); }
     if (ctrl && e.shiftKey && e.key === 'N') { e.preventDefault(); showModal('new-project'); }
     if (ctrl && e.key === 'b') { e.preventDefault(); document.getElementById('sidebar').style.display = document.getElementById('sidebar').style.display === 'none' ? '' : 'none'; }
@@ -2052,7 +2131,7 @@ function bindKeyboardShortcuts() {
     if (ctrl && e.key === 'Tab') {
       e.preventDefault();
       const tabs = [...document.querySelectorAll('.editor-tab')];
-      const idx = tabs.findIndex(t => t.dataset.path === state.activeFile);
+      const idx = tabs.findIndex(t => t.dataset.path === state.activeTab);
       const nextIdx = (idx + 1) % tabs.length;
       if (tabs[nextIdx]) activateTab(tabs[nextIdx].dataset.path);
     }
@@ -2108,8 +2187,8 @@ function bindMenuActions() {
     showToast('Split editor view is not yet available', 'info');
   });
   document.getElementById('btn-close-all-tabs').addEventListener('click', () => {
-    const paths = [...state.openFiles.keys()];
-    paths.forEach(p => closeTab(p));
+    const allTabs = [...document.querySelectorAll('.editor-tab')].map(t => t.dataset.path).filter(Boolean);
+    allTabs.forEach(p => closeTab(p));
   });
 }
 
@@ -2471,16 +2550,18 @@ function bindHomeScreen() {
 }
 
 function openAppView(name) {
-  // Hide welcome & editor
-  document.getElementById('welcome-screen').style.display = 'none';
-  document.getElementById('monaco-editor-wrapper').style.display = 'none';
-  document.getElementById('fallback-editor-wrapper').style.display = 'none';
-  // Hide all app views
-  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
-  // Show target
-  const view = document.getElementById(`app-view-${name}`);
-  if (view) view.classList.add('active');
+  const tabId = APP_TAB_PREFIX + name;
+  // Save current editor state
+  if (monacoEditor && state.activeFile && state.openFiles.has(state.activeFile)) {
+    state.openFiles.get(state.activeFile).viewState = monacoEditor.saveViewState();
+  }
+  // Add a tab for this app (if not already open)
+  addTab(tabId);
+  // Activate the app tab
+  activateTab(tabId);
+}
 
+function initAppIfNeeded(name) {
   if (name === 'subsystem-builder') initSubsystemBuilder();
   if (name === 'command-builder') initCommandBuilder();
   if (name === 'opmode-builder') initOpModeBuilder();
@@ -2495,12 +2576,18 @@ function openAppView(name) {
 }
 
 function closeAppView() {
-  document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
-  if (state.activeFile) {
-    document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
-    document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
+  // Close the currently active app tab (if any)
+  if (state.activeTab && isAppTab(state.activeTab)) {
+    closeTab(state.activeTab);
   } else {
-    document.getElementById('welcome-screen').style.display = '';
+    // Fallback: hide all app views and return to editor or welcome
+    document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+    if (state.activeFile) {
+      document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
+      document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
+    } else {
+      document.getElementById('welcome-screen').style.display = '';
+    }
   }
 }
 
@@ -3275,7 +3362,6 @@ async function insertGeneratedClass(code, packageFolder, className, kindLabel) {
     await window.ftcIDE.fs.writeFile(filePath, code);
     await refreshFileTree();
     await openFile(filePath);
-    closeAppView();
     showToast(`${kindLabel} class created in ${packageFolder}/`, 'success');
   } catch (err) {
     showToast(`Failed to create ${kindLabel}: ${err.message}`, 'error');
@@ -3289,7 +3375,7 @@ function insertGeneratedCode(code) {
       range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
       text: code
     }]);
-    closeAppView();
+    activateTab(state.activeFile);
     showToast('Code inserted into editor', 'success');
   } else if (fallbackEditor && state.activeFile) {
     const start = fallbackEditor.selectionStart ?? fallbackEditor.value.length;
@@ -3302,7 +3388,7 @@ function insertGeneratedCode(code) {
       updateTabModified(state.activeFile, true);
     }
     updateOutline();
-    closeAppView();
+    activateTab(state.activeFile);
     showToast('Code inserted into editor', 'success');
   } else {
     navigator.clipboard.writeText(code);
@@ -3311,7 +3397,12 @@ function insertGeneratedCode(code) {
 }
 
 // ── Path Visualizer (embedded pedropathing.com) ───────────
+let pvInitialized = false;
+
 function initPathVisualizer() {
+  if (pvInitialized) return;
+  pvInitialized = true;
+
   document.getElementById('pv-close').addEventListener('click', closeAppView);
   document.getElementById('pv-open-external').addEventListener('click', () => {
     window.ftcIDE.shell.openExternal('https://visualizer.pedropathing.com');
