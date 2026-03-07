@@ -15,6 +15,7 @@ class GitManager {
   _git(repoPath) {
     if (!this._gitInstances.has(repoPath)) {
       const git = simpleGit(repoPath);
+      git.env('GIT_TERMINAL_PROMPT', '0');
       this._gitInstances.set(repoPath, git);
     }
     return this._gitInstances.get(repoPath);
@@ -33,6 +34,7 @@ class GitManager {
       message.includes('invalid username or password') ||
       message.includes('http basic: access denied') ||
       message.includes('could not read username') ||
+      message.includes('terminal prompts disabled') ||
       message.includes('401')
     );
   }
@@ -40,19 +42,28 @@ class GitManager {
   async _runWithToken(git, args, token) {
     if (!token) return git.raw(args);
     const normalized = String(token).trim();
-    // ghs_/ghu_ tokens are GitHub App/user access tokens and commonly use x-access-token.
-    const usesXAccessTokenUsername = /^(ghs_|ghu_)/.test(normalized);
-    const preferredUsername = usesXAccessTokenUsername ? 'x-access-token' : 'git';
-    const fallbackUsername = usesXAccessTokenUsername ? 'git' : 'x-access-token';
+    if (!normalized) return git.raw(args);
+    // x-access-token works for all GitHub token types (ghp_, github_pat_, ghs_, ghu_).
+    // Disable credential.helper to prevent system keychains from overriding the token.
+    const preferredUsername = 'x-access-token';
+    const fallbackUsername = 'git';
     try {
-      return await git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(normalized, preferredUsername)}`, ...args]);
+      return await git.raw([
+        '-c', `http.extraHeader=${this._buildAuthHeader(normalized, preferredUsername)}`,
+        '-c', 'credential.helper=',
+        ...args
+      ]);
     } catch (firstError) {
       if (!this._isAuthError(firstError)) throw firstError;
       try {
-        return await git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(normalized, fallbackUsername)}`, ...args]);
+        return await git.raw([
+          '-c', `http.extraHeader=${this._buildAuthHeader(normalized, fallbackUsername)}`,
+          '-c', 'credential.helper=',
+          ...args
+        ]);
       } catch (secondError) {
         const reason = secondError?.message || `Authentication failed (${secondError?.name || 'Error'})`;
-        throw new Error(`Git authentication failed using usernames [${preferredUsername}, ${fallbackUsername}]: ${reason}`);
+        throw new Error(`Git authentication failed with x-access-token: ${reason}`);
       }
     }
   }
@@ -70,6 +81,7 @@ class GitManager {
   async clone(url, destPath, token) {
     await fs.ensureDir(destPath);
     const git = simpleGit();
+    git.env('GIT_TERMINAL_PROMPT', '0');
     if (token) {
       await this._runWithToken(git, ['clone', url, destPath], token);
     } else {

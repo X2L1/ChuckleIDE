@@ -1893,9 +1893,14 @@ async function createNewProject() {
 async function doClone() {
   const url = document.getElementById('clone-url').value.trim();
   const dest = document.getElementById('clone-dest').value.trim();
-  const token = document.getElementById('clone-token').value.trim();
+  let token = document.getElementById('clone-token').value.trim();
 
   if (!url || !dest) { showToast('Enter URL and destination', 'warning'); return; }
+
+  // Fall back to stored token when none entered in clone dialog
+  if (!token) {
+    token = await window.ftcIDE.credentials.getGitHubToken();
+  }
 
   closeModal('clone');
   showToast('Cloning...', 'info');
