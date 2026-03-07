@@ -167,6 +167,7 @@ function initMonaco() {
         info.content = monacoEditor.getValue();
         updateTabModified(state.activeFile, true);
         updateOutline();
+        scheduleActiveDiagnostics(state.activeFile);
       }
     }
   });
@@ -196,6 +197,7 @@ function initFallbackEditor() {
     updateTabModified(state.activeFile, true);
     updateOutline();
     updateFallbackCursorPosition();
+    scheduleActiveDiagnostics(state.activeFile);
   });
   fallbackEditor.addEventListener('blur', () => {
     if (state.activeFile) autoSave(state.activeFile);
@@ -830,6 +832,8 @@ function activateTab(filePath) {
   document.getElementById('status-language').textContent = getLanguageForFile(filePath).toUpperCase();
   // Update outline
   updateOutline();
+  renderActiveDiagnosticsForFile(filePath);
+  scheduleActiveDiagnostics(filePath);
 }
 
 function closeTab(filePath) {
@@ -844,6 +848,7 @@ function closeTab(filePath) {
 
   if (info && info.model && typeof info.model.dispose === 'function') info.model.dispose();
   state.openFiles.delete(filePath);
+  activeDiagnosticsByFile.delete(filePath);
 
   const tab = document.querySelector(`.editor-tab[data-path="${CSS.escape(filePath)}"]`);
   if (tab) tab.remove();
@@ -866,6 +871,11 @@ function showWelcomeScreen() {
   document.getElementById('monaco-editor-wrapper').style.display = 'none';
   document.getElementById('fallback-editor-wrapper').style.display = 'none';
   if (monacoEditor) monacoEditor.setModel(null);
+  const problems = document.getElementById('problems-list');
+  const count = document.getElementById('problem-count');
+  if (problems) problems.innerHTML = '';
+  if (count) count.textContent = '';
+  previousActiveDiagnosticsCount = 0;
 }
 
 function updateTabModified(filePath, modified) {
@@ -1382,6 +1392,272 @@ function appendBuildOutput(line, type) {
   el.scrollTop = el.scrollHeight;
 }
 
+function scheduleActiveDiagnostics(filePath) {
+  if (!filePath) return;
+  if (diagnosticsTimer) clearTimeout(diagnosticsTimer);
+  diagnosticsTimer = setTimeout(() => runActiveDiagnostics(filePath), DIAGNOSTICS_DEBOUNCE_MS);
+}
+
+function runActiveDiagnostics(filePath) {
+  const info = state.openFiles.get(filePath);
+  if (!info) return;
+  const content = info.model
+    ? info.model.getValue()
+    : ((state.activeFile === filePath && fallbackEditor) ? fallbackEditor.value : info.content || '');
+  const language = getLanguageForFile(filePath);
+  const diagnostics = findApparentCodeIssues(content, language);
+  activeDiagnosticsByFile.set(filePath, diagnostics);
+  if (state.activeFile === filePath) renderActiveDiagnosticsForFile(filePath);
+}
+
+function renderActiveDiagnosticsForFile(filePath) {
+  const diagnostics = activeDiagnosticsByFile.get(filePath) || [];
+  const list = document.getElementById('problems-list');
+  const count = document.getElementById('problem-count');
+  if (list) list.innerHTML = '';
+
+  if (count) {
+    count.textContent = diagnostics.length > 0 ? String(diagnostics.length) : '';
+  }
+
+  diagnostics.forEach((diag) => {
+    if (!list) return;
+    const item = document.createElement('div');
+    item.className = 'problem-item';
+    item.innerHTML = `
+      <span class="problem-icon ${diag.severity === 'error' ? 'error' : 'warn'}">${diag.severity === 'error' ? '⨯' : '⚠'}</span>
+      <div class="problem-info">
+        <div class="problem-message">${escapeHtml(diag.message)}</div>
+        <div class="problem-location">${escapeHtml(diag.location)}</div>
+      </div>
+    `;
+    item.addEventListener('click', () => focusProblemLocation(diag));
+    list.appendChild(item);
+  });
+
+  if (monacoEditor) {
+    const info = state.openFiles.get(filePath);
+    if (info?.model && monaco?.editor && monaco?.MarkerSeverity) {
+      const markers = diagnostics.map((diag) => ({
+        startLineNumber: diag.startLineNumber,
+        startColumn: diag.startColumn,
+        endLineNumber: diag.endLineNumber,
+        endColumn: diag.endColumn,
+        message: diag.message,
+        severity: diag.severity === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning
+      }));
+      monaco.editor.setModelMarkers(info.model, 'active-issues', markers);
+    }
+  }
+
+  if (state.activeFile) {
+    if (previousActiveDiagnosticsCount === 0 && diagnostics.length > 0) {
+      showToast('Apparent code issue detected. See Problems tab.', diagnostics[0].severity === 'error' ? 'error' : 'warning');
+    }
+    previousActiveDiagnosticsCount = diagnostics.length;
+  }
+}
+
+function focusProblemLocation(diag) {
+  if (!diag) return;
+  if (monacoEditor) {
+    monacoEditor.focus();
+    monacoEditor.revealLineInCenter(diag.startLineNumber);
+    monacoEditor.setPosition({ lineNumber: diag.startLineNumber, column: diag.startColumn });
+    return;
+  }
+  if (fallbackEditor) {
+    fallbackEditor.focus();
+    const index = getOffsetForLineColumn(fallbackEditor.value || '', diag.startLineNumber, diag.startColumn);
+    fallbackEditor.setSelectionRange(index, index);
+    updateFallbackCursorPosition();
+  }
+}
+
+function findApparentCodeIssues(content, language) {
+  const diagnostics = [];
+  const stack = [];
+  const lines = String(content || '').split('\n');
+  let line = 1;
+  let column = 1;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let blockCommentStart = null;
+  let escaping = false;
+
+  const openingBrackets = { '(': ')', '[': ']', '{': '}' };
+  const closingBrackets = { ')': '(', ']': '[', '}': '{' };
+
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    const next = content[i + 1] || '';
+
+    if (ch === '\n') {
+      inLineComment = false;
+      line += 1;
+      column = 1;
+      escaping = false;
+      continue;
+    }
+
+    if (inLineComment) {
+      column += 1;
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        blockCommentStart = null;
+        i += 1;
+        column += 2;
+        continue;
+      }
+      column += 1;
+      continue;
+    }
+
+    if (inSingleQuote || inDoubleQuote || inBacktick) {
+      if (escaping) {
+        escaping = false;
+      } else if (ch === '\\') {
+        escaping = true;
+      } else if ((inSingleQuote && ch === '\'') || (inDoubleQuote && ch === '"') || (inBacktick && ch === '`')) {
+        inSingleQuote = false;
+        inDoubleQuote = false;
+        inBacktick = false;
+      }
+      column += 1;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i += 1;
+      column += 2;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      blockCommentStart = { line, column };
+      i += 1;
+      column += 2;
+      continue;
+    }
+
+    if (ch === '\'') {
+      inSingleQuote = true;
+      column += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inDoubleQuote = true;
+      column += 1;
+      continue;
+    }
+    if (ch === '`') {
+      inBacktick = true;
+      column += 1;
+      continue;
+    }
+
+    if (openingBrackets[ch]) {
+      stack.push({ bracket: ch, line, column });
+    } else if (closingBrackets[ch]) {
+      const top = stack[stack.length - 1];
+      if (!top || top.bracket !== closingBrackets[ch]) {
+        diagnostics.push({
+          severity: 'error',
+          message: `Unexpected "${ch}"`,
+          location: `Line ${line}, Col ${column}`,
+          startLineNumber: line,
+          startColumn: column,
+          endLineNumber: line,
+          endColumn: column + 1
+        });
+      } else {
+        stack.pop();
+      }
+    }
+
+    column += 1;
+  }
+
+  while (stack.length > 0) {
+    const open = stack.pop();
+    diagnostics.push({
+      severity: 'error',
+      message: `Missing closing "${openingBrackets[open.bracket]}"`,
+      location: `Line ${open.line}, Col ${open.column}`,
+      startLineNumber: open.line,
+      startColumn: open.column,
+      endLineNumber: open.line,
+      endColumn: open.column + 1
+    });
+  }
+
+  if (inBlockComment && blockCommentStart) {
+    diagnostics.push({
+      severity: 'warning',
+      message: 'Unclosed block comment',
+      location: `Line ${blockCommentStart.line}, Col ${blockCommentStart.column}`,
+      startLineNumber: blockCommentStart.line,
+      startColumn: blockCommentStart.column,
+      endLineNumber: blockCommentStart.line,
+      endColumn: blockCommentStart.column + 2
+    });
+  }
+
+  if (inSingleQuote || inDoubleQuote || inBacktick) {
+    const lastLineText = lines[lines.length - 1] || '';
+    const endColumn = Math.max(1, lastLineText.length + 1);
+    diagnostics.push({
+      severity: 'error',
+      message: 'Unclosed string literal',
+      location: `Line ${lines.length}, Col ${endColumn}`,
+      startLineNumber: lines.length,
+      startColumn: endColumn,
+      endLineNumber: lines.length,
+      endColumn: endColumn + 1
+    });
+  }
+
+  if (language === 'python' && content.includes('\t')) {
+    diagnostics.push({
+      severity: 'warning',
+      message: 'Mixed indentation may cause errors in Python.',
+      location: 'Detected tab characters in file',
+      startLineNumber: 1,
+      startColumn: 1,
+      endLineNumber: 1,
+      endColumn: 2
+    });
+  }
+
+  return diagnostics.slice(0, MAX_ACTIVE_DIAGNOSTICS);
+}
+
+function getOffsetForLineColumn(text, lineNumber, columnNumber) {
+  const lines = String(text || '').split('\n');
+  let offset = 0;
+  for (let i = 1; i < lineNumber && i <= lines.length; i++) {
+    offset += lines[i - 1].length + 1;
+  }
+  return Math.max(0, Math.min(offset + Math.max(0, columnNumber - 1), text.length));
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Copilot ───────────────────────────────────────────────
 function setupCopilotPanel() {
   document.getElementById('btn-copilot-auth').addEventListener('click', async () => {
@@ -1411,6 +1687,18 @@ function bindBottomPanel() {
     if (active) {
       const logArea = active.querySelector('.log-area, .terminal-output, .problems-list');
       if (logArea) logArea.innerHTML = '';
+      if (active.id === 'tab-problems' && state.activeFile) {
+        activeDiagnosticsByFile.set(state.activeFile, []);
+        previousActiveDiagnosticsCount = 0;
+        if (monacoEditor) {
+          const info = state.openFiles.get(state.activeFile);
+          if (info?.model && monaco?.editor) {
+            monaco.editor.setModelMarkers(info.model, 'active-issues', []);
+          }
+        }
+        const count = document.getElementById('problem-count');
+        if (count) count.textContent = '';
+      }
     }
   });
   document.getElementById('btn-toggle-bottom').addEventListener('click', toggleBottomPanel);
