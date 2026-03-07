@@ -1,7 +1,6 @@
 'use strict';
 
 const simpleGit = require('simple-git');
-const path = require('path');
 const fs = require('fs-extra');
 
 /**
@@ -21,13 +20,14 @@ class GitManager {
     return this._gitInstances.get(repoPath);
   }
 
-  /** Inject auth token into remote URL for HTTPS operations */
-  _injectToken(url, token) {
-    if (!token || !url) return url;
-    if (url.startsWith('https://') && !url.includes('@')) {
-      return url.replace('https://', `https://oauth2:${token}@`);
-    }
-    return url;
+  _buildAuthHeader(token) {
+    const value = Buffer.from(`oauth2:${token}`, 'utf8').toString('base64');
+    return `Authorization: Basic ${value}`;
+  }
+
+  async _runWithToken(git, args, token) {
+    if (!token) return git.raw(args);
+    return git.raw(['-c', `http.extraHeader=${this._buildAuthHeader(token)}`, ...args]);
   }
 
   /** Initialize a new git repository */
@@ -41,10 +41,13 @@ class GitManager {
 
   /** Clone a repository to a destination path */
   async clone(url, destPath, token) {
-    const authUrl = this._injectToken(url, token);
     await fs.ensureDir(destPath);
-    const git = simpleGit(destPath);
-    await git.clone(authUrl, destPath);
+    const git = simpleGit();
+    if (token) {
+      await this._runWithToken(git, ['clone', url, destPath], token);
+    } else {
+      await git.clone(url, destPath);
+    }
     return { success: true, path: destPath };
   }
 
@@ -86,36 +89,20 @@ class GitManager {
   /** Pull from remote */
   async pull(repoPath, remote = 'origin', branch = '', token) {
     const git = this._git(repoPath);
-    if (token) {
-      const remotes = await git.getRemotes(true);
-      const origin = remotes.find(r => r.name === remote);
-      if (origin) {
-        const authUrl = this._injectToken(origin.refs.fetch, token);
-        await git.remote(['set-url', remote, authUrl]);
-      }
-    }
-    const result = branch
-      ? await git.pull(remote, branch)
-      : await git.pull();
-    return { success: true, summary: result.summary };
+    const args = ['pull'];
+    if (remote) args.push(remote);
+    if (branch) args.push(branch);
+    const result = await this._runWithToken(git, args, token);
+    return { success: true, summary: result && result.summary ? result.summary : {} };
   }
 
   /** Push to remote */
   async push(repoPath, remote = 'origin', branch = '', token) {
     const git = this._git(repoPath);
-    if (token) {
-      const remotes = await git.getRemotes(true);
-      const origin = remotes.find(r => r.name === remote);
-      if (origin) {
-        const authUrl = this._injectToken(origin.refs.fetch, token);
-        await git.remote(['set-url', remote, authUrl]);
-      }
-    }
-    if (branch) {
-      await git.push(remote, branch);
-    } else {
-      await git.push();
-    }
+    const args = ['push'];
+    if (remote) args.push(remote);
+    if (branch) args.push(branch);
+    await this._runWithToken(git, args, token);
     return { success: true };
   }
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const Store = require('electron-store');
@@ -15,6 +15,78 @@ const Updater = require('./src/main/updater');
 const templates = require('./src/templates/index');
 
 const store = new Store();
+const SECRET_KEYS = {
+  gitToken: 'secrets.git.token',
+  copilotToken: 'secrets.copilot.token'
+};
+const LEGACY_SECRET_KEYS = {
+  gitToken: 'git.token',
+  copilotToken: 'copilot.token'
+};
+const volatileSecrets = Object.create(null);
+
+function encryptSecret(value) {
+  if (!value || !safeStorage.isEncryptionAvailable()) return null;
+  return safeStorage.encryptString(value).toString('base64');
+}
+
+function decryptSecret(value) {
+  if (!value || !safeStorage.isEncryptionAvailable()) return '';
+  try {
+    return safeStorage.decryptString(Buffer.from(value, 'base64'));
+  } catch {
+    return '';
+  }
+}
+
+function setSecret(key, value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) {
+    delete volatileSecrets[key];
+    store.delete(key);
+    return false;
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    store.set(key, encryptSecret(normalized));
+    delete volatileSecrets[key];
+  } else {
+    volatileSecrets[key] = normalized;
+    store.delete(key);
+  }
+  return true;
+}
+
+function getSecret(key) {
+  if (typeof volatileSecrets[key] === 'string') return volatileSecrets[key];
+  return decryptSecret(store.get(key));
+}
+
+function deleteSecret(key) {
+  delete volatileSecrets[key];
+  store.delete(key);
+}
+
+function hasSecret(key) {
+  return Boolean(getSecret(key));
+}
+
+function migrateLegacySecrets() {
+  const legacyGitToken = store.get(LEGACY_SECRET_KEYS.gitToken);
+  if (legacyGitToken) setSecret(SECRET_KEYS.gitToken, legacyGitToken);
+  const legacyCopilotToken = store.get(LEGACY_SECRET_KEYS.copilotToken);
+  if (legacyCopilotToken) setSecret(SECRET_KEYS.copilotToken, legacyCopilotToken);
+  store.delete(LEGACY_SECRET_KEYS.gitToken);
+  store.delete(LEGACY_SECRET_KEYS.copilotToken);
+}
+
+function scrubSensitiveSettings(settings) {
+  const sanitized = { ...settings };
+  delete sanitized[LEGACY_SECRET_KEYS.gitToken];
+  delete sanitized[LEGACY_SECRET_KEYS.copilotToken];
+  delete sanitized[SECRET_KEYS.gitToken];
+  delete sanitized[SECRET_KEYS.copilotToken];
+  return sanitized;
+}
 let mainWindow;
 let adbManager;
 let gitManager;
@@ -439,8 +511,8 @@ ipcMain.handle('git:commit', async (_, repoPath, message) => {
   return gitManager.commit(repoPath, message);
 });
 
-ipcMain.handle('git:pull', async (_, repoPath, remote, branch) => {
-  return gitManager.pull(repoPath, remote, branch);
+ipcMain.handle('git:pull', async (_, repoPath, remote, branch, token) => {
+  return gitManager.pull(repoPath, remote, branch, token);
 });
 
 ipcMain.handle('git:push', async (_, repoPath, remote, branch, token) => {
@@ -466,7 +538,8 @@ ipcMain.handle('copilot:getCompletions', async (_, context) => {
 });
 
 ipcMain.handle('copilot:setToken', async (_, token) => {
-  return copilotManager.setToken(token);
+  const stored = setSecret(SECRET_KEYS.copilotToken, token);
+  return copilotManager.setToken(stored ? getSecret(SECRET_KEYS.copilotToken) : '');
 });
 
 ipcMain.handle('copilot:isAuthenticated', async () => {
@@ -544,21 +617,54 @@ ipcMain.handle('templates:create', async (_, templateId, options) => {
 // ── IPC: Settings ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('settings:get', async (_, key) => {
+  if (key === LEGACY_SECRET_KEYS.gitToken || key === LEGACY_SECRET_KEYS.copilotToken) return '';
   return store.get(key);
 });
 
 ipcMain.handle('settings:set', async (_, key, value) => {
+  if (key === LEGACY_SECRET_KEYS.gitToken) {
+    setSecret(SECRET_KEYS.gitToken, value);
+    return true;
+  }
+  if (key === LEGACY_SECRET_KEYS.copilotToken) {
+    const stored = setSecret(SECRET_KEYS.copilotToken, value);
+    copilotManager.setToken(stored ? getSecret(SECRET_KEYS.copilotToken) : '');
+    return true;
+  }
   store.set(key, value);
   return true;
 });
 
 ipcMain.handle('settings:getAll', async () => {
-  return store.store;
+  return scrubSensitiveSettings(store.store);
 });
 
 ipcMain.handle('settings:delete', async (_, key) => {
+  if (key === LEGACY_SECRET_KEYS.gitToken) {
+    deleteSecret(SECRET_KEYS.gitToken);
+    return true;
+  }
+  if (key === LEGACY_SECRET_KEYS.copilotToken) {
+    deleteSecret(SECRET_KEYS.copilotToken);
+    copilotManager.setToken('');
+    return true;
+  }
   store.delete(key);
   return true;
+});
+
+// ── IPC: Credentials ───────────────────────────────────────────────────────────
+
+ipcMain.handle('credentials:getGitHubToken', async () => {
+  return getSecret(SECRET_KEYS.gitToken);
+});
+
+ipcMain.handle('credentials:setGitHubToken', async (_, token) => {
+  return setSecret(SECRET_KEYS.gitToken, token);
+});
+
+ipcMain.handle('credentials:hasGitHubToken', async () => {
+  return hasSecret(SECRET_KEYS.gitToken);
 });
 
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
@@ -625,9 +731,11 @@ ipcMain.handle('update:status', async () => {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  migrateLegacySecrets();
   adbManager = new AdbManager();
   gitManager = new GitManager();
-  copilotManager = new CopilotManager(store);
+  copilotManager = new CopilotManager();
+  copilotManager.setToken(getSecret(SECRET_KEYS.copilotToken));
   lspManager = new LspManager(store);
   buildManager = new BuildManager();
   projectManager = new ProjectManager();

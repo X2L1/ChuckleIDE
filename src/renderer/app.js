@@ -22,11 +22,47 @@ let fallbackEditor = null;
 let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
-const DIAGNOSTICS_DEBOUNCE_MS = 220;
-const MAX_ACTIVE_DIAGNOSTICS = 100;
-const activeDiagnosticsByFile = new Map();
-let diagnosticsTimer = null;
-let previousActiveDiagnosticsCount = 0;
+const FALLBACK_AUTOCOMPLETE_ITEMS = [
+  '@Autonomous',
+  '@TeleOp',
+  'hardwareMap.get',
+  'telemetry.addData',
+  'telemetry.update',
+  'waitForStart',
+  'opModeIsActive',
+  'idle',
+  'sleep',
+  'gamepad1',
+  'gamepad2',
+  'left_stick_x',
+  'left_stick_y',
+  'right_stick_x',
+  'right_stick_y',
+  'DcMotor',
+  'Servo',
+  'ElapsedTime',
+  'RUN_TO_POSITION',
+  'STOP_AND_RESET_ENCODER',
+  'RUN_USING_ENCODER',
+  'BRAKE',
+  'FLOAT',
+  'public',
+  'private',
+  'protected',
+  'class',
+  'extends',
+  'implements',
+  'new',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'switch',
+  'case',
+  'try',
+  'catch'
+];
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -151,6 +187,7 @@ function initFallbackEditor() {
   if (!fallbackEditor) return;
 
   applyFallbackEditorSettings();
+  fallbackEditor.addEventListener('keydown', handleFallbackEditorKeydown);
   fallbackEditor.addEventListener('input', () => {
     if (isSettingFallbackContent || !state.activeFile) return;
     const info = state.openFiles.get(state.activeFile);
@@ -177,6 +214,75 @@ function applyFallbackEditorSettings() {
   const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
   fallbackEditor.style.tabSize = String(tabSize);
   fallbackEditor.style.whiteSpace = state.settings['editor.wordWrap'] === 'on' ? 'pre-wrap' : 'pre';
+}
+
+function handleFallbackEditorKeydown(e) {
+  if (!fallbackEditor || !state.activeFile) return;
+  if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    if (tryApplyFallbackAutocomplete()) return;
+    const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
+    const insertion = ' '.repeat(tabSize);
+    const start = fallbackEditor.selectionStart ?? 0;
+    const end = fallbackEditor.selectionEnd ?? start;
+    isSettingFallbackContent = true;
+    fallbackEditor.setRangeText(insertion, start, end, 'end');
+    isSettingFallbackContent = false;
+    syncFallbackEditorContent();
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === ' ') {
+    e.preventDefault();
+    if (!tryApplyFallbackAutocomplete()) {
+      showToast('No autocomplete suggestions found', 'info');
+    }
+  }
+}
+
+function tryApplyFallbackAutocomplete() {
+  if (!fallbackEditor || fallbackEditor.selectionStart !== fallbackEditor.selectionEnd) return false;
+  const context = getFallbackAutocompleteContext();
+  if (!context) return false;
+  const suggestion = getFallbackAutocompleteSuggestion(context.prefix);
+  if (!suggestion) return false;
+  isSettingFallbackContent = true;
+  fallbackEditor.setRangeText(suggestion, context.start, context.end, 'end');
+  isSettingFallbackContent = false;
+  syncFallbackEditorContent();
+  return true;
+}
+
+function getFallbackAutocompleteContext() {
+  if (!fallbackEditor) return null;
+  const cursor = fallbackEditor.selectionStart ?? 0;
+  const before = fallbackEditor.value.slice(0, cursor);
+  const match = before.match(/[@\w.]+$/);
+  if (!match || !match[0]) return null;
+  return { prefix: match[0], start: cursor - match[0].length, end: cursor };
+}
+
+function getFallbackAutocompleteSuggestion(prefix) {
+  const language = getLanguageForFile(state.activeFile || '');
+  const items = language === 'java'
+    ? FALLBACK_AUTOCOMPLETE_ITEMS
+    : ['function', 'const', 'let', 'class', 'return', 'if', 'else', 'for', 'while'];
+  const lowerPrefix = prefix.toLowerCase();
+  return items.find((item) => {
+    const lowerItem = item.toLowerCase();
+    return lowerItem.startsWith(lowerPrefix) && lowerItem !== lowerPrefix;
+  }) || null;
+}
+
+function syncFallbackEditorContent() {
+  if (!fallbackEditor || !state.activeFile) return;
+  const info = state.openFiles.get(state.activeFile);
+  if (!info) return;
+  info.modified = true;
+  info.content = fallbackEditor.value;
+  updateTabModified(state.activeFile, true);
+  updateOutline();
+  updateFallbackCursorPosition();
 }
 
 function registerJavaCompletions() {
@@ -284,7 +390,6 @@ async function saveSettings() {
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['git.username', document.getElementById('setting-github-user').value],
     ['git.email', document.getElementById('setting-github-email').value],
-    ['git.token', document.getElementById('setting-github-token').value],
     ['adb.path', document.getElementById('setting-adb-path').value],
     ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
@@ -292,6 +397,12 @@ async function saveSettings() {
   for (const [k, v] of kvPairs) {
     await window.ftcIDE.settings.set(k, v);
     state.settings[k] = v;
+  }
+
+  const githubToken = document.getElementById('setting-github-token').value.trim();
+  if (githubToken) {
+    await window.ftcIDE.credentials.setGitHubToken(githubToken);
+    document.getElementById('setting-github-token').value = '';
   }
 
   // Apply to Monaco
@@ -1000,7 +1111,7 @@ async function gitPull() {
   if (!state.projectPath) return;
   try {
     showToast('Pulling...', 'info');
-    const token = state.settings['git.token'];
+    const token = await window.ftcIDE.credentials.getGitHubToken();
     await window.ftcIDE.git.pull(state.projectPath, 'origin', '', token);
     showToast('Pull complete', 'success');
     refreshGitStatus();
@@ -1013,7 +1124,7 @@ async function gitPush() {
   if (!state.projectPath) return;
   try {
     showToast('Pushing...', 'info');
-    const token = state.settings['git.token'];
+    const token = await window.ftcIDE.credentials.getGitHubToken();
     await window.ftcIDE.git.push(state.projectPath, 'origin', '', token);
     showToast('Push complete', 'success');
   } catch (e) {
@@ -1554,7 +1665,6 @@ function setupCopilotPanel() {
     if (!token) { showToast('Enter a GitHub token', 'warning'); return; }
     try {
       await window.ftcIDE.copilot.setToken(token);
-      await window.ftcIDE.settings.set('copilot.token', token);
       const ok = await window.ftcIDE.copilot.isAuthenticated();
       const msg = document.getElementById('copilot-status-msg');
       msg.className = `status-msg ${ok ? 'success' : 'error'}`;
@@ -2309,8 +2419,9 @@ function initSubsystemBuilder() {
     navigator.clipboard.writeText(generateSubsystemCode());
     showToast('Subsystem code copied', 'success');
   });
-  document.getElementById('sb-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateSubsystemCode());
+  document.getElementById('sb-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('sb-class-name', 'MySubsystem');
+    await insertGeneratedClass(generateSubsystemCode(), 'subsystems', className, 'Subsystem');
   });
   document.getElementById('sb-refresh').addEventListener('click', updateSBPreview);
   document.getElementById('sb-class-name').addEventListener('input', updateSBPreview);
@@ -2371,7 +2482,7 @@ function generateSubsystemCode() {
   const methods = sbBlocks.filter(b => b.cat === 'method');
 
   let code = '// Generated by ChuckleIDE Subsystem Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
   code += 'import com.qualcomm.robotcore.hardware.*;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n\n';
   code += `public class ${className} {\n`;
@@ -2464,8 +2575,9 @@ function initCommandBuilder() {
     navigator.clipboard.writeText(generateCommandCode());
     showToast('Command code copied', 'success');
   });
-  document.getElementById('cmb-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateCommandCode());
+  document.getElementById('cmb-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('cmb-class-name', 'MyCommand');
+    await insertGeneratedClass(generateCommandCode(), 'commands', className, 'Command');
   });
   document.getElementById('cmb-refresh').addEventListener('click', updateCMBPreview);
   document.getElementById('cmb-class-name').addEventListener('input', updateCMBPreview);
@@ -2529,7 +2641,8 @@ function generateCommandCode() {
   const finishBlocks = cmbBlocks.filter(b => b.cat === 'finish');
 
   let code = '// Generated by ChuckleIDE Command Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.commands;\n\n';
+  code += `import org.firstinspires.ftc.teamcode.subsystems.${subsystem};\n`;
   code += 'import com.qualcomm.robotcore.util.ElapsedTime;\n\n';
   code += `public class ${className} {\n`;
   code += `    private ${subsystem} subsystem;\n`;
@@ -2584,8 +2697,9 @@ function initOpModeBuilder() {
     navigator.clipboard.writeText(generateOpModeCode());
     showToast('OpMode code copied', 'success');
   });
-  document.getElementById('ob-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateOpModeCode());
+  document.getElementById('ob-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('ob-class-name', 'MyAutonomous');
+    await insertGeneratedClass(generateOpModeCode(), 'opmodes', className, 'OpMode');
   });
   document.getElementById('ob-refresh').addEventListener('click', updateOBPreview);
   document.getElementById('ob-class-name').addEventListener('input', updateOBPreview);
@@ -2844,7 +2958,7 @@ function generateOpModeCode() {
   const hasControlPoints = obSteps.some(s => s.type === 'path' && s.controlPoints && s.controlPoints.length > 0);
 
   let code = '// Generated by ChuckleIDE OpMode Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.opmodes;\n\n';
   code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
   code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
   code += 'import com.pedropathing.follower.Follower;\n';
@@ -2855,6 +2969,13 @@ function generateOpModeCode() {
   }
   code += 'import com.pedropathing.pathgen.Path;\n';
   code += 'import com.pedropathing.pathgen.Point;\n\n';
+  for (const sub of subsystems) {
+    code += `import org.firstinspires.ftc.teamcode.subsystems.${sub};\n`;
+  }
+  for (const cmd of commands) {
+    code += `import org.firstinspires.ftc.teamcode.commands.${cmd};\n`;
+  }
+  code += '\n';
   code += `@Autonomous(name = "${className}")\n`;
   code += `public class ${className} extends LinearOpMode {\n\n`;
 
@@ -2968,6 +3089,52 @@ function generateOpModeCode() {
 }
 
 // ── Shared helper to insert generated code into editor ────
+function getGeneratedClassName(inputId, fallbackName) {
+  const value = document.getElementById(inputId)?.value?.trim() || fallbackName;
+  return value.replace(/\.java$/i, '');
+}
+
+// Renderer does not have direct Node.js `path` access, so normalize/join paths here.
+function joinProjectPath(basePath, ...segments) {
+  const sep = window.ftcIDE.platform === 'win32' ? '\\' : '/';
+  const leadingSep = (basePath.match(/^[\\/]+/) || [''])[0].replace(/[\\/]/g, sep);
+  const baseParts = basePath.replace(/^[\\/]+|[\\/]+$/g, '').split(/[\\/]+/).filter(Boolean);
+  const segmentParts = segments
+    .flatMap((segment) => segment.split(/[\\/]+/))
+    .filter(Boolean);
+  return `${leadingSep}${[...baseParts, ...segmentParts].join(sep)}`;
+}
+
+/**
+ * Creates/updates a generated Java class file in its package directory and opens it.
+ * @param {string} code Java source to persist.
+ * @param {string} packageFolder TeamCode package folder (e.g. subsystems).
+ * @param {string} className Java class name (without .java).
+ * @param {string} kindLabel User-facing class type label.
+ */
+async function insertGeneratedClass(code, packageFolder, className, kindLabel) {
+  if (!state.teamCodePath) {
+    navigator.clipboard.writeText(code);
+    showToast(`Open a TeamCode project first — ${kindLabel} code copied to clipboard`, 'warning');
+    return;
+  }
+
+  const rootDir = state.teamCodePath;
+  const packageDir = joinProjectPath(rootDir, packageFolder);
+  const filePath = joinProjectPath(packageDir, `${className}.java`);
+
+  try {
+    await window.ftcIDE.fs.createDir(packageDir);
+    await window.ftcIDE.fs.writeFile(filePath, code);
+    await refreshFileTree();
+    await openFile(filePath);
+    closeAppView();
+    showToast(`${kindLabel} class created in ${packageFolder}/`, 'success');
+  } catch (err) {
+    showToast(`Failed to create ${kindLabel}: ${err.message}`, 'error');
+  }
+}
+
 function insertGeneratedCode(code) {
   if (monacoEditor && state.activeFile) {
     const pos = monacoEditor.getPosition();

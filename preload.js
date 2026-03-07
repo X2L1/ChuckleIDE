@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     diff: (repoPath, file) => ipcRenderer.invoke('git:diff', repoPath, file),
     add: (repoPath, files) => ipcRenderer.invoke('git:add', repoPath, files),
     commit: (repoPath, message) => ipcRenderer.invoke('git:commit', repoPath, message),
-    pull: (repoPath, remote, branch) => ipcRenderer.invoke('git:pull', repoPath, remote, branch),
+    pull: (repoPath, remote, branch, token) => ipcRenderer.invoke('git:pull', repoPath, remote, branch, token),
     push: (repoPath, remote, branch, token) => ipcRenderer.invoke('git:push', repoPath, remote, branch, token),
     branches: (repoPath) => ipcRenderer.invoke('git:branches', repoPath),
     checkout: (repoPath, branch) => ipcRenderer.invoke('git:checkout', repoPath, branch),
@@ -91,6 +91,12 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     set: (key, value) => ipcRenderer.invoke('settings:set', key, value),
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     delete: (key) => ipcRenderer.invoke('settings:delete', key)
+  },
+
+  credentials: {
+    getGitHubToken: () => ipcRenderer.invoke('credentials:getGitHubToken'),
+    setGitHubToken: (token) => ipcRenderer.invoke('credentials:setGitHubToken', token),
+    hasGitHubToken: () => ipcRenderer.invoke('credentials:hasGitHubToken')
   },
 
   // ── LSP ──────────────────────────────────────────────────────────────────────
