@@ -952,19 +952,19 @@ async function autoSave(filePath) {
 // ── Tab Management ────────────────────────────────────────
 const APP_TAB_PREFIX = 'app:';
 const appTabMeta = {
-  'subsystem-builder': { icon: '⚙️', label: 'Subsystem Builder' },
-  'command-builder':   { icon: '📦', label: 'Command Builder' },
-  'opmode-builder':    { icon: '🧩', label: 'OpMode Builder' },
-  'path-visualizer':   { icon: '🗺️', label: 'Path Visualizer' },
-  'ftc-dashboard':     { icon: '📊', label: 'FTC Dashboard' },
-  'panels':            { icon: '📋', label: 'Panels' },
-  'pedro-constants':   { icon: '🔧', label: 'Pedro Constants' },
-  'lut-manager':       { icon: '📊', label: 'Lookup Tables' },
-  'interplut-manager': { icon: '📈', label: 'Interpolated LUTs' },
-  'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
-  'object-manager':    { icon: '📦', label: 'Global Objects' },
-  'util-builder':      { icon: '🛠️', label: 'Utilities' },
-  'vision-builder':    { icon: '👁️', label: 'Vision Builder' }
+  'subsystem-builder': { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="5"/><path d="M16 3v3M16 26v3M3 16h3M26 16h3M6.3 6.3l2.1 2.1M23.6 23.6l2.1 2.1M6.3 25.7l2.1-2.1M23.6 8.4l2.1-2.1"/></svg>', label: 'Subsystem Builder' },
+  'command-builder':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="10" height="10" rx="2"/><rect x="18" y="4" width="10" height="10" rx="2"/><rect x="4" y="18" width="10" height="10" rx="2"/><path d="M18 22h10M23 18v8"/></svg>', label: 'Command Builder' },
+  'opmode-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="16" height="8" rx="2"/><rect x="8" y="22" width="16" height="8" rx="2"/><line x1="16" y1="10" x2="16" y2="22"/><polyline points="12 18 16 22 20 18"/></svg>', label: 'OpMode Builder' },
+  'path-visualizer':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="26" r="3"/><circle cx="26" cy="6" r="3"/><path d="M8 24C12 20 14 10 26 8"/><circle cx="16" cy="16" r="2" fill="currentColor"/></svg>', label: 'Path Visualizer' },
+  'ftc-dashboard':     { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="18" width="5" height="10" rx="1"/><rect x="13" y="10" width="5" height="18" rx="1"/><rect x="22" y="4" width="5" height="24" rx="1"/></svg>', label: 'FTC Dashboard' },
+  'panels':            { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2"/><rect x="17" y="3" width="12" height="6" rx="2"/><rect x="17" y="11" width="12" height="4" rx="1"/><rect x="3" y="17" width="12" height="4" rx="1"/><rect x="3" y="23" width="12" height="6" rx="2"/><rect x="17" y="17" width="12" height="12" rx="2"/></svg>', label: 'Panels' },
+  'pedro-constants':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4a6 6 0 0 0-5 9.2L6 24.4 7.6 26l11.2-11A6 6 0 0 0 22 4z"/><circle cx="22" cy="10" r="2"/></svg>', label: 'Pedro Constants' },
+  'lut-manager':       { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="26" height="22" rx="2"/><line x1="3" y1="11" x2="29" y2="11"/><line x1="3" y1="18" x2="29" y2="18"/><line x1="12" y1="5" x2="12" y2="27"/></svg>', label: 'Lookup Tables' },
+  'interplut-manager': { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 28 4 4"/><polyline points="4 28 28 28"/><path d="M6 24C10 24 12 8 20 8c4 0 6 6 8 6"/><circle cx="6" cy="24" r="2" fill="currentColor"/><circle cx="20" cy="8" r="2" fill="currentColor"/><circle cx="28" cy="14" r="2" fill="currentColor"/></svg>', label: 'Interpolated LUTs' },
+  'enum-manager':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l12 12-10 10L4 16z"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg>', label: 'Global Enums' },
+  'object-manager':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2L4 9v14l12 7 12-7V9z"/><path d="M16 16L4 9"/><path d="M16 16l12-7"/><path d="M16 16v14"/></svg>', label: 'Global Objects' },
+  'util-builder':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14L4 24l4 4 10-10"/><path d="M22 4a6 6 0 0 0-6 6c0 1 .3 2 .6 2.8L14 16"/><path d="M18 18l3.2-3.4c.8.3 1.8.6 2.8.6a6 6 0 0 0 0-12"/></svg>', label: 'Utilities' },
+  'vision-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg>', label: 'Vision Builder' }
 };
 
 function isAppTab(tabId) {
