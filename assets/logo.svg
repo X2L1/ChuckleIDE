@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
-  <rect width="100" height="100" rx="18" fill="#f97316"/>
-  <text x="50" y="72" font-size="60" text-anchor="middle" fill="white"
-        font-family="monospace" font-weight="bold">F</text>
-  <text x="50" y="95" font-size="14" text-anchor="middle" fill="rgba(255,255,255,0.8)"
-        font-family="sans-serif" font-weight="600">FTC</text>
+  <defs>
+    <linearGradient id="bg" x1="12" y1="8" x2="90" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff77be"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="22" y1="14" x2="74" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+  <path d="M15 56C15 34.8 31.8 18 53 18C62.2 18 70.7 21.2 77.3 26.6L70.8 34.1C66.2 30.1 59.9 27.6 53 27.6C37.1 27.6 24.2 40.4 24.2 56.2C24.2 72 37.1 84.8 53 84.8C60.7 84.8 67.7 81.8 72.8 76.8L79.4 83.5C72.6 90.2 63.3 94.4 53 94.4C31.8 94.4 15 77.2 15 56Z" fill="#ffffff"/>
+  <path d="M28 22H78C78 22 70 44 42 44C34 44 28 40 28 40V22Z" fill="url(#shine)"/>
+  <circle cx="61" cy="45" r="2.6" fill="#ffffff" fill-opacity="0.95"/>
+  <circle cx="72" cy="45" r="2.6" fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M58 57C60.7 60.5 64.7 62.5 69 62.5C73.3 62.5 77.3 60.5 80 57" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" fill="none"/>
 </svg>
