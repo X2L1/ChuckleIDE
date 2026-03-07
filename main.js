@@ -512,6 +512,17 @@ ipcMain.handle('auth:signOut', async () => {
   return true;
 });
 
+ipcMain.handle('auth:setClientId', async (_, clientId) => {
+  const id = (clientId || '').trim();
+  if (id) {
+    store.set('github.clientId', id);
+  } else {
+    store.delete('github.clientId');
+  }
+  githubAuth = new GitHubAuth(id);
+  return true;
+});
+
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
 
 ipcMain.handle('lsp:start', async (_, projectPath) => {
@@ -581,7 +592,7 @@ app.whenReady().then(async () => {
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
   updater = new Updater(store);
-  githubAuth = new GitHubAuth();
+  githubAuth = new GitHubAuth(store.get('github.clientId'));
 
   createWindow();
 

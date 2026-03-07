@@ -213,6 +213,13 @@
         <div class="setting-group">
           <div class="setting-group-title">GitHub</div>
           <div id="github-signed-out">
+            <div class="setting-row">
+              <label for="setting-github-client-id">OAuth Client ID</label>
+              <input type="text" id="setting-github-client-id" placeholder="Ov23li…" spellcheck="false" />
+            </div>
+            <div class="setting-hint" style="font-size:0.82em;opacity:0.65;margin:-6px 0 8px 0;text-align:center">
+              Register an OAuth App at <a href="https://github.com/settings/applications/new" style="color:var(--accent)">github.com/settings/applications/new</a> and enable Device Flow.
+            </div>
             <div class="setting-row" style="justify-content:center">
               <button class="btn-primary small" id="btn-github-sign-in">Sign in with GitHub</button>
             </div>

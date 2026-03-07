@@ -97,7 +97,8 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     startDeviceFlow: () => ipcRenderer.invoke('auth:startDeviceFlow'),
     cancelDeviceFlow: () => ipcRenderer.invoke('auth:cancelDeviceFlow'),
     getUser: () => ipcRenderer.invoke('auth:getUser'),
-    signOut: () => ipcRenderer.invoke('auth:signOut')
+    signOut: () => ipcRenderer.invoke('auth:signOut'),
+    setClientId: (id) => ipcRenderer.invoke('auth:setClientId', id)
   },
 
   // ── Event Listeners ──────────────────────────────────────────────────────────

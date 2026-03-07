@@ -6,13 +6,14 @@ const https = require('https');
 // Register your own OAuth App at https://github.com/settings/applications/new
 // then enable "Device Authorization Flow" in the app settings and paste the
 // Client ID below.  A client secret is NOT required for the device flow.
-const GITHUB_CLIENT_ID = 'Ov23liYVVBMH5fJxm0xc';
+const DEFAULT_GITHUB_CLIENT_ID = 'Ov23liYVVBMH5fJxm0xc';
 
 // Scopes requested during authorization (read:user gives basic profile info).
 const SCOPES = 'read:user';
 
 class GitHubAuth {
-  constructor() {
+  constructor(clientId) {
+    this._clientId = clientId || DEFAULT_GITHUB_CLIENT_ID;
     this._polling = false;
     this._aborted = false;
   }
@@ -25,7 +26,7 @@ class GitHubAuth {
    */
   async startDeviceFlow() {
     const body = await this._post('github.com', '/login/device/code', {
-      client_id: GITHUB_CLIENT_ID,
+      client_id: this._clientId,
       scope: SCOPES
     });
 
@@ -59,7 +60,7 @@ class GitHubAuth {
 
         try {
           const body = await this._post('github.com', '/login/oauth/access_token', {
-            client_id: GITHUB_CLIENT_ID,
+            client_id: this._clientId,
             device_code: deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
           });
@@ -167,6 +168,9 @@ class GitHubAuth {
           if (res.statusCode >= 400) {
             let msg = `GitHub returned HTTP ${res.statusCode}`;
             try { const j = JSON.parse(body); msg = j.message || j.error || msg; } catch { /* ignore */ }
+            if (res.statusCode === 404) {
+              msg += '. The OAuth Client ID may be invalid — check your GitHub Client ID in Settings.';
+            }
             return reject(new Error(msg));
           }
           try {

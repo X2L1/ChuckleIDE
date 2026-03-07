@@ -462,6 +462,7 @@ async function loadSettings() {
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
+    setInputVal('setting-github-client-id', state.settings['github.clientId'] || '');
 
     applyFallbackEditorSettings();
 
@@ -493,7 +494,8 @@ function setupSettingsPanel() {
     } catch (e) {
       // Electron wraps IPC errors; strip the prefix for a cleaner toast.
       const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
+      const hint = /404|Not Found/i.test(msg) ? ' Check your GitHub Client ID in Settings.' : '';
+      showToast(`GitHub sign-in failed: ${msg}${hint}`, 'error');
       btn.disabled = false;
       btn.textContent = 'Sign in with GitHub';
     }
@@ -574,7 +576,8 @@ async function saveSettings() {
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['adb.path', document.getElementById('setting-adb-path').value],
-    ['ui.colorMode', document.getElementById('setting-color-mode').value]
+    ['ui.colorMode', document.getElementById('setting-color-mode').value],
+    ['github.clientId', document.getElementById('setting-github-client-id').value]
   ];
 
   for (const [k, v] of kvPairs) {
@@ -594,6 +597,10 @@ async function saveSettings() {
   applyFallbackEditorSettings();
 
   applyColorMode(state.settings['ui.colorMode']);
+
+  // Update the GitHub auth client ID in the main process.
+  await window.ftcIDE.auth.setClientId(state.settings['github.clientId'] || '');
+
   showToast('Settings saved', 'success');
 }
 
