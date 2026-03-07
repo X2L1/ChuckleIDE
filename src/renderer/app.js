@@ -277,7 +277,6 @@ async function saveSettings() {
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['git.username', document.getElementById('setting-github-user').value],
     ['git.email', document.getElementById('setting-github-email').value],
-    ['git.token', document.getElementById('setting-github-token').value],
     ['adb.path', document.getElementById('setting-adb-path').value],
     ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
@@ -285,6 +284,12 @@ async function saveSettings() {
   for (const [k, v] of kvPairs) {
     await window.ftcIDE.settings.set(k, v);
     state.settings[k] = v;
+  }
+
+  const githubToken = document.getElementById('setting-github-token').value.trim();
+  if (githubToken) {
+    await window.ftcIDE.credentials.setGitHubToken(githubToken);
+    document.getElementById('setting-github-token').value = '';
   }
 
   // Apply to Monaco
@@ -985,7 +990,7 @@ async function gitPull() {
   if (!state.projectPath) return;
   try {
     showToast('Pulling...', 'info');
-    const token = state.settings['git.token'];
+    const token = await window.ftcIDE.credentials.getGitHubToken();
     await window.ftcIDE.git.pull(state.projectPath, 'origin', '', token);
     showToast('Pull complete', 'success');
     refreshGitStatus();
@@ -998,7 +1003,7 @@ async function gitPush() {
   if (!state.projectPath) return;
   try {
     showToast('Pushing...', 'info');
-    const token = state.settings['git.token'];
+    const token = await window.ftcIDE.credentials.getGitHubToken();
     await window.ftcIDE.git.push(state.projectPath, 'origin', '', token);
     showToast('Push complete', 'success');
   } catch (e) {
@@ -1273,7 +1278,6 @@ function setupCopilotPanel() {
     if (!token) { showToast('Enter a GitHub token', 'warning'); return; }
     try {
       await window.ftcIDE.copilot.setToken(token);
-      await window.ftcIDE.settings.set('copilot.token', token);
       const ok = await window.ftcIDE.copilot.isAuthenticated();
       const msg = document.getElementById('copilot-status-msg');
       msg.className = `status-msg ${ok ? 'success' : 'error'}`;

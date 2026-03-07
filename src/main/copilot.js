@@ -10,16 +10,14 @@ const https = require('https');
  * Users need a GitHub Copilot subscription and a token with `copilot` scope.
  */
 class CopilotManager {
-  constructor(store) {
-    this.store = store;
-    this.token = store.get('copilot.token') || null;
+  constructor() {
+    this.token = null;
     this.copilotToken = null;    // Short-lived token from GitHub Copilot auth endpoint
     this.copilotTokenExpiry = 0;
   }
 
   setToken(token) {
-    this.token = token;
-    this.store.set('copilot.token', token);
+    this.token = token || null;
     this.copilotToken = null; // reset cached token
     this.copilotTokenExpiry = 0;
   }
