@@ -338,6 +338,10 @@
             <div class="app-name">Global Objects</div>
             <div class="app-desc">Create shared data classes and configuration objects</div>
           </div>
+          <div class="home-app-card" id="app-util-builder">
+            <div class="app-icon">🛠️</div>
+            <div class="app-name">Utilities</div>
+            <div class="app-desc">Generate math, vector, odometry, and other utility classes</div>
           <div class="home-app-card" id="app-vision-builder">
             <div class="app-icon">👁️</div>
             <div class="app-name">Vision Builder</div>
@@ -827,6 +831,14 @@
         </div>
       </div>
 
+      <!-- UTILITY BUILDER -->
+      <div id="app-view-util-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🛠️</span>
+          <h2>Utility Builder</h2>
+          <button class="btn-secondary small" id="ub-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="ub-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="ub-close" title="Close">✕</button>
       <div id="app-view-vision-builder" class="app-view">
         <div class="app-view-header">
           <span style="font-size:18px">👁️</span>
@@ -840,6 +852,19 @@
             <div class="lut-form-panel">
               <div class="form-group">
                 <label>Class Name</label>
+                <input type="text" id="ub-class-name" value="MathUtils" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Utility Category</label>
+                <select id="ub-category" class="text-input">
+                  <option value="math">Math Utilities</option>
+                  <option value="vector">Vector (Vector2d)</option>
+                  <option value="odometry">Odometry (Pinpoint)</option>
+                  <option value="misc">Miscellaneous</option>
+                </select>
+              </div>
+              <div class="ub-methods-container" id="ub-methods-container">
+                <!-- Dynamically populated checkboxes -->
                 <input type="text" id="vis-class-name" value="VisionOpMode" class="text-input" />
               </div>
               <div class="form-group">
@@ -1004,6 +1029,9 @@
             <div class="builder-preview-panel">
               <div class="code-preview-header">
                 <span>Generated Java Code</span>
+                <button class="icon-btn" id="ub-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="ub-preview"></div>
                 <button class="icon-btn" id="vis-refresh" title="Refresh">↻</button>
               </div>
               <div class="code-preview-content" id="vis-preview"></div>

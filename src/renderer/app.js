@@ -868,6 +868,7 @@ const appTabMeta = {
   'interplut-manager': { icon: '📈', label: 'Interpolated LUTs' },
   'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
   'object-manager':    { icon: '📦', label: 'Global Objects' },
+  'util-builder':      { icon: '🛠️', label: 'Utilities' }
   'vision-builder':    { icon: '👁️', label: 'Vision Builder' }
 };
 
@@ -2261,6 +2262,7 @@ function bindHomeScreen() {
     'app-interplut-manager': () => openAppView('interplut-manager'),
     'app-enum-manager':      () => openAppView('enum-manager'),
     'app-object-manager':    () => openAppView('object-manager'),
+    'app-util-builder':      () => openAppView('util-builder'),
     'app-vision-builder':    () => openAppView('vision-builder'),
     'home-open-project':     () => browseForProject(),
     'home-clone-repo':       () => showModal('clone')
@@ -2295,6 +2297,7 @@ function initAppIfNeeded(name) {
   if (name === 'interplut-manager') initInterpLUTManager();
   if (name === 'enum-manager') initEnumManager();
   if (name === 'object-manager') initObjectManager();
+  if (name === 'util-builder') initUtilBuilder();
   if (name === 'vision-builder') initVisionBuilder();
 }
 
@@ -3720,6 +3723,493 @@ function generateObjectCode() {
   code += '}\n';
   return code;
 }
+
+// ── Utility Builder ───────────────────────────────────────
+let ubInitialized = false;
+let ubSelected = {}; // { methodId: true/false }
+
+const utilMethods = {
+  math: [
+    {
+      id: 'clamp',
+      label: 'clamp(value, min, max)',
+      desc: 'Constrain a value between a minimum and maximum',
+      code:
+`    public static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }`
+    },
+    {
+      id: 'lerp',
+      label: 'lerp(a, b, t)',
+      desc: 'Linear interpolation between two values',
+      code:
+`    public static double lerp(double a, double b, double t) {
+        return a + (b - a) * t;
+    }`
+    },
+    {
+      id: 'inverseLerp',
+      label: 'inverseLerp(a, b, value)',
+      desc: 'Inverse linear interpolation — find t given value',
+      code:
+`    public static double inverseLerp(double a, double b, double value) {
+        if (Math.abs(b - a) < 1e-9) return 0.0;
+        return (value - a) / (b - a);
+    }`
+    },
+    {
+      id: 'normalizeAngle',
+      label: 'normalizeAngle(angle)',
+      desc: 'Normalize an angle in radians to [-π, π]',
+      code:
+`    public static double normalizeAngle(double angle) {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }`
+    },
+    {
+      id: 'angleWrap',
+      label: 'angleWrap(angle)',
+      desc: 'Wrap an angle in degrees to [0, 360)',
+      code:
+`    public static double angleWrap(double degrees) {
+        degrees %= 360;
+        if (degrees < 0) degrees += 360;
+        return degrees;
+    }`
+    },
+    {
+      id: 'toDegrees',
+      label: 'toDegrees(radians)',
+      desc: 'Convert radians to degrees',
+      code:
+`    public static double toDegrees(double radians) {
+        return radians * 180.0 / Math.PI;
+    }`
+    },
+    {
+      id: 'toRadians',
+      label: 'toRadians(degrees)',
+      desc: 'Convert degrees to radians',
+      code:
+`    public static double toRadians(double degrees) {
+        return degrees * Math.PI / 180.0;
+    }`
+    },
+    {
+      id: 'approxEquals',
+      label: 'approxEquals(a, b, epsilon)',
+      desc: 'Check if two doubles are approximately equal',
+      code:
+`    public static boolean approxEquals(double a, double b, double epsilon) {
+        return Math.abs(a - b) < epsilon;
+    }`
+    }
+  ],
+  vector: [
+    {
+      id: 'vec2d_class',
+      label: 'Vector2d class',
+      desc: 'Full 2D vector class with common operations',
+      code:
+`    public static class Vector2d {
+        public double x;
+        public double y;
+
+        public Vector2d(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        public Vector2d() {
+            this(0, 0);
+        }
+
+        public Vector2d add(Vector2d other) {
+            return new Vector2d(x + other.x, y + other.y);
+        }
+
+        public Vector2d subtract(Vector2d other) {
+            return new Vector2d(x - other.x, y - other.y);
+        }
+
+        public Vector2d scale(double scalar) {
+            return new Vector2d(x * scalar, y * scalar);
+        }
+
+        public double magnitude() {
+            return Math.hypot(x, y);
+        }
+
+        public Vector2d normalized() {
+            double mag = magnitude();
+            if (mag < 1e-9) return new Vector2d(0, 0);
+            return new Vector2d(x / mag, y / mag);
+        }
+
+        public double dot(Vector2d other) {
+            return x * other.x + y * other.y;
+        }
+
+        public double cross(Vector2d other) {
+            return x * other.y - y * other.x;
+        }
+
+        public double distanceTo(Vector2d other) {
+            return Math.hypot(x - other.x, y - other.y);
+        }
+
+        public double angleTo(Vector2d other) {
+            return Math.atan2(other.y - y, other.x - x);
+        }
+
+        public Vector2d rotated(double angleRadians) {
+            double cos = Math.cos(angleRadians);
+            double sin = Math.sin(angleRadians);
+            return new Vector2d(x * cos - y * sin, x * sin + y * cos);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("(%.2f, %.2f)", x, y);
+        }
+    }`
+    },
+    {
+      id: 'vec_distance',
+      label: 'distance(x1, y1, x2, y2)',
+      desc: 'Distance between two 2D points',
+      code:
+`    public static double distance(double x1, double y1, double x2, double y2) {
+        return Math.hypot(x2 - x1, y2 - y1);
+    }`
+    },
+    {
+      id: 'vec_heading',
+      label: 'headingBetween(x1, y1, x2, y2)',
+      desc: 'Angle in radians from one point to another',
+      code:
+`    public static double headingBetween(double x1, double y1, double x2, double y2) {
+        return Math.atan2(y2 - y1, x2 - x1);
+    }`
+    }
+  ],
+  odometry: [
+    {
+      id: 'pinpoint_pose',
+      label: 'Pose2d class',
+      desc: 'Simple pose class for x, y, heading used with odometry',
+      code:
+`    public static class Pose2d {
+        public double x;
+        public double y;
+        public double heading;
+
+        public Pose2d(double x, double y, double heading) {
+            this.x = x;
+            this.y = y;
+            this.heading = heading;
+        }
+
+        public Pose2d() {
+            this(0, 0, 0);
+        }
+
+        public double distanceTo(Pose2d other) {
+            return Math.hypot(x - other.x, y - other.y);
+        }
+
+        public double headingDiff(Pose2d other) {
+            double diff = other.heading - heading;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            return diff;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("Pose2d(%.2f, %.2f, %.2f°)", x, y, Math.toDegrees(heading));
+        }
+    }`
+    },
+    {
+      id: 'pinpoint_update',
+      label: 'updatePinpointOdometry()',
+      desc: 'Helper to read position from GoBilda Pinpoint and return a Pose2d',
+      code:
+`    /**
+     * Reads the current position from a GoBilda Pinpoint odometry computer.
+     * Requires Pose2d class (select it above) and the Pinpoint driver.
+     *
+     * @param pinpoint the GoBildaPinpointDriver instance
+     * @return current robot Pose2d
+     */
+    public static Pose2d updatePinpointOdometry(GoBildaPinpointDriver pinpoint) {
+        pinpoint.update();
+        Pose2D pos = pinpoint.getPosition();
+        return new Pose2d(pos.getX(DistanceUnit.INCH), pos.getY(DistanceUnit.INCH),
+                          pos.getHeading(AngleUnit.RADIAN));
+    }`
+    },
+    {
+      id: 'pinpoint_reset',
+      label: 'resetPinpointPosition()',
+      desc: 'Reset the Pinpoint odometry position to a given pose',
+      code:
+`    /**
+     * Resets the Pinpoint odometry computer position.
+     *
+     * @param pinpoint the GoBildaPinpointDriver instance
+     * @param x        new x position in inches
+     * @param y        new y position in inches
+     * @param heading  new heading in radians
+     */
+    public static void resetPinpointPosition(GoBildaPinpointDriver pinpoint,
+                                              double x, double y, double heading) {
+        pinpoint.setPosition(new Pose2D(DistanceUnit.INCH, x, y, AngleUnit.RADIAN, heading));
+    }`
+    },
+    {
+      id: 'pinpoint_velocity',
+      label: 'getPinpointVelocity()',
+      desc: 'Read the current velocity from the Pinpoint sensor',
+      code:
+`    /**
+     * Reads the current velocity from a GoBilda Pinpoint odometry computer.
+     * Requires Pose2d class (select it above) and the Pinpoint driver.
+     *
+     * @param pinpoint the GoBildaPinpointDriver instance
+     * @return current velocity as Pose2d (vx, vy, angular velocity)
+     */
+    public static Pose2d getPinpointVelocity(GoBildaPinpointDriver pinpoint) {
+        Pose2D vel = pinpoint.getVelocity();
+        return new Pose2d(vel.getX(DistanceUnit.INCH), vel.getY(DistanceUnit.INCH),
+                          vel.getHeading(AngleUnit.RADIAN));
+    }`
+    }
+  ],
+  misc: [
+    {
+      id: 'range_scale',
+      label: 'scaleRange(value, inMin, inMax, outMin, outMax)',
+      desc: 'Map a value from one range to another',
+      code:
+`    public static double scaleRange(double value, double inMin, double inMax,
+                                     double outMin, double outMax) {
+        return outMin + (outMax - outMin) * ((value - inMin) / (inMax - inMin));
+    }`
+    },
+    {
+      id: 'deadband',
+      label: 'deadband(value, threshold)',
+      desc: 'Apply a deadband — return 0 if value is within threshold of 0',
+      code:
+`    public static double deadband(double value, double threshold) {
+        return Math.abs(value) < threshold ? 0.0 : value;
+    }`
+    },
+    {
+      id: 'avg',
+      label: 'average(values...)',
+      desc: 'Compute the average of a variable number of doubles',
+      code:
+`    public static double average(double... values) {
+        if (values.length == 0) return 0.0;
+        double sum = 0;
+        for (double v : values) sum += v;
+        return sum / values.length;
+    }`
+    },
+    {
+      id: 'timer',
+      label: 'ElapsedTimer class',
+      desc: 'Simple elapsed-time helper using System.nanoTime()',
+      code:
+`    public static class ElapsedTimer {
+        private long startTime;
+
+        public ElapsedTimer() {
+            reset();
+        }
+
+        public void reset() {
+            startTime = System.nanoTime();
+        }
+
+        /** Returns elapsed time in seconds. */
+        public double seconds() {
+            return (System.nanoTime() - startTime) / 1e9;
+        }
+
+        /** Returns elapsed time in milliseconds. */
+        public double milliseconds() {
+            return (System.nanoTime() - startTime) / 1e6;
+        }
+
+        /** Returns true if the specified number of seconds have elapsed. */
+        public boolean hasElapsed(double duration) {
+            return seconds() >= duration;
+        }
+    }`
+    },
+    {
+      id: 'pid_simple',
+      label: 'SimplePID class',
+      desc: 'Basic PID controller with kP, kI, kD coefficients',
+      code:
+`    public static class SimplePID {
+        private final double kP, kI, kD;
+        private double integral = 0;
+        private double previousError = 0;
+        private long previousTime = System.nanoTime();
+
+        public SimplePID(double kP, double kI, double kD) {
+            this.kP = kP;
+            this.kI = kI;
+            this.kD = kD;
+        }
+
+        public double calculate(double error) {
+            long now = System.nanoTime();
+            double dt = (now - previousTime) / 1e9;
+            if (dt <= 0) dt = 1e-3;
+            integral += error * dt;
+            double derivative = (error - previousError) / dt;
+            previousError = error;
+            previousTime = now;
+            return kP * error + kI * integral + kD * derivative;
+        }
+
+        public void reset() {
+            integral = 0;
+            previousError = 0;
+            previousTime = System.nanoTime();
+        }
+    }`
+    }
+  ]
+};
+
+const utilCategoryLabels = {
+  math: 'Math Utilities',
+  vector: 'Vectors',
+  odometry: 'Odometry (Pinpoint)',
+  misc: 'Miscellaneous'
+};
+
+function initUtilBuilder() {
+  if (ubInitialized) { updateUBPreview(); return; }
+  ubInitialized = true;
+
+  // Default: select all math utilities
+  for (const m of utilMethods.math) ubSelected[m.id] = true;
+
+  document.getElementById('ub-close').addEventListener('click', closeAppView);
+  document.getElementById('ub-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateUtilCode());
+    showToast('Utility code copied', 'success');
+  });
+  document.getElementById('ub-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('ub-class-name', 'MathUtils');
+    await insertGeneratedClass(generateUtilCode(), 'util', className, 'Utility');
+  });
+  document.getElementById('ub-refresh').addEventListener('click', updateUBPreview);
+  document.getElementById('ub-class-name').addEventListener('input', updateUBPreview);
+  document.getElementById('ub-category').addEventListener('change', () => {
+    renderUBMethods();
+    updateUBPreview();
+  });
+
+  renderUBMethods();
+  updateUBPreview();
+}
+
+function renderUBMethods() {
+  const container = document.getElementById('ub-methods-container');
+  const category = document.getElementById('ub-category').value;
+  container.innerHTML = '';
+
+  const methods = utilMethods[category] || [];
+
+  const group = document.createElement('div');
+  group.className = 'ub-category-group';
+
+  const title = document.createElement('div');
+  title.className = 'ub-category-title';
+  title.textContent = utilCategoryLabels[category] || category;
+  group.appendChild(title);
+
+  for (const method of methods) {
+    const item = document.createElement('div');
+    item.className = 'ub-method-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'ub-chk-' + method.id;
+    checkbox.checked = !!ubSelected[method.id];
+    checkbox.addEventListener('change', () => {
+      ubSelected[method.id] = checkbox.checked;
+      updateUBPreview();
+    });
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+    label.textContent = method.label;
+    item.appendChild(checkbox);
+    item.appendChild(label);
+    group.appendChild(item);
+
+    if (method.desc) {
+      const desc = document.createElement('div');
+      desc.className = 'ub-method-desc';
+      desc.textContent = method.desc;
+      group.appendChild(desc);
+    }
+  }
+
+  container.appendChild(group);
+}
+
+function updateUBPreview() {
+  const el = document.getElementById('ub-preview');
+  if (el) el.textContent = generateUtilCode();
+}
+
+function generateUtilCode() {
+  const className = document.getElementById('ub-class-name').value || 'MathUtils';
+
+  // Collect all selected methods across all categories
+  const selected = [];
+  for (const cat of Object.keys(utilMethods)) {
+    for (const m of utilMethods[cat]) {
+      if (ubSelected[m.id]) {
+        selected.push(m);
+      }
+    }
+  }
+
+  // Determine needed imports
+  const needsOdometryImports = selected.some(m =>
+    m.id === 'pinpoint_update' || m.id === 'pinpoint_reset' || m.id === 'pinpoint_velocity'
+  );
+
+  let code = '// Generated by ChuckleIDE Utility Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.util;\n\n';
+
+  if (needsOdometryImports) {
+    code += 'import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;\n';
+    code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n';
+    code += 'import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;\n';
+    code += 'import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;\n';
+    code += '\n';
+  }
+
+  code += `public class ${className} {\n\n`;
+  code += `    private ${className}() {} // Utility class -- no instances\n`;
+
+  for (const m of selected) {
+    code += '\n' + m.code + '\n';
+  }
 
 // ── Vision Builder ────────────────────────────────────────
 let visInitialized = false;
