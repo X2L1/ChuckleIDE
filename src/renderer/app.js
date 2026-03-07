@@ -14,8 +14,230 @@ const state = {
   devices: [],
   editorFontSize: 14,
   bottomHeight: 200,
-  sidebarWidth: 260
+  sidebarWidth: 260,
+  pendingPathForOpMode: null
 };
+
+const DEFAULT_HOME_LAYOUT = [
+  { type: 'app', id: 'app-subsystem-builder', visible: true },
+  { type: 'app', id: 'app-command-builder', visible: true },
+  { type: 'app', id: 'app-opmode-builder', visible: true },
+  { type: 'app', id: 'app-pedro-visualizer', visible: true },
+  { type: 'app', id: 'app-ftc-dashboard', visible: true },
+  { type: 'app', id: 'app-panels-view', visible: true },
+  { type: 'app', id: 'app-template-gallery', visible: true },
+  { type: 'app', id: 'app-open-editor', visible: true },
+  { type: 'app', id: 'app-device-manager', visible: true },
+  { type: 'app', id: 'app-new-project', visible: true },
+  { type: 'app', id: 'app-learn', visible: true },
+  { type: 'app', id: 'app-pedro-constants', visible: true },
+  { type: 'app', id: 'app-lut-manager', visible: true },
+  { type: 'app', id: 'app-interplut-manager', visible: true },
+  { type: 'app', id: 'app-enum-manager', visible: true },
+  { type: 'app', id: 'app-object-manager', visible: true },
+  { type: 'app', id: 'app-util-builder', visible: true },
+  { type: 'app', id: 'app-vision-builder', visible: true }
+];
+
+async function getHomeLayout() {
+  try {
+    const saved = await window.ftcIDE.settings.get('home.layout');
+    if (Array.isArray(saved) && saved.length > 0) return saved;
+  } catch { /* ignore */ }
+  return JSON.parse(JSON.stringify(DEFAULT_HOME_LAYOUT));
+}
+
+async function saveHomeLayout(layout) {
+  await window.ftcIDE.settings.set('home.layout', layout);
+}
+
+function applyHomeLayout(layout) {
+  const grid = document.querySelector('.home-apps-grid');
+  if (!grid) return;
+
+  // Hide all app cards first
+  grid.querySelectorAll('.home-app-card').forEach(card => card.style.display = 'none');
+
+  // Remove any existing folder elements
+  grid.querySelectorAll('.home-folder').forEach(f => f.remove());
+
+  // Apply layout: show visible apps in order, create folders
+  let currentFolder = null;
+  let currentFolderGrid = null;
+
+  for (const item of layout) {
+    if (item.type === 'folder') {
+      const folderEl = document.createElement('div');
+      folderEl.className = 'home-folder';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'home-folder-title';
+      titleEl.textContent = item.name || 'Folder';
+      folderEl.appendChild(titleEl);
+      const folderGrid = document.createElement('div');
+      folderGrid.className = 'home-folder-grid';
+      folderEl.appendChild(folderGrid);
+      grid.appendChild(folderEl);
+      currentFolder = folderEl;
+      currentFolderGrid = folderEl.querySelector('.home-folder-grid');
+    } else if (item.type === 'folder-end') {
+      currentFolder = null;
+      currentFolderGrid = null;
+    } else if (item.type === 'app') {
+      const card = document.getElementById(item.id);
+      if (card) {
+        card.style.display = item.visible ? '' : 'none';
+        if (item.visible) {
+          if (currentFolderGrid) {
+            currentFolderGrid.appendChild(card);
+          } else {
+            grid.appendChild(card);
+          }
+        }
+      }
+    }
+  }
+}
+
+async function renderCustomizeList() {
+  const list = document.getElementById('home-customize-list');
+  const layout = await getHomeLayout();
+
+  list.innerHTML = '';
+
+  // Map app IDs to their display names
+  const appNames = {};
+  document.querySelectorAll('.home-app-card').forEach(card => {
+    const nameEl = card.querySelector('.app-name');
+    if (nameEl) appNames[card.id] = nameEl.textContent;
+  });
+
+  layout.forEach((item, idx) => {
+    if (item.type === 'folder') {
+      const folderEl = document.createElement('div');
+      folderEl.className = 'home-customize-folder';
+      folderEl.dataset.idx = idx;
+      const headerEl = document.createElement('div');
+      headerEl.className = 'home-customize-folder-header';
+      headerEl.appendChild(document.createTextNode('📁 '));
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = item.name || 'Folder';
+      nameInput.className = 'folder-name-input';
+      headerEl.appendChild(nameInput);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'icon-btn remove-folder';
+      removeBtn.title = 'Remove folder';
+      removeBtn.style.fontSize = '12px';
+      removeBtn.textContent = '✕';
+      headerEl.appendChild(removeBtn);
+      folderEl.appendChild(headerEl);
+      nameInput.addEventListener('input', async (e) => {
+        const currentLayout = await getHomeLayout();
+        currentLayout[idx].name = e.target.value;
+        await saveHomeLayout(currentLayout);
+      });
+      removeBtn.addEventListener('click', async () => {
+        const currentLayout = await getHomeLayout();
+        // Remove folder start and end markers, keep apps inside
+        let endIdx = currentLayout.findIndex((it, i) => i > idx && it.type === 'folder-end');
+        if (endIdx === -1) endIdx = currentLayout.length;
+        currentLayout.splice(endIdx, 1); // remove folder-end
+        currentLayout.splice(idx, 1); // remove folder
+        await saveHomeLayout(currentLayout);
+        await renderCustomizeList();
+      });
+      list.appendChild(folderEl);
+    } else if (item.type === 'folder-end') {
+      // Visual separator
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:2px;background:var(--border);margin:4px 0 8px;border-radius:1px;';
+      list.appendChild(sep);
+    } else if (item.type === 'app') {
+      const el = document.createElement('div');
+      el.className = 'home-customize-item';
+      el.draggable = true;
+      el.dataset.idx = idx;
+      const name = appNames[item.id] || item.id;
+      el.innerHTML = `
+        <span class="item-grip">⠿</span>
+        <span class="item-name">${name}</span>
+        <input type="checkbox" class="item-toggle" ${item.visible ? 'checked' : ''} />
+      `;
+
+      // Toggle visibility
+      el.querySelector('.item-toggle').addEventListener('change', async (e) => {
+        const currentLayout = await getHomeLayout();
+        currentLayout[idx].visible = e.target.checked;
+        await saveHomeLayout(currentLayout);
+      });
+
+      // Drag and drop reordering
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', idx.toString());
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.style.borderTop = '2px solid var(--accent)';
+      });
+      el.addEventListener('dragleave', () => {
+        el.style.borderTop = '';
+      });
+      el.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        el.style.borderTop = '';
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIdx = parseInt(el.dataset.idx);
+        if (fromIdx !== toIdx) {
+          const currentLayout = await getHomeLayout();
+          const [moved] = currentLayout.splice(fromIdx, 1);
+          currentLayout.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
+          await saveHomeLayout(currentLayout);
+          await renderCustomizeList();
+        }
+      });
+
+      list.appendChild(el);
+    }
+  });
+}
+
+function bindHomeCustomization() {
+  document.getElementById('home-customize-btn').addEventListener('click', async () => {
+    const panel = document.getElementById('home-customize-panel');
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    if (panel.style.display !== 'none') {
+      await renderCustomizeList();
+    }
+  });
+
+  document.getElementById('home-customize-close').addEventListener('click', () => {
+    document.getElementById('home-customize-panel').style.display = 'none';
+  });
+
+  document.getElementById('home-customize-done').addEventListener('click', async () => {
+    document.getElementById('home-customize-panel').style.display = 'none';
+    const layout = await getHomeLayout();
+    applyHomeLayout(layout);
+  });
+
+  document.getElementById('home-reset-layout').addEventListener('click', async () => {
+    await saveHomeLayout(JSON.parse(JSON.stringify(DEFAULT_HOME_LAYOUT)));
+    await renderCustomizeList();
+    applyHomeLayout(await getHomeLayout());
+    showToast('Home screen reset to default', 'info');
+  });
+
+  document.getElementById('home-add-folder').addEventListener('click', async () => {
+    const layout = await getHomeLayout();
+    const folderName = 'New Folder';
+    layout.push({ type: 'folder', name: folderName, id: 'folder-' + Date.now() });
+    layout.push({ type: 'folder-end' });
+    await saveHomeLayout(layout);
+    await renderCustomizeList();
+  });
+}
 
 let monacoEditor = null;
 let fallbackEditor = null;
@@ -462,6 +684,7 @@ async function loadSettings() {
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
+    setInputVal('setting-github-client-id', state.settings['github.clientId'] || '');
 
     applyFallbackEditorSettings();
 
@@ -493,7 +716,8 @@ function setupSettingsPanel() {
     } catch (e) {
       // Electron wraps IPC errors; strip the prefix for a cleaner toast.
       const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
+      const hint = /404|Not Found/i.test(msg) ? ' Check your GitHub Client ID in Settings.' : '';
+      showToast(`GitHub sign-in failed: ${msg}${hint}`, 'error');
       btn.disabled = false;
       btn.textContent = 'Sign in with GitHub';
     }
@@ -574,7 +798,8 @@ async function saveSettings() {
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['adb.path', document.getElementById('setting-adb-path').value],
-    ['ui.colorMode', document.getElementById('setting-color-mode').value]
+    ['ui.colorMode', document.getElementById('setting-color-mode').value],
+    ['github.clientId', document.getElementById('setting-github-client-id').value]
   ];
 
   for (const [k, v] of kvPairs) {
@@ -594,6 +819,10 @@ async function saveSettings() {
   applyFallbackEditorSettings();
 
   applyColorMode(state.settings['ui.colorMode']);
+
+  // Update the GitHub auth client ID in the main process.
+  await window.ftcIDE.auth.setClientId(state.settings['github.clientId'] || '');
+
   showToast('Settings saved', 'success');
 }
 
@@ -944,19 +1173,19 @@ async function autoSave(filePath) {
 // ── Tab Management ────────────────────────────────────────
 const APP_TAB_PREFIX = 'app:';
 const appTabMeta = {
-  'subsystem-builder': { icon: '⚙️', label: 'Subsystem Builder' },
-  'command-builder':   { icon: '📦', label: 'Command Builder' },
-  'opmode-builder':    { icon: '🧩', label: 'OpMode Builder' },
-  'path-visualizer':   { icon: '🗺️', label: 'Path Visualizer' },
-  'ftc-dashboard':     { icon: '📊', label: 'FTC Dashboard' },
-  'panels':            { icon: '📋', label: 'Panels' },
-  'pedro-constants':   { icon: '🔧', label: 'Pedro Constants' },
-  'lut-manager':       { icon: '📊', label: 'Lookup Tables' },
-  'interplut-manager': { icon: '📈', label: 'Interpolated LUTs' },
-  'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
-  'object-manager':    { icon: '📦', label: 'Global Objects' },
-  'util-builder':      { icon: '🛠️', label: 'Utilities' },
-  'vision-builder':    { icon: '👁️', label: 'Vision Builder' }
+  'subsystem-builder': { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="5"/><path d="M16 3v3M16 26v3M3 16h3M26 16h3M6.3 6.3l2.1 2.1M23.6 23.6l2.1 2.1M6.3 25.7l2.1-2.1M23.6 8.4l2.1-2.1"/></svg>', label: 'Subsystem Builder' },
+  'command-builder':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="10" height="10" rx="2"/><rect x="18" y="4" width="10" height="10" rx="2"/><rect x="4" y="18" width="10" height="10" rx="2"/><path d="M18 22h10M23 18v8"/></svg>', label: 'Command Builder' },
+  'opmode-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="16" height="8" rx="2"/><rect x="8" y="22" width="16" height="8" rx="2"/><line x1="16" y1="10" x2="16" y2="22"/><polyline points="12 18 16 22 20 18"/></svg>', label: 'OpMode Builder' },
+  'path-visualizer':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="26" r="3"/><circle cx="26" cy="6" r="3"/><path d="M8 24C12 20 14 10 26 8"/><circle cx="16" cy="16" r="2" fill="currentColor"/></svg>', label: 'Path Visualizer' },
+  'ftc-dashboard':     { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="18" width="5" height="10" rx="1"/><rect x="13" y="10" width="5" height="18" rx="1"/><rect x="22" y="4" width="5" height="24" rx="1"/></svg>', label: 'FTC Dashboard' },
+  'panels':            { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2"/><rect x="17" y="3" width="12" height="6" rx="2"/><rect x="17" y="11" width="12" height="4" rx="1"/><rect x="3" y="17" width="12" height="4" rx="1"/><rect x="3" y="23" width="12" height="6" rx="2"/><rect x="17" y="17" width="12" height="12" rx="2"/></svg>', label: 'Panels' },
+  'pedro-constants':   { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4a6 6 0 0 0-5 9.2L6 24.4 7.6 26l11.2-11A6 6 0 0 0 22 4z"/><circle cx="22" cy="10" r="2"/></svg>', label: 'Pedro Constants' },
+  'lut-manager':       { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="26" height="22" rx="2"/><line x1="3" y1="11" x2="29" y2="11"/><line x1="3" y1="18" x2="29" y2="18"/><line x1="12" y1="5" x2="12" y2="27"/></svg>', label: 'Lookup Tables' },
+  'interplut-manager': { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 28 4 4"/><polyline points="4 28 28 28"/><path d="M6 24C10 24 12 8 20 8c4 0 6 6 8 6"/><circle cx="6" cy="24" r="2" fill="currentColor"/><circle cx="20" cy="8" r="2" fill="currentColor"/><circle cx="28" cy="14" r="2" fill="currentColor"/></svg>', label: 'Interpolated LUTs' },
+  'enum-manager':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l12 12-10 10L4 16z"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg>', label: 'Global Enums' },
+  'object-manager':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2L4 9v14l12 7 12-7V9z"/><path d="M16 16L4 9"/><path d="M16 16l12-7"/><path d="M16 16v14"/></svg>', label: 'Global Objects' },
+  'util-builder':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14L4 24l4 4 10-10"/><path d="M22 4a6 6 0 0 0-6 6c0 1 .3 2 .6 2.8L14 16"/><path d="M18 18l3.2-3.4c.8.3 1.8.6 2.8.6a6 6 0 0 0 0-12"/></svg>', label: 'Utilities' },
+  'vision-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg>', label: 'Vision Builder' }
 };
 
 function isAppTab(tabId) {
@@ -2358,6 +2587,10 @@ function bindHomeScreen() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', fn);
   }
+
+  bindHomeCustomization();
+  // Apply saved layout
+  getHomeLayout().then(applyHomeLayout);
 }
 
 function openAppView(name) {
@@ -2755,7 +2988,7 @@ function initOpModeBuilder() {
   document.getElementById('ob-start-heading').addEventListener('input', updateOBPreview);
 
   document.getElementById('ob-add-path').addEventListener('click', () => {
-    obSteps.push({
+    const step = {
       id: ++obIdCounter,
       type: 'path',
       interpolation: 'linear',
@@ -2764,7 +2997,22 @@ function initOpModeBuilder() {
         { x: 24, y: 0, heading: 0 }
       ],
       controlPoints: []
-    });
+    };
+
+    if (state.pendingPathForOpMode) {
+      const pd = state.pendingPathForOpMode;
+      if (pd.waypoints && pd.waypoints.length >= 2) {
+        step.waypoints = pd.waypoints.map(wp => ({
+          x: wp.x, y: wp.y, heading: wp.heading || 0
+        }));
+        if (pd.controlPoints && pd.controlPoints.length > 0) {
+          step.controlPoints = pd.controlPoints.map(cp => ({ x: cp.x, y: cp.y }));
+        }
+      }
+      state.pendingPathForOpMode = null;
+    }
+
+    obSteps.push(step);
     renderOBSequence();
     updateOBPreview();
   });
@@ -3221,6 +3469,224 @@ function initPathVisualizer() {
   document.getElementById('pv-close').addEventListener('click', closeAppView);
   document.getElementById('pv-open-external').addEventListener('click', () => {
     window.ftcIDE.shell.openExternal('https://visualizer.pedropathing.com');
+  });
+
+  document.getElementById('pv-save-path').addEventListener('click', () => {
+    showSavePathDialog();
+  });
+
+  document.getElementById('pv-load-paths').addEventListener('click', () => {
+    const panel = document.getElementById('pv-saved-paths-panel');
+    const isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : '';
+    if (!isVisible) renderSavedPaths();
+  });
+
+  document.getElementById('pv-close-saved-panel').addEventListener('click', () => {
+    document.getElementById('pv-saved-paths-panel').style.display = 'none';
+  });
+}
+
+function showSavePathDialog() {
+  const existing = document.getElementById('pv-save-dialog');
+  if (existing) existing.remove();
+
+  const dialog = document.createElement('div');
+  dialog.id = 'pv-save-dialog';
+  dialog.className = 'modal-overlay';
+  dialog.style.display = 'flex';
+  dialog.innerHTML = `
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <h3>Save Path from Visualizer</h3>
+        <button class="icon-btn" id="pv-save-dialog-close">✕</button>
+      </div>
+      <div class="modal-body" style="max-height:400px; overflow-y:auto;">
+        <p style="color:var(--fg-dim); font-size:12px; margin-bottom:12px;">
+          Enter the path waypoints from the visualizer. Copy the coordinates from the PedroPathing visualizer.
+        </p>
+        <div class="form-group">
+          <label>Path Name</label>
+          <input type="text" id="pv-path-name" value="" placeholder="e.g. Score Specimen" class="text-input" />
+        </div>
+        <div id="pv-waypoints-container">
+          <div class="panel-section-title">WAYPOINTS</div>
+          <div class="pv-waypoint-entry" data-index="0">
+            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+              <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Start:</span>
+              <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+            </div>
+          </div>
+          <div class="pv-waypoint-entry" data-index="1">
+            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+              <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">End:</span>
+              <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+              <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <button class="btn-secondary small" id="pv-add-waypoint">+ Add Waypoint</button>
+          <button class="btn-secondary small" id="pv-add-control-point">+ Add Control Point</button>
+        </div>
+        <div id="pv-control-points-container" style="margin-top:8px;">
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid var(--border);">
+        <button class="btn-secondary small" id="pv-save-dialog-cancel">Cancel</button>
+        <button class="btn-primary small" id="pv-save-dialog-confirm">Save Path</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+
+  let controlPointCount = 0;
+
+  document.getElementById('pv-save-dialog-close').addEventListener('click', () => dialog.remove());
+  document.getElementById('pv-save-dialog-cancel').addEventListener('click', () => dialog.remove());
+
+  document.getElementById('pv-add-waypoint').addEventListener('click', () => {
+    const container = document.getElementById('pv-waypoints-container');
+    const entries = container.querySelectorAll('.pv-waypoint-entry');
+    const idx = entries.length;
+    const entry = document.createElement('div');
+    entry.className = 'pv-waypoint-entry';
+    entry.dataset.index = idx;
+    entry.innerHTML = `
+      <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+        <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Pt ${idx}:</span>
+        <input type="number" class="text-input small pv-wp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-wp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-wp-h" placeholder="Heading°" value="0" step="any" style="width:80px;" />
+        <button class="icon-btn pv-remove-wp" title="Remove" style="font-size:12px;">✕</button>
+      </div>
+    `;
+    const lastEntry = entries[entries.length - 1];
+    container.insertBefore(entry, lastEntry);
+    entry.querySelector('.pv-remove-wp').addEventListener('click', () => entry.remove());
+  });
+
+  document.getElementById('pv-add-control-point').addEventListener('click', () => {
+    controlPointCount++;
+    const container = document.getElementById('pv-control-points-container');
+    const entry = document.createElement('div');
+    entry.className = 'pv-control-point-entry';
+    entry.innerHTML = `
+      <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+        <span style="font-size:11px; color:var(--fg-dim); min-width:40px;">Ctrl ${controlPointCount}:</span>
+        <input type="number" class="text-input small pv-cp-x" placeholder="X" value="0" step="any" style="width:70px;" />
+        <input type="number" class="text-input small pv-cp-y" placeholder="Y" value="0" step="any" style="width:70px;" />
+        <button class="icon-btn pv-remove-cp" title="Remove" style="font-size:12px;">✕</button>
+      </div>
+    `;
+    container.appendChild(entry);
+    entry.querySelector('.pv-remove-cp').addEventListener('click', () => entry.remove());
+  });
+
+  document.getElementById('pv-save-dialog-confirm').addEventListener('click', async () => {
+    const name = document.getElementById('pv-path-name').value.trim();
+    if (!name) { showToast('Enter a path name', 'warning'); return; }
+
+    const waypoints = [];
+    document.querySelectorAll('#pv-waypoints-container .pv-waypoint-entry').forEach(entry => {
+      waypoints.push({
+        x: parseFloat(entry.querySelector('.pv-wp-x').value) || 0,
+        y: parseFloat(entry.querySelector('.pv-wp-y').value) || 0,
+        heading: parseFloat(entry.querySelector('.pv-wp-h').value) || 0
+      });
+    });
+
+    const controlPoints = [];
+    document.querySelectorAll('#pv-control-points-container .pv-control-point-entry').forEach(entry => {
+      controlPoints.push({
+        x: parseFloat(entry.querySelector('.pv-cp-x').value) || 0,
+        y: parseFloat(entry.querySelector('.pv-cp-y').value) || 0
+      });
+    });
+
+    if (waypoints.length < 2) { showToast('A path needs at least 2 waypoints', 'warning'); return; }
+
+    const pathData = {
+      name,
+      date: new Date().toISOString(),
+      waypoints,
+      controlPoints
+    };
+
+    let saved = [];
+    try {
+      const raw = await window.ftcIDE.settings.get('paths.saved');
+      if (Array.isArray(raw)) saved = raw;
+    } catch { /* ignore */ }
+
+    saved.push(pathData);
+    await window.ftcIDE.settings.set('paths.saved', saved);
+
+    dialog.remove();
+    showToast(`Path "${name}" saved`, 'success');
+  });
+}
+
+async function renderSavedPaths() {
+  const list = document.getElementById('pv-saved-paths-list');
+  let saved = [];
+  try {
+    const raw = await window.ftcIDE.settings.get('paths.saved');
+    if (Array.isArray(raw)) saved = raw;
+  } catch { /* ignore */ }
+
+  if (saved.length === 0) {
+    list.innerHTML = '<div class="pv-empty-msg">No saved paths yet. Design a path in the visualizer, then click "Save Path".</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  saved.forEach((p, idx) => {
+    const item = document.createElement('div');
+    item.className = 'pv-path-item';
+    const dateStr = p.date ? new Date(p.date).toLocaleDateString() : '';
+    const wpCount = (p.waypoints || []).length;
+    const cpCount = (p.controlPoints || []).length;
+    const escapedName = p.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    item.innerHTML = `
+      <div class="pv-path-item-header">
+        <span class="pv-path-item-name">${escapedName}</span>
+        <span class="pv-path-item-date">${dateStr}</span>
+      </div>
+      <div class="pv-path-item-points">${wpCount} waypoints${cpCount > 0 ? ', ' + cpCount + ' control points' : ''}</div>
+      <div class="pv-path-actions">
+        <button class="btn-primary small pv-use-in-opmode" data-idx="${idx}">Use in OpMode</button>
+        <button class="btn-secondary small pv-delete-path" data-idx="${idx}">Delete</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('.pv-use-in-opmode').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      const pathData = saved[idx];
+      if (pathData) {
+        state.pendingPathForOpMode = pathData;
+        document.getElementById('pv-saved-paths-panel').style.display = 'none';
+        openAppView('opmode-builder');
+        showToast(`Path "${pathData.name}" ready — add a "Follow Path" step to use it`, 'info');
+      }
+    });
+  });
+
+  list.querySelectorAll('.pv-delete-path').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      saved.splice(idx, 1);
+      await window.ftcIDE.settings.set('paths.saved', saved);
+      renderSavedPaths();
+      showToast('Path deleted', 'info');
+    });
   });
 }
 
@@ -4327,8 +4793,8 @@ function initVisionBuilder() {
     showToast('Vision code copied', 'success');
   });
   document.getElementById('vis-insert-code').addEventListener('click', async () => {
-    const className = getGeneratedClassName('vis-class-name', 'VisionOpMode');
-    await insertGeneratedClass(generateVisionCode(), 'vision', className, 'Vision');
+    const className = getGeneratedClassName('vis-class-name', 'VisionSubsystem');
+    await insertGeneratedClass(generateVisionCode(), 'subsystems', className, 'Vision Subsystem');
   });
   document.getElementById('vis-refresh').addEventListener('click', updateVisPreview);
 
@@ -4355,12 +4821,14 @@ function generateVisionCode() {
     case 'tensorflow':  return generateTensorFlowCode();
     case 'huskylens':   return generateHuskyLensCode();
     case 'limelight':   return generateLimelightCode();
+    case 'opencv':      return generateOpenCVCode();
+    case 'colorblob':   return generateColorBlobCode();
     default:            return '// Select a vision type';
   }
 }
 
 function generateAprilTagCode() {
-  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const className = document.getElementById('vis-class-name').value || 'AprilTagSubsystem';
   const camera    = document.getElementById('vis-at-camera').value || 'Webcam 1';
   const res       = (document.getElementById('vis-at-resolution').value || '640,480').split(',');
   const resW      = res[0] || '640';
@@ -4372,9 +4840,8 @@ function generateAprilTagCode() {
   const navigate  = document.getElementById('vis-at-navigate').value === 'true';
 
   let code = '// Generated by ChuckleIDE Vision Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n';
@@ -4383,57 +4850,12 @@ function generateAprilTagCode() {
   code += 'import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;\n';
   code += 'import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;\n\n';
   code += 'import java.util.List;\n\n';
-  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
-  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += `public class ${className} {\n\n`;
   code += '    private VisionPortal visionPortal;\n';
   code += '    private AprilTagProcessor aprilTagProcessor;\n\n';
-  code += '    @Override\n';
-  code += '    public void runOpMode() throws InterruptedException {\n';
-  code += '        initVision();\n\n';
-  code += '        telemetry.addData("Status", "Vision Initialized");\n';
-  code += '        telemetry.addData("Camera State", visionPortal.getCameraState());\n';
-  code += '        telemetry.update();\n\n';
-  code += '        waitForStart();\n\n';
-  code += '        while (opModeIsActive()) {\n';
-  code += '            List<AprilTagDetection> detections = aprilTagProcessor.getDetections();\n';
-  code += '            telemetry.addData("Tags Detected", detections.size());\n\n';
-  code += '            for (AprilTagDetection detection : detections) {\n';
-  code += '                if (detection.metadata != null) {\n';
-  code += '                    telemetry.addLine(String.format(\n';
-  code += '                            "\\n==== Tag #%d (%s) ====",\n';
-  code += '                            detection.id, detection.metadata.name));\n';
-  code += '                    telemetry.addData("  Range",   "%.2f inches", detection.ftcPose.range);\n';
-  code += '                    telemetry.addData("  Bearing", "%.2f degrees", detection.ftcPose.bearing);\n';
-  code += '                    telemetry.addData("  Yaw",     "%.2f degrees", detection.ftcPose.yaw);\n';
-  code += '                } else {\n';
-  code += '                    telemetry.addLine(String.format(\n';
-  code += '                            "\\n==== Unknown Tag #%d ====", detection.id));\n';
-  code += '                }\n';
-  if (navigate) {
-    code += '                navigateToTag(detection);\n';
-  }
-  code += '            }\n\n';
-  code += '            telemetry.update();\n';
-  code += '        }\n\n';
-  code += '        visionPortal.close();\n';
-  code += '    }\n';
 
-  if (navigate) {
-    code += '\n    private void navigateToTag(AprilTagDetection detection) {\n';
-    code += '        if (detection.ftcPose == null) return;\n';
-    code += '        double rangeError   = detection.ftcPose.range  - 12.0;\n';
-    code += '        double headingError = detection.ftcPose.bearing;\n';
-    code += '        double yawError     = detection.ftcPose.yaw;\n\n';
-    code += '        double drive  = -rangeError   * 0.05;\n';
-    code += '        double strafe =  headingError * 0.05;\n';
-    code += '        double turn   = -yawError     * 0.03;\n\n';
-    code += '        telemetry.addData("Nav Drive",  "%.2f", drive);\n';
-    code += '        telemetry.addData("Nav Strafe", "%.2f", strafe);\n';
-    code += '        telemetry.addData("Nav Turn",   "%.2f", turn);\n';
-    code += '    }\n';
-  }
-
-  code += '\n    private void initVision() {\n';
+  // Constructor
+  code += `    public ${className}(HardwareMap hardwareMap) {\n`;
   code += '        aprilTagProcessor = new AprilTagProcessor.Builder()\n';
   code += `                .setDrawAxes(${axes})\n`;
   code += `                .setDrawCubeProjection(${cube})\n`;
@@ -4447,11 +4869,86 @@ function generateAprilTagCode() {
   code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
   code += '                .setStreamFormat(VisionPortal.StreamFormat.YUY2)\n';
   code += '                .addProcessor(aprilTagProcessor)\n';
-  code += '                .build();\n\n';
-  code += '        while (!isStarted() && !isStopRequested() &&\n';
-  code += '               visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {\n';
-  code += '            telemetry.addData("Camera", "Waiting...");\n';
-  code += '            telemetry.update();\n';
+  code += '                .build();\n';
+  code += '    }\n';
+
+  // Public methods
+  code += '\n    /** Returns all currently detected AprilTags. */\n';
+  code += '    public List<AprilTagDetection> getDetections() {\n';
+  code += '        return aprilTagProcessor.getDetections();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the closest detected tag, or null if none are visible. */\n';
+  code += '    public AprilTagDetection getClosestTag() {\n';
+  code += '        List<AprilTagDetection> detections = aprilTagProcessor.getDetections();\n';
+  code += '        AprilTagDetection closest = null;\n';
+  code += '        double minRange = Double.MAX_VALUE;\n';
+  code += '        for (AprilTagDetection d : detections) {\n';
+  code += '            if (d.ftcPose != null && d.ftcPose.range < minRange) {\n';
+  code += '                minRange = d.ftcPose.range;\n';
+  code += '                closest = d;\n';
+  code += '            }\n';
+  code += '        }\n';
+  code += '        return closest;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the detection for a specific tag ID, or null if not visible. */\n';
+  code += '    public AprilTagDetection getTagById(int id) {\n';
+  code += '        for (AprilTagDetection d : aprilTagProcessor.getDetections()) {\n';
+  code += '            if (d.id == id) return d;\n';
+  code += '        }\n';
+  code += '        return null;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if the specified tag is currently visible. */\n';
+  code += '    public boolean isTagVisible(int id) {\n';
+  code += '        return getTagById(id) != null;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns range to the specified tag in inches, or -1 if not visible. */\n';
+  code += '    public double getRangeToTag(int id) {\n';
+  code += '        AprilTagDetection d = getTagById(id);\n';
+  code += '        return (d != null && d.ftcPose != null) ? d.ftcPose.range : -1;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns bearing to the specified tag in degrees, or 0 if not visible. */\n';
+  code += '    public double getBearingToTag(int id) {\n';
+  code += '        AprilTagDetection d = getTagById(id);\n';
+  code += '        return (d != null && d.ftcPose != null) ? d.ftcPose.bearing : 0;\n';
+  code += '    }\n';
+
+  if (navigate) {
+    code += '\n    /**\n';
+    code += '     * Computes drive, strafe, and turn powers to navigate toward a tag.\n';
+    code += '     * A typical desiredRange is 12.0 inches.\n';
+    code += '     * Returns a 3-element array: [drive, strafe, turn], or null if pose unavailable.\n';
+    code += '     */\n';
+    code += '    public double[] navigateToTag(AprilTagDetection detection, double desiredRange) {\n';
+    code += '        if (detection.ftcPose == null) return null;\n';
+    code += '        double rangeError   = detection.ftcPose.range - desiredRange;\n';
+    code += '        double headingError = detection.ftcPose.bearing;\n';
+    code += '        double yawError     = detection.ftcPose.yaw;\n\n';
+    code += '        double drive  = -rangeError   * 0.05;\n';
+    code += '        double strafe =  headingError * 0.05;\n';
+    code += '        double turn   = -yawError     * 0.03;\n';
+    code += '        return new double[]{drive, strafe, turn};\n';
+    code += '    }\n';
+  }
+
+  code += '\n    /** Resumes the vision portal streaming. */\n';
+  code += '    public void start() {\n';
+  code += '        visionPortal.resumeStreaming();\n';
+  code += '    }\n';
+
+  code += '\n    /** Pauses the vision portal streaming. */\n';
+  code += '    public void stop() {\n';
+  code += '        visionPortal.stopStreaming();\n';
+  code += '    }\n';
+
+  code += '\n    /** Closes the vision portal and releases resources. */\n';
+  code += '    public void close() {\n';
+  code += '        if (visionPortal != null) {\n';
+  code += '            visionPortal.close();\n';
   code += '        }\n';
   code += '    }\n';
   code += '}\n';
@@ -4459,7 +4956,7 @@ function generateAprilTagCode() {
 }
 
 function generateTensorFlowCode() {
-  const className  = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const className  = document.getElementById('vis-class-name').value || 'TFODSubsystem';
   const camera     = document.getElementById('vis-tf-camera').value || 'Webcam 1';
   const res        = (document.getElementById('vis-tf-resolution').value || '640,480').split(',');
   const resW       = res[0] || '640';
@@ -4471,16 +4968,15 @@ function generateTensorFlowCode() {
   const labels     = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
 
   let code = '// Generated by ChuckleIDE Vision Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
   code += 'import org.firstinspires.ftc.vision.VisionPortal;\n';
   code += 'import org.firstinspires.ftc.vision.tfod.TfodProcessor;\n';
   code += 'import org.firstinspires.ftc.robotcore.external.tfod.Recognition;\n\n';
+  code += 'import java.util.ArrayList;\n';
   code += 'import java.util.List;\n\n';
-  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
-  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += `public class ${className} {\n\n`;
 
   if (model) {
     code += `    private static final String TFOD_MODEL_ASSET = "${model}";\n`;
@@ -4500,65 +4996,10 @@ function generateTensorFlowCode() {
 
   if (detectPos) {
     code += '\n    public enum DetectedPosition { LEFT, CENTER, RIGHT, UNKNOWN }\n';
-    code += '    private DetectedPosition detectedPosition = DetectedPosition.UNKNOWN;\n';
   }
 
-  code += '\n    @Override\n';
-  code += '    public void runOpMode() throws InterruptedException {\n';
-  code += '        initVision();\n\n';
-
-  if (detectPos) {
-    code += '        while (!isStarted() && !isStopRequested()) {\n';
-    code += '            detectPosition();\n';
-    code += '            telemetry.addData("Detected Position", detectedPosition);\n';
-    code += '            telemetry.update();\n';
-    code += '        }\n\n';
-  }
-
-  code += '        waitForStart();\n\n';
-  code += '        while (opModeIsActive()) {\n';
-  code += '            List<Recognition> recognitions = tfodProcessor.getRecognitions();\n';
-  code += '            telemetry.addData("Objects Detected", recognitions.size());\n\n';
-  code += '            for (Recognition rec : recognitions) {\n';
-  code += '                double x = (rec.getLeft() + rec.getRight()) / 2.0;\n';
-  code += '                double y = (rec.getTop() + rec.getBottom()) / 2.0;\n';
-  code += '                telemetry.addData("Image", "%s (%.0f %% conf.)", rec.getLabel(), rec.getConfidence() * 100);\n';
-  code += '                telemetry.addData("- Position", "%.0f / %.0f", x, y);\n';
-  code += '                telemetry.addData("- Size", "%.0f x %.0f", rec.getWidth(), rec.getHeight());\n';
-  code += '            }\n\n';
-  code += '            telemetry.update();\n';
-  code += '        }\n\n';
-  code += '        visionPortal.close();\n';
-  code += '    }\n';
-
-  if (detectPos) {
-    code += '\n    private void detectPosition() {\n';
-    code += '        List<Recognition> recognitions = tfodProcessor.getRecognitions();\n';
-    code += '        double highestConfidence = 0;\n';
-    code += '        Recognition bestDetection = null;\n\n';
-    code += '        for (Recognition rec : recognitions) {\n';
-    code += '            if (rec.getConfidence() > highestConfidence) {\n';
-    code += '                highestConfidence = rec.getConfidence();\n';
-    code += '                bestDetection = rec;\n';
-    code += '            }\n';
-    code += '        }\n\n';
-    code += `        if (bestDetection != null && bestDetection.getConfidence() > ${confidence}) {\n`;
-    code += '            double centerX = (bestDetection.getLeft() + bestDetection.getRight()) / 2.0;\n';
-    code += '            double imageWidth = bestDetection.getImageWidth();\n';
-    code += '            if (centerX < imageWidth / 3.0) {\n';
-    code += '                detectedPosition = DetectedPosition.LEFT;\n';
-    code += '            } else if (centerX < 2.0 * imageWidth / 3.0) {\n';
-    code += '                detectedPosition = DetectedPosition.CENTER;\n';
-    code += '            } else {\n';
-    code += '                detectedPosition = DetectedPosition.RIGHT;\n';
-    code += '            }\n';
-    code += '        } else {\n';
-    code += '            detectedPosition = DetectedPosition.UNKNOWN;\n';
-    code += '        }\n';
-    code += '    }\n';
-  }
-
-  code += '\n    private void initVision() {\n';
+  // Constructor
+  code += `\n    public ${className}(HardwareMap hardwareMap) {\n`;
   code += '        TfodProcessor.Builder tfodBuilder = new TfodProcessor.Builder()\n';
   code += `                .setMinResultConfidence(${confidence}f)\n`;
   code += '                .setIsModelTensorFlow2(true)\n';
@@ -4572,11 +5013,93 @@ function generateTensorFlowCode() {
   code += `                .setCamera(hardwareMap.get(WebcamName.class, "${camera}"))\n`;
   code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
   code += '                .addProcessor(tfodProcessor)\n';
-  code += '                .build();\n\n';
-  code += '        while (!isStarted() && !isStopRequested() &&\n';
-  code += '               visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {\n';
-  code += '            telemetry.addData("Camera", "Opening...");\n';
-  code += '            telemetry.update();\n';
+  code += '                .build();\n';
+  code += '    }\n';
+
+  // Public methods
+  code += '\n    /** Returns all current recognitions. */\n';
+  code += '    public List<Recognition> getRecognitions() {\n';
+  code += '        return tfodProcessor.getRecognitions();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the recognition with the highest confidence, or null. */\n';
+  code += '    public Recognition getBestRecognition() {\n';
+  code += '        List<Recognition> recognitions = tfodProcessor.getRecognitions();\n';
+  code += '        Recognition best = null;\n';
+  code += '        float highestConf = 0;\n';
+  code += '        for (Recognition rec : recognitions) {\n';
+  code += '            if (rec.getConfidence() > highestConf) {\n';
+  code += '                highestConf = rec.getConfidence();\n';
+  code += '                best = rec;\n';
+  code += '            }\n';
+  code += '        }\n';
+  code += '        return best;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns all recognitions matching the given label. */\n';
+  code += '    public List<Recognition> getRecognitionsByLabel(String label) {\n';
+  code += '        List<Recognition> filtered = new ArrayList<>();\n';
+  code += '        for (Recognition rec : tfodProcessor.getRecognitions()) {\n';
+  code += '            if (rec.getLabel().equalsIgnoreCase(label)) {\n';
+  code += '                filtered.add(rec);\n';
+  code += '            }\n';
+  code += '        }\n';
+  code += '        return filtered;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if any object with the given label is detected. */\n';
+  code += '    public boolean isObjectDetected(String label) {\n';
+  code += '        return !getRecognitionsByLabel(label).isEmpty();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the center position [x, y] of the best detection, or null. */\n';
+  code += '    public double[] getDetectedPosition() {\n';
+  code += '        Recognition best = getBestRecognition();\n';
+  code += '        if (best == null) return null;\n';
+  code += '        double x = (best.getLeft() + best.getRight()) / 2.0;\n';
+  code += '        double y = (best.getTop() + best.getBottom()) / 2.0;\n';
+  code += '        return new double[]{x, y};\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the confidence for the best recognition of a given label, or -1. */\n';
+  code += '    public float getConfidence(String label) {\n';
+  code += '        List<Recognition> matches = getRecognitionsByLabel(label);\n';
+  code += '        float best = -1;\n';
+  code += '        for (Recognition rec : matches) {\n';
+  code += '            if (rec.getConfidence() > best) best = rec.getConfidence();\n';
+  code += '        }\n';
+  code += '        return best;\n';
+  code += '    }\n';
+
+  if (detectPos) {
+    code += '\n    /** Determines the screen-third position of the best detection. */\n';
+    code += '    public DetectedPosition detectPosition() {\n';
+    code += '        Recognition best = getBestRecognition();\n';
+    code += `        if (best == null || best.getConfidence() < ${confidence}f) {\n`;
+    code += '            return DetectedPosition.UNKNOWN;\n';
+    code += '        }\n';
+    code += '        double centerX = (best.getLeft() + best.getRight()) / 2.0;\n';
+    code += '        double imageWidth = best.getImageWidth();\n';
+    code += '        if (centerX < imageWidth / 3.0) return DetectedPosition.LEFT;\n';
+    code += '        if (centerX < 2.0 * imageWidth / 3.0) return DetectedPosition.CENTER;\n';
+    code += '        return DetectedPosition.RIGHT;\n';
+    code += '    }\n';
+  }
+
+  code += '\n    /** Resumes the vision portal streaming. */\n';
+  code += '    public void start() {\n';
+  code += '        visionPortal.resumeStreaming();\n';
+  code += '    }\n';
+
+  code += '\n    /** Pauses the vision portal streaming. */\n';
+  code += '    public void stop() {\n';
+  code += '        visionPortal.stopStreaming();\n';
+  code += '    }\n';
+
+  code += '\n    /** Closes the vision portal and releases resources. */\n';
+  code += '    public void close() {\n';
+  code += '        if (visionPortal != null) {\n';
+  code += '            visionPortal.close();\n';
   code += '        }\n';
   code += '    }\n';
   code += '}\n';
@@ -4584,86 +5107,92 @@ function generateTensorFlowCode() {
 }
 
 function generateHuskyLensCode() {
-  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const className = document.getElementById('vis-class-name').value || 'HuskyLensSubsystem';
   const hwName    = document.getElementById('vis-hl-name').value || 'huskyLens';
   const algorithm = document.getElementById('vis-hl-algorithm').value;
   const center    = document.getElementById('vis-hl-center').value === 'true';
 
   let code = '// Generated by ChuckleIDE Vision Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
   code += 'import com.qualcomm.hardware.dfrobot.HuskyLens;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n\n';
-  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
-  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n\n';
+  code += `public class ${className} {\n\n`;
   code += '    private HuskyLens huskyLens;\n\n';
-  code += '    @Override\n';
-  code += '    public void runOpMode() throws InterruptedException {\n';
-  code += '        initHuskyLens();\n\n';
-  code += '        telemetry.addData("Status", "HuskyLens Initialized");\n';
-  code += '        telemetry.addData(">", "Press START to begin detection");\n';
-  code += '        telemetry.update();\n\n';
-  code += '        waitForStart();\n\n';
-  code += '        while (opModeIsActive()) {\n';
-  code += '            HuskyLens.Block[] blocks = huskyLens.blocks();\n';
-  code += '            telemetry.addData("Objects Detected", blocks.length);\n\n';
-  code += '            for (HuskyLens.Block block : blocks) {\n';
-  code += '                telemetry.addLine(String.format(\n';
-  code += '                        "  Block: ID=%d  x=%d  y=%d  w=%d  h=%d",\n';
-  code += '                        block.id, block.x, block.y, block.width, block.height));\n';
-  code += '            }\n\n';
 
-  if (center) {
-    code += '            if (blocks.length > 0) {\n';
-    code += '                HuskyLens.Block largest = getLargestBlock(blocks);\n';
-    code += '                processDetection(largest);\n';
-    code += '            }\n\n';
-  }
+  // Constructor
+  code += `    public ${className}(HardwareMap hardwareMap) {\n`;
+  code += `        huskyLens = hardwareMap.get(HuskyLens.class, "${hwName}");\n`;
+  code += `        huskyLens.selectAlgorithm(HuskyLens.Algorithm.${algorithm});\n`;
+  code += '    }\n';
 
-  code += '            telemetry.update();\n';
+  // Public methods
+  code += '\n    /** Returns all currently detected blocks. */\n';
+  code += '    public HuskyLens.Block[] getBlocks() {\n';
+  code += '        return huskyLens.blocks();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the largest detected block by area, or null if none. */\n';
+  code += '    public HuskyLens.Block getLargestBlock() {\n';
+  code += '        HuskyLens.Block[] blocks = huskyLens.blocks();\n';
+  code += '        if (blocks.length == 0) return null;\n';
+  code += '        HuskyLens.Block largest = blocks[0];\n';
+  code += '        int maxArea = largest.width * largest.height;\n';
+  code += '        for (int i = 1; i < blocks.length; i++) {\n';
+  code += '            int area = blocks[i].width * blocks[i].height;\n';
+  code += '            if (area > maxArea) {\n';
+  code += '                maxArea = area;\n';
+  code += '                largest = blocks[i];\n';
+  code += '            }\n';
   code += '        }\n';
+  code += '        return largest;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the first block matching the given learned ID, or null. */\n';
+  code += '    public HuskyLens.Block getBlockById(int id) {\n';
+  code += '        for (HuskyLens.Block block : huskyLens.blocks()) {\n';
+  code += '            if (block.id == id) return block;\n';
+  code += '        }\n';
+  code += '        return null;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if any block is currently detected. */\n';
+  code += '    public boolean isBlockDetected() {\n';
+  code += '        return huskyLens.blocks().length > 0;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the number of currently detected blocks. */\n';
+  code += '    public int getBlockCount() {\n';
+  code += '        return huskyLens.blocks().length;\n';
+  code += '    }\n';
+
+  code += '\n    /** Changes the active HuskyLens algorithm. */\n';
+  code += '    public void setAlgorithm(HuskyLens.Algorithm algorithm) {\n';
+  code += '        huskyLens.selectAlgorithm(algorithm);\n';
   code += '    }\n';
 
   if (center) {
-    code += '\n    private void processDetection(HuskyLens.Block block) {\n';
-    code += '        int frameCenterX = 160;\n';
-    code += '        int frameCenterY = 120;\n';
-    code += '        int errorX = block.x - frameCenterX;\n';
-    code += '        int errorY = block.y - frameCenterY;\n\n';
-    code += '        telemetry.addData("Target ID", block.id);\n';
-    code += '        telemetry.addData("Error X", errorX);\n';
-    code += '        telemetry.addData("Error Y", errorY);\n\n';
-    code += '        double turnPower  = errorX * 0.003;\n';
-    code += '        double drivePower = -errorY * 0.003;\n';
-    code += '        telemetry.addData("Turn Power",  "%.2f", turnPower);\n';
-    code += '        telemetry.addData("Drive Power", "%.2f", drivePower);\n';
-    code += '    }\n';
-
-    code += '\n    private HuskyLens.Block getLargestBlock(HuskyLens.Block[] blocks) {\n';
-    code += '        if (blocks.length == 0) return null;\n';
-    code += '        HuskyLens.Block largest = blocks[0];\n';
-    code += '        int maxArea = largest.width * largest.height;\n';
-    code += '        for (int i = 1; i < blocks.length; i++) {\n';
-    code += '            int area = blocks[i].width * blocks[i].height;\n';
-    code += '            if (area > maxArea) {\n';
-    code += '                maxArea = area;\n';
-    code += '                largest = blocks[i];\n';
-    code += '            }\n';
-    code += '        }\n';
-    code += '        return largest;\n';
+    code += '\n    /**\n';
+    code += '     * Returns the X/Y pixel error from frame center for a given block.\n';
+    code += '     * Frame center is assumed at (160, 120) for the default 320×240 output.\n';
+    code += '     * Returns a 2-element array: [errorX, errorY].\n';
+    code += '     */\n';
+    code += '    public int[] getCenterError(HuskyLens.Block block) {\n';
+    code += '        int errorX = block.x - 160;\n';
+    code += '        int errorY = block.y - 120;\n';
+    code += '        return new int[]{errorX, errorY};\n';
     code += '    }\n';
   }
 
-  code += '\n    private void initHuskyLens() {\n';
-  code += `        huskyLens = hardwareMap.get(HuskyLens.class, "${hwName}");\n`;
-  code += `        huskyLens.selectAlgorithm(HuskyLens.Algorithm.${algorithm});\n`;
+  code += '\n    /** Releases resources (no-op for I2C sensor, included for consistency). */\n';
+  code += '    public void close() {\n';
+  code += '        // HuskyLens is I2C; no explicit close needed.\n';
   code += '    }\n';
   code += '}\n';
   return code;
 }
 
 function generateLimelightCode() {
-  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const className = document.getElementById('vis-class-name').value || 'LimelightSubsystem';
   const hwName    = document.getElementById('vis-ll-name').value || 'limelight';
   const pipeline  = document.getElementById('vis-ll-pipeline').value;
   const apriltag  = document.getElementById('vis-ll-apriltag').value === 'true';
@@ -4672,102 +5201,393 @@ function generateLimelightCode() {
   const pose      = document.getElementById('vis-ll-pose').value === 'true';
 
   let code = '// Generated by ChuckleIDE Vision Builder\n';
-  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
   code += 'import com.qualcomm.hardware.limelightvision.LLResult;\n';
   code += 'import com.qualcomm.hardware.limelightvision.LLResultTypes;\n';
   code += 'import com.qualcomm.hardware.limelightvision.Limelight3A;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
-  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n';
   if (apriltag || pose) {
     code += 'import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;\n';
   }
   code += '\nimport java.util.List;\n\n';
-  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
-  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += `public class ${className} {\n\n`;
   code += '    private Limelight3A limelight;\n\n';
-  code += '    @Override\n';
-  code += '    public void runOpMode() throws InterruptedException {\n';
-  code += '        initLimelight();\n\n';
-  code += '        telemetry.addData("Status", "Limelight Initialized");\n';
-  code += '        telemetry.addData(">", "Press START to begin detection");\n';
-  code += '        telemetry.update();\n\n';
-  code += '        waitForStart();\n\n';
-  code += '        while (opModeIsActive()) {\n';
-  code += '            LLResult result = limelight.getLatestResult();\n\n';
-  code += '            if (result != null && result.isValid()) {\n';
 
-  if (apriltag) {
-    code += '                processAprilTags(result);\n';
-  }
-  if (neural) {
-    code += '                processNeuralDetections(result);\n';
-  }
-  if (color) {
-    code += '                processColorTargets(result);\n';
-  }
-  if (pose) {
-    code += '\n                Pose3D botPose = result.getBotpose();\n';
-    code += '                if (botPose != null) {\n';
-    code += '                    telemetry.addData("Bot Pose X (m)", "%.3f", botPose.getPosition().x);\n';
-    code += '                    telemetry.addData("Bot Pose Y (m)", "%.3f", botPose.getPosition().y);\n';
-    code += '                    telemetry.addData("Bot Pose Z (m)", "%.3f", botPose.getPosition().z);\n';
-    code += '                }\n';
-  }
-
-  code += '\n                telemetry.addData("Pipeline", result.getPipelineIndex());\n';
-  code += '                telemetry.addData("Tx", "%.2f", result.getTx());\n';
-  code += '                telemetry.addData("Ty", "%.2f", result.getTy());\n';
-  code += '            } else {\n';
-  code += '                telemetry.addData("Limelight", "No valid result");\n';
-  code += '            }\n\n';
-  code += '            telemetry.update();\n';
-  code += '        }\n\n';
-  code += '        limelight.stop();\n';
-  code += '    }\n';
-
-  if (apriltag) {
-    code += '\n    private void processAprilTags(LLResult result) {\n';
-    code += '        List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();\n';
-    code += '        for (LLResultTypes.FiducialResult fiducial : fiducials) {\n';
-    code += '            int tagId = fiducial.getFiducialId();\n';
-    code += '            double tx = fiducial.getTargetXDegrees();\n';
-    code += '            double ty = fiducial.getTargetYDegrees();\n';
-    code += '            telemetry.addLine(String.format(\n';
-    code += '                    "  AprilTag #%d  tx=%.1f°  ty=%.1f°", tagId, tx, ty));\n';
-    code += '        }\n';
-    code += '    }\n';
-  }
-
-  if (neural) {
-    code += '\n    private void processNeuralDetections(LLResult result) {\n';
-    code += '        List<LLResultTypes.DetectorResult> detections = result.getDetectorResults();\n';
-    code += '        for (LLResultTypes.DetectorResult detection : detections) {\n';
-    code += '            telemetry.addLine(String.format(\n';
-    code += '                    "  Detector: %s (%.0f%% conf)  tx=%.1f  ty=%.1f",\n';
-    code += '                    detection.getClassName(), detection.getConfidence() * 100,\n';
-    code += '                    detection.getTargetXDegrees(), detection.getTargetYDegrees()));\n';
-    code += '        }\n';
-    code += '    }\n';
-  }
-
-  if (color) {
-    code += '\n    private void processColorTargets(LLResult result) {\n';
-    code += '        List<LLResultTypes.ColorResult> colorResults = result.getColorResults();\n';
-    code += '        for (LLResultTypes.ColorResult colorTarget : colorResults) {\n';
-    code += '            telemetry.addLine(String.format(\n';
-    code += '                    "  Color target: tx=%.1f  ty=%.1f  ta=%.2f",\n';
-    code += '                    colorTarget.getTargetXDegrees(),\n';
-    code += '                    colorTarget.getTargetYDegrees(),\n';
-    code += '                    colorTarget.getTargetArea()));\n';
-    code += '        }\n';
-    code += '    }\n';
-  }
-
-  code += '\n    private void initLimelight() {\n';
+  // Constructor
+  code += `    public ${className}(HardwareMap hardwareMap) {\n`;
   code += `        limelight = hardwareMap.get(Limelight3A.class, "${hwName}");\n`;
   code += `        limelight.pipelineSwitch(${pipeline});\n`;
   code += '        limelight.start();\n';
-  code += '        telemetry.addData("Limelight", "Connected: %b", limelight.isConnected());\n';
+  code += '    }\n';
+
+  // Public methods
+  code += '\n    /** Returns the latest result from the Limelight, or null. */\n';
+  code += '    public LLResult getLatestResult() {\n';
+  code += '        return limelight.getLatestResult();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the horizontal offset (tx) from the latest valid result, or 0. */\n';
+  code += '    public double getTx() {\n';
+  code += '        LLResult result = limelight.getLatestResult();\n';
+  code += '        return (result != null && result.isValid()) ? result.getTx() : 0;\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the vertical offset (ty) from the latest valid result, or 0. */\n';
+  code += '    public double getTy() {\n';
+  code += '        LLResult result = limelight.getLatestResult();\n';
+  code += '        return (result != null && result.isValid()) ? result.getTy() : 0;\n';
+  code += '    }\n';
+
+  if (pose) {
+    code += '\n    /** Returns the MegaTag bot pose, or null if unavailable. */\n';
+    code += '    public Pose3D getBotPose() {\n';
+    code += '        LLResult result = limelight.getLatestResult();\n';
+    code += '        if (result != null && result.isValid()) {\n';
+    code += '            return result.getBotpose();\n';
+    code += '        }\n';
+    code += '        return null;\n';
+    code += '    }\n';
+  }
+
+  if (apriltag) {
+    code += '\n    /** Returns detected fiducial (AprilTag) results from the latest frame. */\n';
+    code += '    public List<LLResultTypes.FiducialResult> getFiducialResults() {\n';
+    code += '        LLResult result = limelight.getLatestResult();\n';
+    code += '        if (result != null && result.isValid()) {\n';
+    code += '            return result.getFiducialResults();\n';
+    code += '        }\n';
+    code += '        return java.util.Collections.emptyList();\n';
+    code += '    }\n';
+  }
+
+  if (neural) {
+    code += '\n    /** Returns neural network detector results from the latest frame. */\n';
+    code += '    public List<LLResultTypes.DetectorResult> getDetectorResults() {\n';
+    code += '        LLResult result = limelight.getLatestResult();\n';
+    code += '        if (result != null && result.isValid()) {\n';
+    code += '            return result.getDetectorResults();\n';
+    code += '        }\n';
+    code += '        return java.util.Collections.emptyList();\n';
+    code += '    }\n';
+  }
+
+  if (color) {
+    code += '\n    /** Returns color target results from the latest frame. */\n';
+    code += '    public List<LLResultTypes.ColorResult> getColorResults() {\n';
+    code += '        LLResult result = limelight.getLatestResult();\n';
+    code += '        if (result != null && result.isValid()) {\n';
+    code += '            return result.getColorResults();\n';
+    code += '        }\n';
+    code += '        return java.util.Collections.emptyList();\n';
+    code += '    }\n';
+  }
+
+  code += '\n    /** Switches the active pipeline on the Limelight. */\n';
+  code += '    public void setPipeline(int pipelineIndex) {\n';
+  code += '        limelight.pipelineSwitch(pipelineIndex);\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if the Limelight is connected. */\n';
+  code += '    public boolean isConnected() {\n';
+  code += '        return limelight.isConnected();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if a valid target is visible. */\n';
+  code += '    public boolean isTargetVisible() {\n';
+  code += '        LLResult result = limelight.getLatestResult();\n';
+  code += '        return result != null && result.isValid();\n';
+  code += '    }\n';
+
+  code += '\n    /** Starts the Limelight polling. */\n';
+  code += '    public void start() {\n';
+  code += '        limelight.start();\n';
+  code += '    }\n';
+
+  code += '\n    /** Stops the Limelight polling. */\n';
+  code += '    public void stop() {\n';
+  code += '        limelight.stop();\n';
+  code += '    }\n';
+
+  code += '\n    /** Stops and releases the Limelight. */\n';
+  code += '    public void close() {\n';
+  code += '        limelight.stop();\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+function generateOpenCVCode() {
+  const className    = document.getElementById('vis-class-name').value || 'OpenCVSubsystem';
+  const camera       = document.getElementById('vis-cv-camera').value || 'Webcam 1';
+  const res          = (document.getElementById('vis-cv-resolution').value || '640,480').split(',');
+  const resW         = res[0] || '640';
+  const resH         = res[1] || '480';
+  const sampleFilter = document.getElementById('vis-cv-samplefilter').value === 'true';
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCamera;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCameraFactory;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCameraRotation;\n';
+  code += 'import org.openftc.easyopencv.OpenCvPipeline;\n';
+  code += 'import org.opencv.core.Core;\n';
+  code += 'import org.opencv.core.Mat;\n';
+  if (sampleFilter) {
+    code += 'import org.opencv.core.Scalar;\n';
+    code += 'import org.opencv.imgproc.Imgproc;\n';
+  }
+  code += '\n';
+  code += `public class ${className} {\n\n`;
+  code += '    private OpenCvCamera camera;\n';
+  code += '    private SamplePipeline pipeline;\n\n';
+
+  // Constructor
+  code += `    public ${className}(HardwareMap hardwareMap) {\n`;
+  code += '        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier(\n';
+  code += '                "cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());\n';
+  code += '        camera = OpenCvCameraFactory.getInstance().createWebcam(\n';
+  code += `                hardwareMap.get(WebcamName.class, "${camera}"), cameraMonitorViewId);\n`;
+  code += '        pipeline = new SamplePipeline();\n';
+  code += '        camera.setPipeline(pipeline);\n';
+  code += '        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {\n';
+  code += '            @Override\n';
+  code += '            public void onOpened() {\n';
+  code += `                camera.startStreaming(${resW}, ${resH}, OpenCvCameraRotation.UPRIGHT);\n`;
+  code += '            }\n';
+  code += '            @Override\n';
+  code += '            public void onError(int errorCode) {\n';
+  code += '                // Camera failed to open\n';
+  code += '            }\n';
+  code += '        });\n';
+  code += '    }\n';
+
+  // Public methods
+  code += '\n    /** Starts camera streaming (if previously stopped). */\n';
+  code += '    public void startStreaming() {\n';
+  code += `        camera.startStreaming(${resW}, ${resH}, OpenCvCameraRotation.UPRIGHT);\n`;
+  code += '    }\n';
+
+  code += '\n    /** Stops camera streaming. */\n';
+  code += '    public void stopStreaming() {\n';
+  code += '        camera.stopStreaming();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the most recent frame processed by the pipeline. */\n';
+  code += '    public Mat getLatestFrame() {\n';
+  code += '        return pipeline.getLatestFrame();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the analysis value computed by the pipeline. */\n';
+  code += '    public double getAnalysis() {\n';
+  code += '        return pipeline.getAnalysis();\n';
+  code += '    }\n';
+
+  code += '\n    /** Closes the camera and releases resources. */\n';
+  code += '    public void close() {\n';
+  code += '        camera.stopStreaming();\n';
+  code += '        camera.closeCameraDevice();\n';
+  code += '    }\n';
+
+  // Inner pipeline class
+  code += '\n    /**\n';
+  code += '     * Custom OpenCV pipeline. Modify processFrame() to implement\n';
+  code += '     * your own vision processing logic.\n';
+  code += '     */\n';
+  code += '    static class SamplePipeline extends OpenCvPipeline {\n\n';
+  code += '        private volatile double analysisResult = 0;\n';
+  code += '        private final Mat latestFrame = new Mat();\n';
+  if (sampleFilter) {
+    code += '        private final Mat hsvMat = new Mat();\n';
+    code += '        private final Mat filteredMat = new Mat();\n';
+    code += '        private final Scalar lowerHSV = new Scalar(100, 150, 50);\n';
+    code += '        private final Scalar upperHSV = new Scalar(130, 255, 255);\n';
+  }
+  code += '\n';
+  code += '        @Override\n';
+  code += '        public Mat processFrame(Mat input) {\n';
+  code += '            input.copyTo(latestFrame);\n';
+  if (sampleFilter) {
+    code += '            Imgproc.cvtColor(input, hsvMat, Imgproc.COLOR_RGB2HSV);\n';
+    code += '            Core.inRange(hsvMat, lowerHSV, upperHSV, filteredMat);\n';
+    code += '            analysisResult = Core.countNonZero(filteredMat);\n';
+    code += '            return filteredMat;\n';
+  } else {
+    code += '            // TODO: Add your processing logic here\n';
+    code += '            analysisResult = 0;\n';
+    code += '            return input;\n';
+  }
+  code += '        }\n';
+  code += '\n';
+  code += '        public double getAnalysis() {\n';
+  code += '            return analysisResult;\n';
+  code += '        }\n';
+  code += '\n';
+  code += '        public Mat getLatestFrame() {\n';
+  code += '            return latestFrame;\n';
+  code += '        }\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+function generateColorBlobCode() {
+  const className = document.getElementById('vis-class-name').value || 'ColorBlobSubsystem';
+  const camera    = document.getElementById('vis-cb-camera').value || 'Webcam 1';
+  const res       = (document.getElementById('vis-cb-resolution').value || '640,480').split(',');
+  const resW      = res[0] || '640';
+  const resH      = res[1] || '480';
+  const lH        = document.getElementById('vis-cb-lh').value || '100';
+  const lS        = document.getElementById('vis-cb-ls').value || '150';
+  const lV        = document.getElementById('vis-cb-lv').value || '50';
+  const uH        = document.getElementById('vis-cb-uh').value || '130';
+  const uS        = document.getElementById('vis-cb-us').value || '255';
+  const uV        = document.getElementById('vis-cb-uv').value || '255';
+  const minArea   = document.getElementById('vis-cb-minarea').value || '500';
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
+  code += 'import com.qualcomm.robotcore.hardware.HardwareMap;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCamera;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCameraFactory;\n';
+  code += 'import org.openftc.easyopencv.OpenCvCameraRotation;\n';
+  code += 'import org.openftc.easyopencv.OpenCvPipeline;\n';
+  code += 'import org.opencv.core.Core;\n';
+  code += 'import org.opencv.core.Mat;\n';
+  code += 'import org.opencv.core.MatOfPoint;\n';
+  code += 'import org.opencv.core.Point;\n';
+  code += 'import org.opencv.core.Rect;\n';
+  code += 'import org.opencv.core.Scalar;\n';
+  code += 'import org.opencv.imgproc.Imgproc;\n';
+  code += 'import org.opencv.imgproc.Moments;\n\n';
+  code += 'import java.util.ArrayList;\n';
+  code += 'import java.util.List;\n\n';
+  code += `public class ${className} {\n\n`;
+  code += '    private OpenCvCamera camera;\n';
+  code += '    private BlobPipeline pipeline;\n\n';
+
+  // Constructor
+  code += `    public ${className}(HardwareMap hardwareMap) {\n`;
+  code += '        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier(\n';
+  code += '                "cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());\n';
+  code += '        camera = OpenCvCameraFactory.getInstance().createWebcam(\n';
+  code += `                hardwareMap.get(WebcamName.class, "${camera}"), cameraMonitorViewId);\n`;
+  code += `        pipeline = new BlobPipeline(\n`;
+  code += `                new Scalar(${lH}, ${lS}, ${lV}),\n`;
+  code += `                new Scalar(${uH}, ${uS}, ${uV}),\n`;
+  code += `                ${minArea});\n`;
+  code += '        camera.setPipeline(pipeline);\n';
+  code += '        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {\n';
+  code += '            @Override\n';
+  code += '            public void onOpened() {\n';
+  code += `                camera.startStreaming(${resW}, ${resH}, OpenCvCameraRotation.UPRIGHT);\n`;
+  code += '            }\n';
+  code += '            @Override\n';
+  code += '            public void onError(int errorCode) {\n';
+  code += '                // Camera failed to open\n';
+  code += '            }\n';
+  code += '        });\n';
+  code += '    }\n';
+
+  // Public methods
+  code += '\n    /** Returns bounding rectangles of all detected blobs. */\n';
+  code += '    public List<Rect> getDetectedBlobs() {\n';
+  code += '        return pipeline.getDetectedBlobs();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the bounding rectangle of the largest blob, or null. */\n';
+  code += '    public Rect getLargestBlob() {\n';
+  code += '        return pipeline.getLargestBlob();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns true if any blob is detected. */\n';
+  code += '    public boolean isBlobDetected() {\n';
+  code += '        return !pipeline.getDetectedBlobs().isEmpty();\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the center point of the largest blob, or null. */\n';
+  code += '    public Point getBlobCenter() {\n';
+  code += '        Rect r = pipeline.getLargestBlob();\n';
+  code += '        if (r == null) return null;\n';
+  code += '        return new Point(r.x + r.width / 2.0, r.y + r.height / 2.0);\n';
+  code += '    }\n';
+
+  code += '\n    /** Returns the area (in pixels) of the largest blob, or 0. */\n';
+  code += '    public double getBlobArea() {\n';
+  code += '        Rect r = pipeline.getLargestBlob();\n';
+  code += '        return (r != null) ? r.area() : 0;\n';
+  code += '    }\n';
+
+  code += '\n    /** Updates the HSV color range used for thresholding. */\n';
+  code += '    public void setColorRange(Scalar lower, Scalar upper) {\n';
+  code += '        pipeline.setColorRange(lower, upper);\n';
+  code += '    }\n';
+
+  code += '\n    /** Closes the camera and releases resources. */\n';
+  code += '    public void close() {\n';
+  code += '        camera.stopStreaming();\n';
+  code += '        camera.closeCameraDevice();\n';
+  code += '    }\n';
+
+  // Inner pipeline class
+  code += '\n    /**\n';
+  code += '     * OpenCV pipeline that detects color blobs using HSV thresholding.\n';
+  code += '     */\n';
+  code += '    static class BlobPipeline extends OpenCvPipeline {\n\n';
+  code += '        private volatile Scalar lowerHSV;\n';
+  code += '        private volatile Scalar upperHSV;\n';
+  code += '        private final double minContourArea;\n';
+  code += '        private final Mat hsvMat = new Mat();\n';
+  code += '        private final Mat mask = new Mat();\n';
+  code += '        private final Mat hierarchy = new Mat();\n';
+  code += '        private volatile List<Rect> detectedBlobs = new ArrayList<>();\n\n';
+  code += '        BlobPipeline(Scalar lowerHSV, Scalar upperHSV, double minContourArea) {\n';
+  code += '            this.lowerHSV = lowerHSV;\n';
+  code += '            this.upperHSV = upperHSV;\n';
+  code += '            this.minContourArea = minContourArea;\n';
+  code += '        }\n';
+  code += '\n';
+  code += '        void setColorRange(Scalar lower, Scalar upper) {\n';
+  code += '            this.lowerHSV = lower;\n';
+  code += '            this.upperHSV = upper;\n';
+  code += '        }\n';
+  code += '\n';
+  code += '        @Override\n';
+  code += '        public Mat processFrame(Mat input) {\n';
+  code += '            Imgproc.cvtColor(input, hsvMat, Imgproc.COLOR_RGB2HSV);\n';
+  code += '            Core.inRange(hsvMat, lowerHSV, upperHSV, mask);\n\n';
+  code += '            List<MatOfPoint> contours = new ArrayList<>();\n';
+  code += '            Imgproc.findContours(mask, contours, hierarchy,\n';
+  code += '                    Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);\n\n';
+  code += '            List<Rect> blobs = new ArrayList<>();\n';
+  code += '            for (MatOfPoint contour : contours) {\n';
+  code += '                double area = Imgproc.contourArea(contour);\n';
+  code += '                if (area >= minContourArea) {\n';
+  code += '                    blobs.add(Imgproc.boundingRect(contour));\n';
+  code += '                }\n';
+  code += '            }\n';
+  code += '            detectedBlobs = blobs;\n\n';
+  code += '            Imgproc.drawContours(input, contours, -1, new Scalar(0, 255, 0), 2);\n';
+  code += '            return input;\n';
+  code += '        }\n';
+  code += '\n';
+  code += '        List<Rect> getDetectedBlobs() {\n';
+  code += '            return detectedBlobs;\n';
+  code += '        }\n';
+  code += '\n';
+  code += '        Rect getLargestBlob() {\n';
+  code += '            List<Rect> blobs = detectedBlobs;\n';
+  code += '            if (blobs.isEmpty()) return null;\n';
+  code += '            Rect largest = blobs.get(0);\n';
+  code += '            for (int i = 1; i < blobs.size(); i++) {\n';
+  code += '                if (blobs.get(i).area() > largest.area()) {\n';
+  code += '                    largest = blobs.get(i);\n';
+  code += '                }\n';
+  code += '            }\n';
+  code += '            return largest;\n';
+  code += '        }\n';
   code += '    }\n';
   code += '}\n';
   return code;
