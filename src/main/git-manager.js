@@ -21,7 +21,9 @@ class GitManager {
   }
 
   _buildAuthHeader(token) {
-    const value = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');
+    const normalized = String(token || '').trim();
+    const username = /^(ghs_|ghu_)/.test(normalized) ? 'x-access-token' : 'git';
+    const value = Buffer.from(`${username}:${normalized}`, 'utf8').toString('base64');
     return `Authorization: Basic ${value}`;
   }
 
