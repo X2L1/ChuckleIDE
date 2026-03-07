@@ -142,11 +142,11 @@ class ProjectManager {
     if (!libs.dashboard) {
       content = content.replace(/.*ftc-dashboard.*\n/g, '');
     }
-    if (libs.roadrunner && !content.includes('roadrunner')) {
-      content = content.replace(
-        '// Road Runner (optional)',
-        "implementation 'com.acmerobotics.roadrunner:core:1.0.0'"
-      );
+    if (!libs.solverslib) {
+      content = content.replace(/.*SolversLib.*\n/g, '');
+    }
+    if (!libs.panels) {
+      content = content.replace(/.*Panels.*\n/g, '');
     }
 
     await fs.writeFile(gradlePath, content);
@@ -237,8 +237,11 @@ dependencies {
     // FTC Dashboard
     ${libs.dashboard !== false ? "releaseImplementation 'com.acmerobotics.dashboard:dashboard:0.4.16'\n    debugImplementation 'com.acmerobotics.dashboard:dashboard:0.4.16'" : '// FTC Dashboard disabled'}
 
-    // Road Runner (optional)
-    // implementation 'com.acmerobotics.roadrunner:core:1.0.0'
+    // SolversLib – command-based framework
+    ${libs.solverslib !== false ? "implementation 'com.github.Iris-TheRainbow:SolversLib:main-SNAPSHOT'" : '// SolversLib disabled'}
+
+    // Panels – telemetry dashboard
+    ${libs.panels !== false ? "implementation 'com.github.nicholasblackburn1:Panels:main-SNAPSHOT'" : '// Panels disabled'}
 }
 `;
   }
