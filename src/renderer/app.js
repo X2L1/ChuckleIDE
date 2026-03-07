@@ -19,7 +19,7 @@ const state = {
 
 let monacoEditor = null;
 let selectedTemplateId = null;
-const EDITOR_READY_TIMEOUT_MS = 4000;
+const EDITOR_READY_TIMEOUT_MS = 15000;
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Monaco Initialization ─────────────────────────────────
 function initMonaco() {
   if (monacoEditor) return;
+  if (typeof monaco === 'undefined' || !monaco?.editor) return;
   const container = document.getElementById('monaco-editor-wrapper');
   const theme = state.settings['editor.theme'] || 'vs-dark';
 
@@ -544,25 +545,28 @@ async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let done = false;
     let timer = null;
+    let poll = null;
+    const tryInit = () => {
+      initMonaco();
+      if (monacoEditor) finish(true);
+    };
     const finish = (ok) => {
       if (done) return;
       done = true;
       if (timer) clearTimeout(timer);
+      if (poll) clearInterval(poll);
       document.removeEventListener('monaco-ready', onReady);
       resolve(ok);
     };
     const onReady = () => {
-      initMonaco();
-      finish(!!monacoEditor);
+      tryInit();
     };
     document.addEventListener('monaco-ready', onReady);
-    if (window.monacoReady) {
-      initMonaco();
-      if (monacoEditor) {
-        finish(true);
-        return;
-      }
+    if (window.monacoReady || (typeof monaco !== 'undefined' && monaco?.editor)) {
+      tryInit();
+      if (monacoEditor) return;
     }
+    poll = setInterval(tryInit, 250);
     timer = setTimeout(() => finish(false), timeoutMs);
   });
 }
