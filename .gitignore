@@ -38,4 +38,3 @@ coverage/
 
 # Electron-store data
 app-state.json
-node_modules/
