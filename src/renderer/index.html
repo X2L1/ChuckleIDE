@@ -352,6 +352,31 @@
             <div class="app-name">Learn FTC</div>
             <div class="app-desc">FTC SDK docs, PedroPathing guides, and NextFTC tutorials</div>
           </div>
+          <div class="home-app-card" id="app-pedro-constants">
+            <div class="app-icon">🔧</div>
+            <div class="app-name">Pedro Constants</div>
+            <div class="app-desc">Manage PedroPathing follower &amp; localization constants</div>
+          </div>
+          <div class="home-app-card" id="app-lut-manager">
+            <div class="app-icon">📊</div>
+            <div class="app-name">Lookup Tables</div>
+            <div class="app-desc">Create and manage standard lookup tables (LUT)</div>
+          </div>
+          <div class="home-app-card" id="app-interplut-manager">
+            <div class="app-icon">📈</div>
+            <div class="app-name">Interpolated LUTs</div>
+            <div class="app-desc">Create interpolated lookup tables for smooth value mapping</div>
+          </div>
+          <div class="home-app-card" id="app-enum-manager">
+            <div class="app-icon">🏷️</div>
+            <div class="app-name">Global Enums</div>
+            <div class="app-desc">Define shared enumerations for your robot code</div>
+          </div>
+          <div class="home-app-card" id="app-object-manager">
+            <div class="app-icon">📦</div>
+            <div class="app-name">Global Objects</div>
+            <div class="app-desc">Create shared data classes and configuration objects</div>
+          </div>
         </div>
 
         <div class="home-quick-actions">
@@ -538,6 +563,247 @@
             <p>Enter your Panels dashboard URL above and click Connect.<br/>Default: <code>http://192.168.43.1:7070</code></p>
           </div>
           <iframe id="panels-iframe" style="width:100%;height:100%;border:none;display:none;"></iframe>
+        </div>
+      </div>
+
+      <!-- PEDRO CONSTANTS MANAGER -->
+      <div id="app-view-pedro-constants" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🔧</span>
+          <h2>PedroPathing Constants Manager</h2>
+          <button class="btn-secondary small" id="pc-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="pc-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="pc-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="constants-manager-layout">
+            <div class="constants-form-panel" id="pc-form">
+              <div class="panel-section-title">FOLLOWER CONSTANTS (FConstants)</div>
+              <div class="constants-group">
+                <div class="constants-group-title">Motor Dynamics</div>
+                <div class="const-row"><label>xMovement</label><input type="number" step="any" id="pc-xMovement" value="81.34056" class="text-input" /></div>
+                <div class="const-row"><label>yMovement</label><input type="number" step="any" id="pc-yMovement" value="65.43028" class="text-input" /></div>
+                <div class="const-row"><label>forwardZeroPowerAcceleration</label><input type="number" step="any" id="pc-fwdZeroAccel" value="-34.02962" class="text-input" /></div>
+                <div class="const-row"><label>lateralZeroPowerAcceleration</label><input type="number" step="any" id="pc-latZeroAccel" value="-78.31929" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Translational PIDF</div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-transP" value="0.1" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-transI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-transD" value="0" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-transF" value="0" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Heading PIDF</div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-headP" value="1.0" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-headI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-headD" value="0" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-headF" value="0" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Drive PIDF</div>
+                <div class="const-row"><label>P</label><input type="number" step="any" id="pc-driveP" value="0.023" class="text-input" /></div>
+                <div class="const-row"><label>I</label><input type="number" step="any" id="pc-driveI" value="0" class="text-input" /></div>
+                <div class="const-row"><label>D</label><input type="number" step="any" id="pc-driveD" value="0.00001" class="text-input" /></div>
+                <div class="const-row"><label>F</label><input type="number" step="any" id="pc-driveF" value="0.005" class="text-input" /></div>
+              </div>
+              <div class="panel-section-title" style="margin-top:16px">LOCALIZATION CONSTANTS (LConstants)</div>
+              <div class="constants-group">
+                <div class="constants-group-title">Dead Wheel Pod Positions (inches)</div>
+                <div class="const-row"><label>leftY</label><input type="number" step="any" id="pc-leftY" value="1.0" class="text-input" /></div>
+                <div class="const-row"><label>rightY</label><input type="number" step="any" id="pc-rightY" value="-1.0" class="text-input" /></div>
+                <div class="const-row"><label>strafeX</label><input type="number" step="any" id="pc-strafeX" value="-4.0" class="text-input" /></div>
+              </div>
+              <div class="constants-group">
+                <div class="constants-group-title">Encoder</div>
+                <div class="const-row"><label>Encoder Ticks per Rev</label><input type="number" step="any" id="pc-ticksPerRev" value="8192" class="text-input" /></div>
+                <div class="const-row"><label>Wheel Radius (in)</label><input type="number" step="any" id="pc-wheelRadius" value="0.944882" class="text-input" /></div>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="pc-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="pc-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LUT MANAGER -->
+      <div id="app-view-lut-manager" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📊</span>
+          <h2>Lookup Table Manager</h2>
+          <button class="btn-secondary small" id="lut-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="lut-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="lut-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Class Name</label>
+                <input type="text" id="lut-class-name" value="MyLookupTable" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Key Type</label>
+                <select id="lut-key-type" class="text-input">
+                  <option value="double">double</option>
+                  <option value="int">int</option>
+                  <option value="String">String</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Value Type</label>
+                <select id="lut-value-type" class="text-input">
+                  <option value="double">double</option>
+                  <option value="int">int</option>
+                  <option value="String">String</option>
+                </select>
+              </div>
+              <div class="lut-table-container">
+                <table class="lut-table" id="lut-table">
+                  <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
+                  <tbody id="lut-table-body"></tbody>
+                </table>
+                <button class="btn-secondary small" id="lut-add-row">+ Add Entry</button>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="lut-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="lut-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INTERPOLATED LUT MANAGER -->
+      <div id="app-view-interplut-manager" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📈</span>
+          <h2>Interpolated Lookup Table Manager</h2>
+          <button class="btn-secondary small" id="ilut-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="ilut-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="ilut-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Class Name</label>
+                <input type="text" id="ilut-class-name" value="MyInterpLUT" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="ilut-description" value="Interpolated lookup table for smooth value mapping" class="text-input" />
+              </div>
+              <div class="lut-table-container">
+                <table class="lut-table" id="ilut-table">
+                  <thead><tr><th>Input (double)</th><th>Output (double)</th><th></th></tr></thead>
+                  <tbody id="ilut-table-body"></tbody>
+                </table>
+                <button class="btn-secondary small" id="ilut-add-row">+ Add Entry</button>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="ilut-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="ilut-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GLOBAL ENUM MANAGER -->
+      <div id="app-view-enum-manager" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🏷️</span>
+          <h2>Global Enum Manager</h2>
+          <button class="btn-secondary small" id="enum-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="enum-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="enum-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Enum Name</label>
+                <input type="text" id="enum-class-name" value="RobotState" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Has Associated Value</label>
+                <select id="enum-has-value" class="text-input">
+                  <option value="none">No associated value</option>
+                  <option value="int">int</option>
+                  <option value="double">double</option>
+                  <option value="String">String</option>
+                </select>
+              </div>
+              <div class="lut-table-container">
+                <table class="lut-table" id="enum-table">
+                  <thead><tr><th>Constant Name</th><th id="enum-value-header" style="display:none">Value</th><th></th></tr></thead>
+                  <tbody id="enum-table-body"></tbody>
+                </table>
+                <button class="btn-secondary small" id="enum-add-row">+ Add Constant</button>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="enum-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="enum-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GLOBAL OBJECT MANAGER -->
+      <div id="app-view-object-manager" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📦</span>
+          <h2>Global Object Manager</h2>
+          <button class="btn-secondary small" id="obj-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="obj-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="obj-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Class Name</label>
+                <input type="text" id="obj-class-name" value="RobotConfig" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Make fields static</label>
+                <select id="obj-static" class="text-input">
+                  <option value="yes">Yes (static fields)</option>
+                  <option value="no">No (instance fields)</option>
+                </select>
+              </div>
+              <div class="lut-table-container">
+                <table class="lut-table" id="obj-table">
+                  <thead><tr><th>Type</th><th>Name</th><th>Default Value</th><th></th></tr></thead>
+                  <tbody id="obj-table-body"></tbody>
+                </table>
+                <button class="btn-secondary small" id="obj-add-row">+ Add Field</button>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="obj-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="obj-preview"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

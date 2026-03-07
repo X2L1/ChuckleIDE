@@ -27,6 +27,14 @@ const TEMPLATES = [
     file: 'autonomous/PedroPathingAutonomous.java'
   },
   {
+    id: 'pedro-tuning',
+    name: 'Pedro Tuning OpMode',
+    category: 'Autonomous',
+    description: 'Tuning OpMode for PedroPathing constants — drive, strafe, and turn tests',
+    icon: '🔧',
+    file: 'autonomous/PedroTuningOpMode.java'
+  },
+  {
     id: 'command-autonomous',
     name: 'Command-Based Autonomous',
     category: 'Autonomous',
