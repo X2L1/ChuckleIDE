@@ -30,13 +30,15 @@ const REPO_OWNER = 'X2L1';
 const REPO_NAME = 'ChuckleIDE';
 
 class Updater {
-  constructor() {
+  constructor(store = null) {
     this._git = simpleGit(APP_ROOT);
+    this._store = store;
     this._updateAvailable = false;
     this._latestCommit = null;
     this._currentCommit = null;
     this._changelog = [];
     this._checkInterval = null;
+    this._restorePersistedState();
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -91,8 +93,9 @@ class Updater {
       let changelog = [];
       if (hasUpdate) {
         changelog = await this._buildChangelog(this._currentCommit, this._latestCommit);
-        this._changelog = changelog;
       }
+      this._changelog = changelog;
+      this._persistState();
 
       return {
         hasUpdate,
@@ -134,6 +137,9 @@ class Updater {
       }
 
       onProgress('Relaunching FTC IDE…');
+      this._updateAvailable = false;
+      this._changelog = [];
+      this._persistState();
       // Give the renderer a moment to display the final message.
       await new Promise(r => setTimeout(r, 1200));
       this._relaunch();
@@ -152,6 +158,14 @@ class Updater {
   /** The most recently fetched changelog entries. */
   get changelog() {
     return this._changelog;
+  }
+
+  get latestCommit() {
+    return this._latestCommit ? this._latestCommit.slice(0, 7) : null;
+  }
+
+  get currentCommit() {
+    return this._currentCommit ? this._currentCommit.slice(0, 7) : null;
   }
 
   // ─── Private helpers ───────────────────────────────────────────────────────
@@ -242,6 +256,27 @@ class Updater {
     const { app } = require('electron');
     app.relaunch();
     app.exit(0);
+  }
+
+  _persistState() {
+    if (!this._store) return;
+    this._store.set('updater.state', {
+      updateAvailable: this._updateAvailable,
+      latestCommit: this._latestCommit,
+      currentCommit: this._currentCommit,
+      changelog: this._changelog
+    });
+  }
+
+  _restorePersistedState() {
+    if (!this._store) return;
+    const persisted = this._store.get('updater.state');
+    if (!persisted || typeof persisted !== 'object') return;
+
+    this._updateAvailable = Boolean(persisted.updateAvailable);
+    this._latestCommit = typeof persisted.latestCommit === 'string' ? persisted.latestCommit : null;
+    this._currentCommit = typeof persisted.currentCommit === 'string' ? persisted.currentCommit : null;
+    this._changelog = Array.isArray(persisted.changelog) ? persisted.changelog : [];
   }
 }
 

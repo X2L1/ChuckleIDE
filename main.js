@@ -612,6 +612,8 @@ ipcMain.handle('update:install', async () => {
 ipcMain.handle('update:status', async () => {
   return {
     updateAvailable: updater.updateAvailable,
+    currentCommit: updater.currentCommit,
+    latestCommit: updater.latestCommit,
     changelog: updater.changelog
   };
 });
@@ -625,7 +627,7 @@ app.whenReady().then(() => {
   lspManager = new LspManager(store);
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
-  updater = new Updater();
+  updater = new Updater(store);
 
   createWindow();
 
