@@ -110,7 +110,7 @@ class GitHubAuth {
 
   _post(hostname, path, params) {
     return new Promise((resolve, reject) => {
-      const data = JSON.stringify(params);
+      const data = new URLSearchParams(params).toString();
       const req = https.request({
         hostname,
         port: 443,
@@ -118,13 +118,18 @@ class GitHubAuth {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Content-Length': Buffer.byteLength(data)
         }
       }, (res) => {
         let body = '';
         res.on('data', (chunk) => { body += chunk; });
         res.on('end', () => {
+          if (res.statusCode >= 400) {
+            let msg = `GitHub returned HTTP ${res.statusCode}`;
+            try { const j = JSON.parse(body); msg = j.message || j.error || msg; } catch {}
+            return reject(new Error(msg));
+          }
           try {
             resolve(JSON.parse(body));
           } catch {
