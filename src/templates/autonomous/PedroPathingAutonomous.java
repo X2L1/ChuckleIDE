@@ -213,7 +213,8 @@ public class PedroPathingAutonomous extends LinearOpMode {
         // Pinpoint device name in robot configuration
         public static String hardwareMapName = "pinpoint";
 
-        // Pod offsets from robot center (mm)
+        // Pod offsets from robot center (mm) – MEASURE FOR YOUR ROBOT
+        // These are example values; adjust based on your physical pod placement.
         public static double xOffset = -84.0;
         public static double yOffset = -168.0;
 
