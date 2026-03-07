@@ -19,6 +19,8 @@ const state = {
 
 let monacoEditor = null;
 let fallbackEditor = null;
+let fallbackHighlight = null;
+let fallbackHighlightFrame = null;
 let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
@@ -63,6 +65,21 @@ const FALLBACK_AUTOCOMPLETE_ITEMS = [
   'try',
   'catch'
 ];
+const FALLBACK_JAVA_KEYWORDS = new Set([
+  'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const',
+  'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final', 'finally', 'float',
+  'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int', 'interface', 'long', 'native',
+  'new', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'strictfp',
+  'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'void',
+  'volatile', 'while'
+]);
+const FALLBACK_JAVA_TYPES = new Set([
+  'String', 'Integer', 'Boolean', 'Double', 'Float', 'Long', 'Short', 'Byte', 'Character'
+]);
+const FALLBACK_JAVA_FTC_TERMS = new Set([
+  'DcMotor', 'Servo', 'ElapsedTime', 'hardwareMap', 'telemetry', 'waitForStart',
+  'opModeIsActive', 'gamepad1', 'gamepad2'
+]);
 
 // ── Initialization ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -184,9 +201,11 @@ function initMonaco() {
 function initFallbackEditor() {
   if (fallbackEditor) return;
   fallbackEditor = document.getElementById('fallback-editor');
+  fallbackHighlight = document.getElementById('fallback-highlight');
   if (!fallbackEditor) return;
 
   applyFallbackEditorSettings();
+  requestFallbackHighlightUpdate();
   fallbackEditor.addEventListener('keydown', handleFallbackEditorKeydown);
   fallbackEditor.addEventListener('input', () => {
     if (isSettingFallbackContent || !state.activeFile) return;
@@ -197,8 +216,10 @@ function initFallbackEditor() {
     updateTabModified(state.activeFile, true);
     updateOutline();
     updateFallbackCursorPosition();
+    requestFallbackHighlightUpdate();
     scheduleActiveDiagnostics(state.activeFile);
   });
+  fallbackEditor.addEventListener('scroll', syncFallbackHighlightScroll);
   fallbackEditor.addEventListener('blur', () => {
     if (state.activeFile) autoSave(state.activeFile);
   });
@@ -214,6 +235,11 @@ function applyFallbackEditorSettings() {
   const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
   fallbackEditor.style.tabSize = String(tabSize);
   fallbackEditor.style.whiteSpace = state.settings['editor.wordWrap'] === 'on' ? 'pre-wrap' : 'pre';
+  if (fallbackHighlight) {
+    fallbackHighlight.style.fontSize = `${state.editorFontSize}px`;
+    fallbackHighlight.style.tabSize = String(tabSize);
+    fallbackHighlight.style.whiteSpace = state.settings['editor.wordWrap'] === 'on' ? 'pre-wrap' : 'pre';
+  }
 }
 
 function handleFallbackEditorKeydown(e) {
@@ -283,6 +309,73 @@ function syncFallbackEditorContent() {
   updateTabModified(state.activeFile, true);
   updateOutline();
   updateFallbackCursorPosition();
+  requestFallbackHighlightUpdate();
+}
+
+function requestFallbackHighlightUpdate() {
+  if (fallbackHighlightFrame !== null) return;
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    updateFallbackHighlight();
+    return;
+  }
+  fallbackHighlightFrame = window.requestAnimationFrame(() => {
+    fallbackHighlightFrame = null;
+    updateFallbackHighlight();
+  });
+}
+
+function updateFallbackHighlight() {
+  if (!fallbackEditor || !fallbackHighlight) return;
+  const code = fallbackEditor.value || '';
+  const language = getLanguageForFile(state.activeFile || '');
+  if (language !== 'java') {
+    fallbackHighlight.textContent = code || ' ';
+    syncFallbackHighlightScroll();
+    return;
+  }
+  const highlighted = highlightFallbackJavaCode(code);
+  fallbackHighlight.innerHTML = highlighted || '&nbsp;';
+  syncFallbackHighlightScroll();
+}
+
+function syncFallbackHighlightScroll() {
+  if (!fallbackEditor || !fallbackHighlight) return;
+  fallbackHighlight.scrollTop = fallbackEditor.scrollTop;
+  fallbackHighlight.scrollLeft = fallbackEditor.scrollLeft;
+}
+
+function highlightFallbackJavaCode(code) {
+  const tokenPattern = /\/\/.*$|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|@[A-Za-z_]\w*|\b[A-Za-z_]\w*\b/gm;
+  let html = '';
+  let cursor = 0;
+  for (const match of code.matchAll(tokenPattern)) {
+    const index = match.index ?? 0;
+    const token = match[0];
+    html += escapeFallbackHtml(code.slice(cursor, index));
+    html += `<span class="${getFallbackJavaTokenClass(token)}">${escapeFallbackHtml(token)}</span>`;
+    cursor = index + token.length;
+  }
+  html += escapeFallbackHtml(code.slice(cursor));
+  return html;
+}
+
+function getFallbackJavaTokenClass(token) {
+  if (token.startsWith('//') || token.startsWith('/*')) return 'token-comment';
+  if (token.startsWith('"') || token.startsWith('\'')) return 'token-string';
+  if (token.startsWith('@')) return 'token-annotation';
+  if (FALLBACK_JAVA_KEYWORDS.has(token)) return 'token-keyword';
+  if (FALLBACK_JAVA_TYPES.has(token)) return 'token-type';
+  if (FALLBACK_JAVA_FTC_TERMS.has(token)) return 'token-ftc';
+  return 'token-plain';
+}
+
+function escapeFallbackHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function registerJavaCompletions() {
@@ -822,6 +915,7 @@ function activateTab(filePath) {
     isSettingFallbackContent = true;
     fallbackEditor.value = info.content || '';
     isSettingFallbackContent = false;
+    requestFallbackHighlightUpdate();
     fallbackEditor.focus();
     updateFallbackCursorPosition();
   }
