@@ -368,6 +368,7 @@
             <div class="app-icon">🛠️</div>
             <div class="app-name">Utilities</div>
             <div class="app-desc">Generate math, vector, odometry, and other utility classes</div>
+          </div>
           <div class="home-app-card" id="app-vision-builder">
             <div class="app-icon">👁️</div>
             <div class="app-name">Vision Builder</div>
@@ -865,13 +866,6 @@
           <button class="btn-secondary small" id="ub-copy-code">📋 Copy Code</button>
           <button class="btn-primary small" id="ub-insert-code">Insert into Editor</button>
           <button class="icon-btn" id="ub-close" title="Close">✕</button>
-      <div id="app-view-vision-builder" class="app-view">
-        <div class="app-view-header">
-          <span style="font-size:18px">👁️</span>
-          <h2>Vision Builder</h2>
-          <button class="btn-secondary small" id="vis-copy-code">📋 Copy Code</button>
-          <button class="btn-primary small" id="vis-insert-code">Insert into Editor</button>
-          <button class="icon-btn" id="vis-close" title="Close">✕</button>
         </div>
         <div class="app-view-body">
           <div class="lut-manager-layout">
@@ -891,6 +885,33 @@
               </div>
               <div class="ub-methods-container" id="ub-methods-container">
                 <!-- Dynamically populated checkboxes -->
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="ub-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="ub-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISION BUILDER -->
+      <div id="app-view-vision-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">👁️</span>
+          <h2>Vision Builder</h2>
+          <button class="btn-secondary small" id="vis-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="vis-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="vis-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="lut-manager-layout">
+            <div class="lut-form-panel">
+              <div class="form-group">
+                <label>Class Name</label>
                 <input type="text" id="vis-class-name" value="VisionOpMode" class="text-input" />
               </div>
               <div class="form-group">
@@ -1055,9 +1076,6 @@
             <div class="builder-preview-panel">
               <div class="code-preview-header">
                 <span>Generated Java Code</span>
-                <button class="icon-btn" id="ub-refresh" title="Refresh">↻</button>
-              </div>
-              <div class="code-preview-content" id="ub-preview"></div>
                 <button class="icon-btn" id="vis-refresh" title="Refresh">↻</button>
               </div>
               <div class="code-preview-content" id="vis-preview"></div>
@@ -1065,6 +1083,7 @@
           </div>
         </div>
       </div>
+
     </div>
   </div>
 
