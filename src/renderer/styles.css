@@ -1175,12 +1175,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   position: relative;
 }
 
-/* ── CODE BUILDER (Drag & Drop) ──────────────────────────── */
-.code-builder-layout {
+/* ── BUILDER APPS (Subsystem, Command, OpMode) ───────────── */
+.builder-layout {
   display: flex;
   height: 100%;
 }
-.block-palette {
+.builder-palette {
   width: 240px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
@@ -1225,26 +1225,36 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   color: var(--fg-dim);
   margin-top: 2px;
 }
-.block-item[data-category="motor"] { border-left-color: #ff69b4; }
-.block-item[data-category="servo"] { border-left-color: #da70d6; }
-.block-item[data-category="sensor"] { border-left-color: #f0b0d0; }
+.block-item[data-category="hardware"] { border-left-color: #ff69b4; }
+.block-item[data-category="method"] { border-left-color: #da70d6; }
+.block-item[data-category="action"] { border-left-color: #4ec9b0; }
 .block-item[data-category="control"] { border-left-color: #ffe4b5; }
-.block-item[data-category="timing"] { border-left-color: #ffb6c1; }
+.block-item[data-category="finish"] { border-left-color: #ffb6c1; }
 .block-item[data-category="telemetry"] { border-left-color: #dda0dd; }
 
-.code-builder-workspace {
+.builder-workspace-area {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
-.block-workspace {
+.builder-config {
+  padding: 10px 16px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.builder-config .form-group { margin-bottom: 0; flex: 1; }
+.builder-workspace {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
   min-height: 200px;
   position: relative;
 }
-.block-workspace.drag-over {
+.builder-workspace.drag-over {
   background: var(--bg-hover);
 }
 .workspace-hint {
@@ -1273,11 +1283,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   cursor: move;
   user-select: none;
 }
-.placed-block[data-category="motor"] { border-left-color: #ff69b4; }
-.placed-block[data-category="servo"] { border-left-color: #da70d6; }
-.placed-block[data-category="sensor"] { border-left-color: #f0b0d0; }
+.placed-block[data-category="hardware"] { border-left-color: #ff69b4; }
+.placed-block[data-category="method"] { border-left-color: #da70d6; }
+.placed-block[data-category="action"] { border-left-color: #4ec9b0; }
 .placed-block[data-category="control"] { border-left-color: #ffe4b5; }
-.placed-block[data-category="timing"] { border-left-color: #ffb6c1; }
+.placed-block[data-category="finish"] { border-left-color: #ffb6c1; }
 .placed-block[data-category="telemetry"] { border-left-color: #dda0dd; }
 .placed-block .block-text { flex: 1; }
 .placed-block input {
@@ -1329,14 +1339,22 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   color: var(--fg-main);
   white-space: pre-wrap;
 }
+.builder-preview-panel {
+  width: 340px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-main);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
 
-/* ── PATH VISUALIZER ─────────────────────────────────────── */
-.path-viz-layout {
+/* ── OPMODE BUILDER ──────────────────────────────────────── */
+.opmode-builder-layout {
   display: flex;
   height: 100%;
 }
-.path-viz-sidebar {
-  width: 240px;
+.ob-palette {
+  width: 220px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -1344,47 +1362,114 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
-.path-viz-canvas-wrap {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  position: relative;
-}
-.path-viz-canvas-wrap canvas {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: crosshair;
-}
-.path-viz-sidebar .form-group { margin-bottom: 8px; }
-.path-viz-sidebar label { font-size: 12px; color: var(--fg-main); font-weight: 500; display: block; margin-bottom: 4px; }
-.path-point-list {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-input);
-}
-.path-point-item {
+.ob-add-btn {
+  width: 100%;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+}
+.ob-sequence {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  min-width: 0;
+  position: relative;
+}
+.ob-step {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.ob-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.ob-step-icon { font-size: 16px; }
+.ob-step-num { margin-left: auto; color: var(--fg-dim); font-size: 11px; }
+.ob-step-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ob-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.ob-step-row label { font-size: 11px; color: var(--fg-dim); white-space: nowrap; min-width: 70px; }
+.ob-step-row .text-input { flex: 1; }
+.ob-waypoint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--fg-main);
-  border-bottom: 1px solid var(--border-light);
 }
-.path-point-item:last-child { border-bottom: none; }
-.path-point-item .remove-point {
-  background: none;
-  border: none;
-  color: var(--fg-dim);
-  cursor: pointer;
+.ob-waypoint span { color: var(--fg-dim); min-width: 24px; }
+.text-input.tiny { width: 60px; padding: 2px 4px; font-size: 11px; }
+.btn-secondary.tiny { font-size: 10px; padding: 2px 8px; }
+.remove-block.tiny { font-size: 11px; padding: 0 2px; }
+
+/* ── EMBEDDED VIEWS (Dashboard, Panels) ─────────────────── */
+.dashboard-url-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 0;
+}
+.dashboard-url-bar .text-input {
+  width: 280px;
   font-size: 12px;
-  margin-left: auto;
 }
-.path-point-item .remove-point:hover { color: var(--accent-red); }
+.embedded-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--fg-dim);
+  text-align: center;
+  padding: 40px;
+}
+.embedded-placeholder .placeholder-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+.embedded-placeholder h3 {
+  font-size: 20px;
+  color: var(--fg-main);
+  margin-bottom: 8px;
+}
+.embedded-placeholder p {
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 400px;
+}
+.embedded-placeholder code {
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* ── DEPENDENCIES SECTION ────────────────────────────────── */
+.deps-section {
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+.deps-btn {
+  width: 100%;
+  text-align: center;
+}

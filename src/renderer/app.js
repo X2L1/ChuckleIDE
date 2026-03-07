@@ -320,6 +320,18 @@ function bindFileExplorer() {
   document.getElementById('btn-refresh-tree').addEventListener('click', () => refreshFileTree());
   document.getElementById('btn-open-project-2').addEventListener('click', browseForProject);
   document.getElementById('btn-new-project').addEventListener('click', () => showModal('new-project'));
+
+  // Dependencies button – toggles between TeamCode view and full project view
+  document.getElementById('btn-view-deps').addEventListener('click', () => {
+    state.showingDeps = !state.showingDeps;
+    const btn = document.getElementById('btn-view-deps');
+    if (state.showingDeps) {
+      btn.textContent = '☕ Back to TeamCode';
+    } else {
+      btn.textContent = '🐘 Dependencies & Build Files';
+    }
+    refreshFileTree();
+  });
 }
 
 async function browseForProject() {
@@ -335,8 +347,19 @@ async function openProject(projectPath) {
     document.getElementById('project-title').textContent = projectPath.split(/[/\\]/).pop();
     document.getElementById('status-project').textContent = projectPath.split(/[/\\]/).pop();
     await window.ftcIDE.settings.set('project.lastPath', projectPath);
+
+    // Default to TeamCode folder if it exists
+    const teamCodePath = await findTeamCodePath(projectPath);
+    state.teamCodePath = teamCodePath;
+    state.showingDeps = false;
+
     await refreshFileTree();
     await refreshGitStatus();
+
+    // Show Dependencies button if project has TeamCode
+    const depsSection = document.getElementById('deps-section');
+    if (depsSection) depsSection.style.display = teamCodePath ? '' : 'none';
+
     appendOutput(`Opened project: ${projectPath}`, 'success');
     showToast(`Project opened: ${projectPath.split(/[/\\]/).pop()}`, 'success');
   } catch (e) {
@@ -344,8 +367,29 @@ async function openProject(projectPath) {
   }
 }
 
+async function findTeamCodePath(projectPath) {
+  // Look for the TeamCode source directory
+  const candidates = [
+    projectPath + '/TeamCode/src/main/java/org/firstinspires/ftc/teamcode',
+    projectPath + '/TeamCode/src/main/java',
+    projectPath + '/TeamCode'
+  ];
+  for (const p of candidates) {
+    try {
+      const exists = await window.ftcIDE.fs.exists(p);
+      if (exists) return p;
+    } catch (e) {}
+  }
+  return null;
+}
+
 async function refreshFileTree(dirPath, containerEl, depth) {
-  dirPath = dirPath || state.projectPath;
+  // Default to TeamCode folder when showing the project tree at top level
+  if (!dirPath && !state.showingDeps && state.teamCodePath) {
+    dirPath = state.teamCodePath;
+  } else {
+    dirPath = dirPath || state.projectPath;
+  }
   containerEl = containerEl || document.getElementById('file-tree');
   depth = depth || 0;
 
@@ -1176,7 +1220,8 @@ async function createNewProject() {
     pedro: document.getElementById('lib-pedro').checked,
     nextftc: document.getElementById('lib-nextftc').checked,
     dashboard: document.getElementById('lib-dashboard').checked,
-    roadrunner: document.getElementById('lib-roadrunner').checked
+    solverslib: document.getElementById('lib-solverslib').checked,
+    panels: document.getElementById('lib-panels').checked
   };
 
   closeModal('new-project');
@@ -1567,16 +1612,20 @@ function escapeHtml(str) {
 // ── Home Screen App Launcher ──────────────────────────────
 function bindHomeScreen() {
   const handlers = {
-    'app-code-builder':    () => openAppView('code-builder'),
-    'app-pedro-visualizer':() => openAppView('path-visualizer'),
-    'app-template-gallery':() => { switchPanel('templates'); showModal('template'); },
-    'app-open-editor':     () => browseForProject(),
-    'app-device-manager':  () => switchPanel('devices'),
-    'app-git-manager':     () => switchPanel('git'),
-    'app-new-project':     () => showModal('new-project'),
-    'app-learn':           () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
-    'home-open-project':   () => browseForProject(),
-    'home-clone-repo':     () => showModal('clone')
+    'app-subsystem-builder': () => openAppView('subsystem-builder'),
+    'app-command-builder':   () => openAppView('command-builder'),
+    'app-opmode-builder':    () => openAppView('opmode-builder'),
+    'app-pedro-visualizer':  () => openAppView('path-visualizer'),
+    'app-ftc-dashboard':     () => openAppView('ftc-dashboard'),
+    'app-panels-view':       () => openAppView('panels'),
+    'app-template-gallery':  () => { switchPanel('templates'); showModal('template'); },
+    'app-open-editor':       () => browseForProject(),
+    'app-device-manager':    () => switchPanel('devices'),
+    'app-git-manager':       () => switchPanel('git'),
+    'app-new-project':       () => showModal('new-project'),
+    'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
+    'home-open-project':     () => browseForProject(),
+    'home-clone-repo':       () => showModal('clone')
   };
   for (const [id, fn] of Object.entries(handlers)) {
     const el = document.getElementById(id);
@@ -1594,8 +1643,12 @@ function openAppView(name) {
   const view = document.getElementById(`app-view-${name}`);
   if (view) view.classList.add('active');
 
-  if (name === 'code-builder') initCodeBuilder();
+  if (name === 'subsystem-builder') initSubsystemBuilder();
+  if (name === 'command-builder') initCommandBuilder();
+  if (name === 'opmode-builder') initOpModeBuilder();
   if (name === 'path-visualizer') initPathVisualizer();
+  if (name === 'ftc-dashboard') initDashboardView();
+  if (name === 'panels') initPanelsView();
 }
 
 function closeAppView() {
@@ -1607,133 +1660,97 @@ function closeAppView() {
   }
 }
 
-// ── Code Builder (Drag & Drop) ────────────────────────────
-const codeBlocks = [
-  { cat: 'motor', label: 'Set Motor Power', code: '{{name}}.setPower({{value}});', defaults: { name: 'motor', value: '1.0' } },
-  { cat: 'motor', label: 'Get Motor (Hardware Map)', code: '{{name}} = hardwareMap.get(DcMotor.class, "{{hwName}}");', defaults: { name: 'motor', hwName: 'motor0' } },
-  { cat: 'motor', label: 'Set Motor Direction', code: '{{name}}.setDirection(DcMotor.Direction.{{dir}});', defaults: { name: 'motor', dir: 'FORWARD' } },
-  { cat: 'motor', label: 'Set Zero Power Behavior', code: '{{name}}.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.{{mode}});', defaults: { name: 'motor', mode: 'BRAKE' } },
-  { cat: 'motor', label: 'Set Motor Run Mode', code: '{{name}}.setMode(DcMotor.RunMode.{{mode}});', defaults: { name: 'motor', mode: 'RUN_USING_ENCODER' } },
-  { cat: 'motor', label: 'Set Target Position', code: '{{name}}.setTargetPosition({{pos}});', defaults: { name: 'motor', pos: '0' } },
-  { cat: 'servo', label: 'Set Servo Position', code: '{{name}}.setPosition({{pos}});', defaults: { name: 'servo', pos: '0.5' } },
-  { cat: 'servo', label: 'Get Servo (Hardware Map)', code: '{{name}} = hardwareMap.get(Servo.class, "{{hwName}}");', defaults: { name: 'servo', hwName: 'servo0' } },
-  { cat: 'sensor', label: 'Read Distance (cm)', code: 'double {{var}} = {{name}}.getDistance(DistanceUnit.CM);', defaults: { var: 'distance', name: 'distSensor' } },
-  { cat: 'sensor', label: 'Read Color Sensor', code: 'int {{var}} = {{name}}.argb();', defaults: { var: 'color', name: 'colorSensor' } },
-  { cat: 'sensor', label: 'Is Touch Pressed', code: 'boolean {{var}} = {{name}}.isPressed();', defaults: { var: 'pressed', name: 'touchSensor' } },
-  { cat: 'control', label: 'If / Else', code: 'if ({{condition}}) {\n    {{body}}\n} else {\n    {{elseBody}}\n}', defaults: { condition: 'gamepad1.a', body: '// do something', elseBody: '// do something else' } },
-  { cat: 'control', label: 'While Loop', code: 'while ({{condition}}) {\n    {{body}}\n}', defaults: { condition: 'opModeIsActive()', body: '// loop body' } },
-  { cat: 'control', label: 'For Loop', code: 'for (int {{var}} = 0; {{var}} < {{count}}; {{var}}++) {\n    {{body}}\n}', defaults: { var: 'i', count: '10', body: '// loop body' } },
-  { cat: 'control', label: 'Wait For Start', code: 'waitForStart();', defaults: {} },
-  { cat: 'timing', label: 'Sleep (ms)', code: 'sleep({{ms}});', defaults: { ms: '1000' } },
-  { cat: 'timing', label: 'Reset Runtime', code: 'resetRuntime();', defaults: {} },
-  { cat: 'telemetry', label: 'Telemetry Add Data', code: 'telemetry.addData("{{key}}", {{value}});', defaults: { key: 'Status', value: '"Running"' } },
-  { cat: 'telemetry', label: 'Telemetry Update', code: 'telemetry.update();', defaults: {} },
-  { cat: 'telemetry', label: 'Telemetry Add Line', code: 'telemetry.addLine("{{text}}");', defaults: { text: 'Hello FTC!' } },
+// ── Subsystem Builder ─────────────────────────────────────
+const subsystemBlocks = [
+  { cat: 'hardware', label: 'DcMotor', code: 'private DcMotor {{name}};', init: '{{name}} = hardwareMap.get(DcMotor.class, "{{hwName}}");', defaults: { name: 'motor', hwName: 'motor0' } },
+  { cat: 'hardware', label: 'Servo', code: 'private Servo {{name}};', init: '{{name}} = hardwareMap.get(Servo.class, "{{hwName}}");', defaults: { name: 'servo', hwName: 'servo0' } },
+  { cat: 'hardware', label: 'CRServo', code: 'private CRServo {{name}};', init: '{{name}} = hardwareMap.get(CRServo.class, "{{hwName}}");', defaults: { name: 'crServo', hwName: 'crServo0' } },
+  { cat: 'hardware', label: 'Distance Sensor', code: 'private DistanceSensor {{name}};', init: '{{name}} = hardwareMap.get(DistanceSensor.class, "{{hwName}}");', defaults: { name: 'distSensor', hwName: 'distSensor0' } },
+  { cat: 'hardware', label: 'Touch Sensor', code: 'private TouchSensor {{name}};', init: '{{name}} = hardwareMap.get(TouchSensor.class, "{{hwName}}");', defaults: { name: 'touchSensor', hwName: 'touchSensor0' } },
+  { cat: 'hardware', label: 'Color Sensor', code: 'private ColorSensor {{name}};', init: '{{name}} = hardwareMap.get(ColorSensor.class, "{{hwName}}");', defaults: { name: 'colorSensor', hwName: 'colorSensor0' } },
+  { cat: 'method', label: 'Set Motor Power', code: 'public void {{methodName}}(double power) {\n    {{motor}}.setPower(power);\n}', defaults: { methodName: 'setDrivePower', motor: 'motor' } },
+  { cat: 'method', label: 'Set Servo Position', code: 'public void {{methodName}}(double pos) {\n    {{servo}}.setPosition(pos);\n}', defaults: { methodName: 'setArmPosition', servo: 'servo' } },
+  { cat: 'method', label: 'Get Distance', code: 'public double {{methodName}}() {\n    return {{sensor}}.getDistance(DistanceUnit.CM);\n}', defaults: { methodName: 'getDistance', sensor: 'distSensor' } },
+  { cat: 'method', label: 'Is Pressed', code: 'public boolean {{methodName}}() {\n    return {{sensor}}.isPressed();\n}', defaults: { methodName: 'isLimitReached', sensor: 'touchSensor' } },
+  { cat: 'method', label: 'Stop All', code: 'public void stop() {\n    {{body}}\n}', defaults: { body: '// Stop all motors' } },
+  { cat: 'method', label: 'Custom Method', code: 'public {{returnType}} {{methodName}}({{params}}) {\n    {{body}}\n}', defaults: { returnType: 'void', methodName: 'doSomething', params: '', body: '// TODO' } },
 ];
 
-let placedBlocks = [];
-let blockIdCounter = 0;
+let sbBlocks = [];
+let sbIdCounter = 0;
+let sbInitialized = false;
 
-function initCodeBuilder() {
-  const palette = document.getElementById('block-palette');
-  const workspace = document.getElementById('block-workspace');
+function initSubsystemBuilder() {
+  if (sbInitialized) { updateSBPreview(); return; }
+  sbInitialized = true;
 
-  // Build palette
+  const palette = document.getElementById('sb-palette');
   palette.innerHTML = '';
-  const categories = [...new Set(codeBlocks.map(b => b.cat))];
+  const categories = [...new Set(subsystemBlocks.map(b => b.cat))];
   for (const cat of categories) {
     const title = document.createElement('div');
     title.className = 'block-palette-title';
     title.textContent = cat.toUpperCase();
     palette.appendChild(title);
 
-    for (const block of codeBlocks.filter(b => b.cat === cat)) {
+    for (const block of subsystemBlocks.filter(b => b.cat === cat)) {
       const el = document.createElement('div');
       el.className = 'block-item';
       el.setAttribute('data-category', block.cat);
-      el.draggable = true;
       el.innerHTML = `<div class="block-label">${escapeHtml(block.label)}</div>`;
+      el.addEventListener('dblclick', () => addSBBlock(block));
+      el.draggable = true;
       el.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', JSON.stringify(block));
         e.dataTransfer.effectAllowed = 'copy';
       });
-      // Also allow click to add
-      el.addEventListener('dblclick', () => addBlockToWorkspace(block));
       palette.appendChild(el);
     }
   }
 
-  // Workspace drop zone
+  const workspace = document.getElementById('sb-workspace');
   workspace.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; workspace.classList.add('drag-over'); });
   workspace.addEventListener('dragleave', () => workspace.classList.remove('drag-over'));
   workspace.addEventListener('drop', (e) => {
     e.preventDefault();
     workspace.classList.remove('drag-over');
-    try {
-      const block = JSON.parse(e.dataTransfer.getData('text/plain'));
-      addBlockToWorkspace(block);
-    } catch(err) {}
+    try { addSBBlock(JSON.parse(e.dataTransfer.getData('text/plain'))); } catch(err) {}
   });
 
-  // Buttons
-  document.getElementById('cb-close').addEventListener('click', closeAppView);
-  document.getElementById('cb-copy-code').addEventListener('click', () => {
-    const code = generateCodeFromBlocks();
-    navigator.clipboard.writeText(code);
-    showToast('Code copied to clipboard', 'success');
+  document.getElementById('sb-close').addEventListener('click', closeAppView);
+  document.getElementById('sb-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateSubsystemCode());
+    showToast('Subsystem code copied', 'success');
   });
-  document.getElementById('cb-insert-code').addEventListener('click', () => {
-    const code = generateCodeFromBlocks();
-    if (monacoEditor && state.activeFile) {
-      const pos = monacoEditor.getPosition();
-      monacoEditor.executeEdits('code-builder', [{
-        range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
-        text: code
-      }]);
-      closeAppView();
-      showToast('Code inserted into editor', 'success');
-    } else {
-      navigator.clipboard.writeText(code);
-      showToast('No file open — code copied to clipboard instead', 'info');
-    }
+  document.getElementById('sb-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateSubsystemCode());
   });
-  document.getElementById('cb-refresh-preview').addEventListener('click', updateCodePreview);
+  document.getElementById('sb-refresh').addEventListener('click', updateSBPreview);
+  document.getElementById('sb-class-name').addEventListener('input', updateSBPreview);
 
-  renderWorkspace();
-  updateCodePreview();
+  renderSBWorkspace();
+  updateSBPreview();
 }
 
-function addBlockToWorkspace(block) {
-  const instance = {
-    ...block,
-    id: ++blockIdCounter,
-    params: { ...block.defaults }
-  };
-  placedBlocks.push(instance);
-  renderWorkspace();
-  updateCodePreview();
+function addSBBlock(block) {
+  sbBlocks.push({ ...block, id: ++sbIdCounter, params: { ...block.defaults } });
+  renderSBWorkspace();
+  updateSBPreview();
 }
 
-function renderWorkspace() {
-  const workspace = document.getElementById('block-workspace');
-  const hint = document.getElementById('workspace-hint');
-
-  // Remove existing placed blocks
+function renderSBWorkspace() {
+  const workspace = document.getElementById('sb-workspace');
+  const hint = document.getElementById('sb-hint');
   workspace.querySelectorAll('.placed-block').forEach(el => el.remove());
 
-  if (placedBlocks.length === 0) {
-    hint.classList.remove('hidden');
-    return;
-  }
+  if (sbBlocks.length === 0) { hint.classList.remove('hidden'); return; }
   hint.classList.add('hidden');
 
-  placedBlocks.forEach((block, index) => {
+  sbBlocks.forEach((block) => {
     const el = document.createElement('div');
     el.className = 'placed-block';
     el.setAttribute('data-category', block.cat);
-    el.draggable = true;
 
-    // Build editable params
     let paramHtml = '';
     for (const [key, val] of Object.entries(block.params)) {
       paramHtml += ` <input type="text" value="${escapeHtml(val)}" data-param="${key}" title="${key}" />`;
@@ -1744,246 +1761,595 @@ function renderWorkspace() {
       <button class="remove-block" title="Remove">✕</button>
     `;
 
-    // Param changes
     el.querySelectorAll('input').forEach(input => {
-      input.addEventListener('input', () => {
-        block.params[input.dataset.param] = input.value;
-        updateCodePreview();
-      });
+      input.addEventListener('input', () => { block.params[input.dataset.param] = input.value; updateSBPreview(); });
     });
-
-    // Remove
     el.querySelector('.remove-block').addEventListener('click', () => {
-      const idx = placedBlocks.findIndex(b => b.id === block.id);
-      if (idx !== -1) placedBlocks.splice(idx, 1);
-      renderWorkspace();
-      updateCodePreview();
+      sbBlocks = sbBlocks.filter(b => b.id !== block.id);
+      renderSBWorkspace();
+      updateSBPreview();
     });
-
-    // Drag to reorder
-    el.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', String(index));
-      e.dataTransfer.effectAllowed = 'move';
-    });
-
     workspace.appendChild(el);
   });
 }
 
-function updateCodePreview() {
-  const el = document.getElementById('code-preview');
-  if (el) el.textContent = generateCodeFromBlocks();
+function updateSBPreview() {
+  const el = document.getElementById('sb-preview');
+  if (el) el.textContent = generateSubsystemCode();
 }
 
-function generateCodeFromBlocks() {
-  if (placedBlocks.length === 0) return '// Drag blocks from the palette to build code';
+function generateSubsystemCode() {
+  const className = document.getElementById('sb-class-name').value || 'MySubsystem';
+  const hardware = sbBlocks.filter(b => b.cat === 'hardware');
+  const methods = sbBlocks.filter(b => b.cat === 'method');
 
-  let lines = [];
-  lines.push('// Generated by ChuckleIDE Code Builder');
-  lines.push('');
+  let code = '// Generated by ChuckleIDE Subsystem Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import com.qualcomm.robotcore.hardware.*;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n\n';
+  code += `public class ${className} {\n`;
 
-  for (const block of placedBlocks) {
-    let code = block.code;
-    for (const [key, val] of Object.entries(block.params)) {
-      code = code.replaceAll(`{{${key}}}`, val);
-    }
-    // Indent multi-line code
-    const codeLines = code.split('\n');
-    for (const line of codeLines) {
-      lines.push('    ' + line);
-    }
+  // Hardware fields
+  for (const h of hardware) {
+    let decl = h.code;
+    for (const [k, v] of Object.entries(h.params)) decl = decl.replaceAll(`{{${k}}}`, v);
+    code += `    ${decl}\n`;
   }
 
-  return lines.join('\n');
-}
-
-// ── Path Visualizer ───────────────────────────────────────
-let pathPoints = [];
-let pvCanvas = null;
-let pvCtx = null;
-
-function initPathVisualizer() {
-  pvCanvas = document.getElementById('pv-canvas');
-  pvCtx = pvCanvas.getContext('2d');
-  pathPoints = [];
-
-  drawField();
-
-  pvCanvas.addEventListener('click', (e) => {
-    const rect = pvCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
-    const scale = pvCanvas.width / fieldSize;
-    const fieldX = (x / scale).toFixed(1);
-    const fieldY = (fieldSize - y / scale).toFixed(1);
-    pathPoints.push({ x: parseFloat(fieldX), y: parseFloat(fieldY), heading: parseFloat(document.getElementById('pv-heading').value) || 0 });
-    drawField();
-    renderPointList();
-  });
-
-  pvCanvas.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    // Remove nearest point
-    if (pathPoints.length === 0) return;
-    const rect = pvCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
-    const scale = pvCanvas.width / fieldSize;
-
-    let minDist = Infinity, minIdx = -1;
-    pathPoints.forEach((p, i) => {
-      const px = p.x * scale;
-      const py = (fieldSize - p.y) * scale;
-      const d = Math.hypot(mx - px, my - py);
-      if (d < minDist) { minDist = d; minIdx = i; }
-    });
-    if (minIdx >= 0 && minDist < 20) {
-      pathPoints.splice(minIdx, 1);
-      drawField();
-      renderPointList();
-    }
-  });
-
-  // Buttons
-  document.getElementById('pv-close').addEventListener('click', closeAppView);
-  document.getElementById('pv-clear').addEventListener('click', () => {
-    pathPoints = [];
-    drawField();
-    renderPointList();
-  });
-  document.getElementById('pv-export').addEventListener('click', () => {
-    const code = generatePathCode();
-    navigator.clipboard.writeText(code);
-    showToast('PedroPathing code copied to clipboard', 'success');
-  });
-  document.getElementById('pv-generate').addEventListener('click', () => {
-    const code = generatePathCode();
-    navigator.clipboard.writeText(code);
-    showToast('PedroPathing code copied to clipboard', 'success');
-  });
-}
-
-function drawField() {
-  if (!pvCtx) return;
-  const w = pvCanvas.width;
-  const h = pvCanvas.height;
-  const fieldSize = parseFloat(document.getElementById('pv-field-size').value) || 144;
-  const scale = w / fieldSize;
-
-  // Background
-  const isDark = !document.documentElement.hasAttribute('data-theme');
-  pvCtx.fillStyle = isDark ? '#1a1a1a' : '#f0f0e8';
-  pvCtx.fillRect(0, 0, w, h);
-
-  // Grid
-  pvCtx.strokeStyle = isDark ? '#2a2020' : '#e0d0d0';
-  pvCtx.lineWidth = 0.5;
-  for (let i = 0; i <= fieldSize; i += 12) {
-    const pos = i * scale;
-    pvCtx.beginPath(); pvCtx.moveTo(pos, 0); pvCtx.lineTo(pos, h); pvCtx.stroke();
-    pvCtx.beginPath(); pvCtx.moveTo(0, pos); pvCtx.lineTo(w, pos); pvCtx.stroke();
-  }
-
-  // Center lines
-  pvCtx.strokeStyle = isDark ? '#3a2030' : '#d0b0b8';
-  pvCtx.lineWidth = 1;
-  pvCtx.beginPath(); pvCtx.moveTo(w/2, 0); pvCtx.lineTo(w/2, h); pvCtx.stroke();
-  pvCtx.beginPath(); pvCtx.moveTo(0, h/2); pvCtx.lineTo(w, h/2); pvCtx.stroke();
-
-  // Axis labels
-  pvCtx.fillStyle = isDark ? '#5a4050' : '#8a6070';
-  pvCtx.font = '10px sans-serif';
-  pvCtx.fillText('0', 2, h - 2);
-  pvCtx.fillText(String(fieldSize), w - 24, h - 2);
-  pvCtx.fillText(String(fieldSize), 2, 12);
-
-  if (pathPoints.length === 0) return;
-
-  // Draw path lines
-  pvCtx.strokeStyle = '#ff69b4';
-  pvCtx.lineWidth = 2;
-  pvCtx.beginPath();
-  pathPoints.forEach((p, i) => {
-    const px = p.x * scale;
-    const py = (fieldSize - p.y) * scale;
-    if (i === 0) pvCtx.moveTo(px, py);
-    else pvCtx.lineTo(px, py);
-  });
-  pvCtx.stroke();
-
-  // Draw points
-  pathPoints.forEach((p, i) => {
-    const px = p.x * scale;
-    const py = (fieldSize - p.y) * scale;
-
-    // Point circle
-    pvCtx.beginPath();
-    pvCtx.arc(px, py, 6, 0, Math.PI * 2);
-    pvCtx.fillStyle = i === 0 ? '#4ec9b0' : '#ff69b4';
-    pvCtx.fill();
-    pvCtx.strokeStyle = '#fff';
-    pvCtx.lineWidth = 1.5;
-    pvCtx.stroke();
-
-    // Heading arrow
-    const headRad = (p.heading || 0) * Math.PI / 180;
-    const arrowLen = 14;
-    pvCtx.strokeStyle = '#ffe4b5';
-    pvCtx.lineWidth = 2;
-    pvCtx.beginPath();
-    pvCtx.moveTo(px, py);
-    pvCtx.lineTo(px + Math.cos(headRad) * arrowLen, py - Math.sin(headRad) * arrowLen);
-    pvCtx.stroke();
-
-    // Label
-    pvCtx.fillStyle = isDark ? '#e0d0d8' : '#4a2030';
-    pvCtx.font = '10px monospace';
-    pvCtx.fillText(`P${i}`, px + 8, py - 8);
-  });
-}
-
-function renderPointList() {
-  const list = document.getElementById('pv-point-list');
-  if (pathPoints.length === 0) {
-    list.innerHTML = '<div style="padding:12px;color:var(--fg-dim);font-size:11px;text-align:center">No waypoints yet</div>';
-    return;
-  }
-  list.innerHTML = pathPoints.map((p, i) => `
-    <div class="path-point-item">
-      <span style="color:${i === 0 ? '#4ec9b0' : 'var(--accent)'}">P${i}</span>
-      <span>(${p.x}, ${p.y})</span>
-      <span style="color:var(--fg-dim)">${p.heading}°</span>
-      <button class="remove-point" data-idx="${i}">✕</button>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('.remove-point').forEach(btn => {
-    btn.addEventListener('click', () => {
-      pathPoints.splice(parseInt(btn.dataset.idx), 1);
-      drawField();
-      renderPointList();
-    });
-  });
-}
-
-function generatePathCode() {
-  if (pathPoints.length < 2) return '// Add at least 2 waypoints to generate a path';
-
-  let code = '// Generated by ChuckleIDE Path Visualizer\n';
-  code += '// PedroPathing autonomous path\n\n';
-  code += 'PathBuilder path = new PathBuilder()\n';
-
-  for (let i = 0; i < pathPoints.length; i++) {
-    const p = pathPoints[i];
-    if (i === 0) {
-      code += `    .setStartPose(new Pose(${p.x}, ${p.y}, Math.toRadians(${p.heading})))\n`;
-    } else {
-      code += `    .addWaypoint(new Pose(${p.x}, ${p.y}, Math.toRadians(${p.heading})))\n`;
+  // Constructor
+  code += `\n    public ${className}(HardwareMap hardwareMap) {\n`;
+  for (const h of hardware) {
+    if (h.init) {
+      let init = h.init;
+      for (const [k, v] of Object.entries(h.params)) init = init.replaceAll(`{{${k}}}`, v);
+      code += `        ${init}\n`;
     }
   }
+  code += '    }\n';
 
-  code += '    .build();\n';
+  // Methods
+  for (const m of methods) {
+    let body = m.code;
+    for (const [k, v] of Object.entries(m.params)) body = body.replaceAll(`{{${k}}}`, v);
+    code += `\n    ${body.split('\n').join('\n    ')}\n`;
+  }
+
+  code += '}\n';
   return code;
+}
+
+// ── Command Builder ──────────────────────────────────────
+const commandBlocks = [
+  { cat: 'action', label: 'Call Subsystem Method', code: '{{subsystem}}.{{method}}({{args}});', defaults: { subsystem: 'subsystem', method: 'doSomething', args: '' } },
+  { cat: 'action', label: 'Set Motor Power', code: '{{subsystem}}.setPower({{value}});', defaults: { subsystem: 'subsystem', value: '1.0' } },
+  { cat: 'action', label: 'Set Servo Position', code: '{{subsystem}}.setPosition({{value}});', defaults: { subsystem: 'subsystem', value: '0.5' } },
+  { cat: 'control', label: 'Wait (ms)', code: 'sleep({{ms}});', defaults: { ms: '1000' } },
+  { cat: 'control', label: 'While Condition', code: 'while ({{condition}}) {\n    {{body}}\n}', defaults: { condition: '!isStopRequested()', body: '// loop' } },
+  { cat: 'control', label: 'If Condition', code: 'if ({{condition}}) {\n    {{body}}\n}', defaults: { condition: 'true', body: '// action' } },
+  { cat: 'finish', label: 'Set Finished Condition', code: '// Finished when: {{condition}}', defaults: { condition: 'timer.seconds() > 2.0' } },
+  { cat: 'telemetry', label: 'Telemetry Add', code: 'telemetry.addData("{{key}}", {{value}});', defaults: { key: 'Status', value: '"Running"' } },
+  { cat: 'telemetry', label: 'Telemetry Update', code: 'telemetry.update();', defaults: {} },
+];
+
+let cmbBlocks = [];
+let cmbIdCounter = 0;
+let cmbInitialized = false;
+
+function initCommandBuilder() {
+  if (cmbInitialized) { updateCMBPreview(); return; }
+  cmbInitialized = true;
+
+  const palette = document.getElementById('cmb-palette');
+  palette.innerHTML = '';
+  const categories = [...new Set(commandBlocks.map(b => b.cat))];
+  for (const cat of categories) {
+    const title = document.createElement('div');
+    title.className = 'block-palette-title';
+    title.textContent = cat.toUpperCase();
+    palette.appendChild(title);
+
+    for (const block of commandBlocks.filter(b => b.cat === cat)) {
+      const el = document.createElement('div');
+      el.className = 'block-item';
+      el.setAttribute('data-category', block.cat);
+      el.innerHTML = `<div class="block-label">${escapeHtml(block.label)}</div>`;
+      el.addEventListener('dblclick', () => addCMBBlock(block));
+      el.draggable = true;
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify(block));
+        e.dataTransfer.effectAllowed = 'copy';
+      });
+      palette.appendChild(el);
+    }
+  }
+
+  const workspace = document.getElementById('cmb-workspace');
+  workspace.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; workspace.classList.add('drag-over'); });
+  workspace.addEventListener('dragleave', () => workspace.classList.remove('drag-over'));
+  workspace.addEventListener('drop', (e) => {
+    e.preventDefault();
+    workspace.classList.remove('drag-over');
+    try { addCMBBlock(JSON.parse(e.dataTransfer.getData('text/plain'))); } catch(err) {}
+  });
+
+  document.getElementById('cmb-close').addEventListener('click', closeAppView);
+  document.getElementById('cmb-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateCommandCode());
+    showToast('Command code copied', 'success');
+  });
+  document.getElementById('cmb-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateCommandCode());
+  });
+  document.getElementById('cmb-refresh').addEventListener('click', updateCMBPreview);
+  document.getElementById('cmb-class-name').addEventListener('input', updateCMBPreview);
+  document.getElementById('cmb-subsystem').addEventListener('input', updateCMBPreview);
+
+  renderCMBWorkspace();
+  updateCMBPreview();
+}
+
+function addCMBBlock(block) {
+  cmbBlocks.push({ ...block, id: ++cmbIdCounter, params: { ...block.defaults } });
+  renderCMBWorkspace();
+  updateCMBPreview();
+}
+
+function renderCMBWorkspace() {
+  const workspace = document.getElementById('cmb-workspace');
+  const hint = document.getElementById('cmb-hint');
+  workspace.querySelectorAll('.placed-block').forEach(el => el.remove());
+
+  if (cmbBlocks.length === 0) { hint.classList.remove('hidden'); return; }
+  hint.classList.add('hidden');
+
+  cmbBlocks.forEach((block) => {
+    const el = document.createElement('div');
+    el.className = 'placed-block';
+    el.setAttribute('data-category', block.cat);
+
+    let paramHtml = '';
+    for (const [key, val] of Object.entries(block.params)) {
+      paramHtml += ` <input type="text" value="${escapeHtml(val)}" data-param="${key}" title="${key}" />`;
+    }
+
+    el.innerHTML = `
+      <span class="block-text"><strong>${escapeHtml(block.label)}</strong>${paramHtml}</span>
+      <button class="remove-block" title="Remove">✕</button>
+    `;
+
+    el.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', () => { block.params[input.dataset.param] = input.value; updateCMBPreview(); });
+    });
+    el.querySelector('.remove-block').addEventListener('click', () => {
+      cmbBlocks = cmbBlocks.filter(b => b.id !== block.id);
+      renderCMBWorkspace();
+      updateCMBPreview();
+    });
+    workspace.appendChild(el);
+  });
+}
+
+function updateCMBPreview() {
+  const el = document.getElementById('cmb-preview');
+  if (el) el.textContent = generateCommandCode();
+}
+
+function generateCommandCode() {
+  const className = document.getElementById('cmb-class-name').value || 'MyCommand';
+  const subsystem = document.getElementById('cmb-subsystem').value || 'MySubsystem';
+
+  const actions = cmbBlocks.filter(b => b.cat === 'action' || b.cat === 'control' || b.cat === 'telemetry');
+  const finishBlocks = cmbBlocks.filter(b => b.cat === 'finish');
+
+  let code = '// Generated by ChuckleIDE Command Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import com.qualcomm.robotcore.util.ElapsedTime;\n\n';
+  code += `public class ${className} {\n`;
+  code += `    private ${subsystem} subsystem;\n`;
+  code += '    private ElapsedTime timer = new ElapsedTime();\n\n';
+  code += `    public ${className}(${subsystem} subsystem) {\n`;
+  code += '        this.subsystem = subsystem;\n';
+  code += '    }\n\n';
+
+  // initialize
+  code += '    public void initialize() {\n';
+  code += '        timer.reset();\n';
+  code += '    }\n\n';
+
+  // execute
+  code += '    public void execute() {\n';
+  for (const block of actions) {
+    let line = block.code;
+    for (const [k, v] of Object.entries(block.params)) line = line.replaceAll(`{{${k}}}`, v);
+    for (const l of line.split('\n')) code += `        ${l}\n`;
+  }
+  code += '    }\n\n';
+
+  // isFinished
+  code += '    public boolean isFinished() {\n';
+  if (finishBlocks.length > 0) {
+    const cond = finishBlocks[0].params.condition || 'false';
+    code += `        return ${cond};\n`;
+  } else {
+    code += '        return false;\n';
+  }
+  code += '    }\n\n';
+
+  // end
+  code += '    public void end() {\n';
+  code += '        // Clean up when command finishes\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+// ── OpMode Builder (Paths + Commands) ─────────────────────
+let obSteps = [];
+let obIdCounter = 0;
+let obInitialized = false;
+
+function initOpModeBuilder() {
+  if (obInitialized) { updateOBPreview(); return; }
+  obInitialized = true;
+
+  document.getElementById('ob-close').addEventListener('click', closeAppView);
+  document.getElementById('ob-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateOpModeCode());
+    showToast('OpMode code copied', 'success');
+  });
+  document.getElementById('ob-insert-code').addEventListener('click', () => {
+    insertGeneratedCode(generateOpModeCode());
+  });
+  document.getElementById('ob-refresh').addEventListener('click', updateOBPreview);
+  document.getElementById('ob-class-name').addEventListener('input', updateOBPreview);
+  document.getElementById('ob-start-x').addEventListener('input', updateOBPreview);
+  document.getElementById('ob-start-y').addEventListener('input', updateOBPreview);
+  document.getElementById('ob-start-heading').addEventListener('input', updateOBPreview);
+
+  document.getElementById('ob-add-path').addEventListener('click', () => {
+    obSteps.push({
+      id: ++obIdCounter,
+      type: 'path',
+      waypoints: [
+        { x: 0, y: 0, heading: 0 },
+        { x: 24, y: 0, heading: 0 }
+      ]
+    });
+    renderOBSequence();
+    updateOBPreview();
+  });
+
+  document.getElementById('ob-add-command').addEventListener('click', () => {
+    obSteps.push({
+      id: ++obIdCounter,
+      type: 'command',
+      commandName: 'MyCommand',
+      subsystemName: 'MySubsystem'
+    });
+    renderOBSequence();
+    updateOBPreview();
+  });
+
+  document.getElementById('ob-add-parallel').addEventListener('click', () => {
+    obSteps.push({
+      id: ++obIdCounter,
+      type: 'parallel',
+      commands: ['CommandA', 'CommandB']
+    });
+    renderOBSequence();
+    updateOBPreview();
+  });
+
+  document.getElementById('ob-add-wait').addEventListener('click', () => {
+    obSteps.push({
+      id: ++obIdCounter,
+      type: 'wait',
+      ms: 1000
+    });
+    renderOBSequence();
+    updateOBPreview();
+  });
+
+  renderOBSequence();
+  updateOBPreview();
+}
+
+function renderOBSequence() {
+  const container = document.getElementById('ob-sequence');
+  const hint = document.getElementById('ob-hint');
+  container.querySelectorAll('.ob-step').forEach(el => el.remove());
+
+  if (obSteps.length === 0) { hint.classList.remove('hidden'); return; }
+  hint.classList.add('hidden');
+
+  obSteps.forEach((step, index) => {
+    const el = document.createElement('div');
+    el.className = 'ob-step';
+
+    if (step.type === 'path') {
+      el.innerHTML = `
+        <div class="ob-step-header">
+          <span class="ob-step-icon">🗺️</span>
+          <strong>Follow Path</strong>
+          <span class="ob-step-num">#${index + 1}</span>
+          <button class="remove-block" title="Remove">✕</button>
+        </div>
+        <div class="ob-step-body">
+          ${step.waypoints.map((wp, wi) => `
+            <div class="ob-waypoint">
+              <span>P${wi}:</span>
+              <input type="number" value="${wp.x}" data-wi="${wi}" data-field="x" title="X" class="text-input tiny" />
+              <input type="number" value="${wp.y}" data-wi="${wi}" data-field="y" title="Y" class="text-input tiny" />
+              <input type="number" value="${wp.heading}" data-wi="${wi}" data-field="heading" title="Heading°" class="text-input tiny" />
+              <button class="remove-block tiny" data-remove-wp="${wi}">✕</button>
+            </div>
+          `).join('')}
+          <button class="btn-secondary tiny ob-add-wp">+ Waypoint</button>
+        </div>
+      `;
+
+      el.querySelectorAll('.ob-waypoint input').forEach(input => {
+        input.addEventListener('input', () => {
+          const wi = parseInt(input.dataset.wi);
+          step.waypoints[wi][input.dataset.field] = parseFloat(input.value) || 0;
+          updateOBPreview();
+        });
+      });
+      el.querySelectorAll('[data-remove-wp]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          step.waypoints.splice(parseInt(btn.dataset.removeWp), 1);
+          renderOBSequence();
+          updateOBPreview();
+        });
+      });
+      el.querySelector('.ob-add-wp').addEventListener('click', () => {
+        const last = step.waypoints[step.waypoints.length - 1] || { x: 0, y: 0, heading: 0 };
+        step.waypoints.push({ x: last.x + 12, y: last.y, heading: last.heading });
+        renderOBSequence();
+        updateOBPreview();
+      });
+    } else if (step.type === 'command') {
+      el.innerHTML = `
+        <div class="ob-step-header">
+          <span class="ob-step-icon">📦</span>
+          <strong>Run Command</strong>
+          <span class="ob-step-num">#${index + 1}</span>
+          <button class="remove-block" title="Remove">✕</button>
+        </div>
+        <div class="ob-step-body">
+          <div class="ob-step-row">
+            <label>Command:</label>
+            <input type="text" value="${escapeHtml(step.commandName)}" data-field="commandName" class="text-input" />
+          </div>
+          <div class="ob-step-row">
+            <label>Subsystem:</label>
+            <input type="text" value="${escapeHtml(step.subsystemName)}" data-field="subsystemName" class="text-input" />
+          </div>
+        </div>
+      `;
+      el.querySelectorAll('.ob-step-body input').forEach(input => {
+        input.addEventListener('input', () => { step[input.dataset.field] = input.value; updateOBPreview(); });
+      });
+    } else if (step.type === 'parallel') {
+      el.innerHTML = `
+        <div class="ob-step-header">
+          <span class="ob-step-icon">⏩</span>
+          <strong>Parallel Commands</strong>
+          <span class="ob-step-num">#${index + 1}</span>
+          <button class="remove-block" title="Remove">✕</button>
+        </div>
+        <div class="ob-step-body">
+          <div class="ob-step-row">
+            <label>Commands (comma-separated):</label>
+            <input type="text" value="${escapeHtml(step.commands.join(', '))}" data-field="commands" class="text-input" />
+          </div>
+        </div>
+      `;
+      el.querySelector('[data-field="commands"]').addEventListener('input', (e) => {
+        step.commands = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+        updateOBPreview();
+      });
+    } else if (step.type === 'wait') {
+      el.innerHTML = `
+        <div class="ob-step-header">
+          <span class="ob-step-icon">⏱️</span>
+          <strong>Wait</strong>
+          <span class="ob-step-num">#${index + 1}</span>
+          <button class="remove-block" title="Remove">✕</button>
+        </div>
+        <div class="ob-step-body">
+          <div class="ob-step-row">
+            <label>Duration (ms):</label>
+            <input type="number" value="${step.ms}" data-field="ms" class="text-input small" />
+          </div>
+        </div>
+      `;
+      el.querySelector('[data-field="ms"]').addEventListener('input', (e) => {
+        step.ms = parseInt(e.target.value) || 0;
+        updateOBPreview();
+      });
+    }
+
+    // Remove step button
+    el.querySelector('.ob-step-header .remove-block').addEventListener('click', () => {
+      obSteps = obSteps.filter(s => s.id !== step.id);
+      renderOBSequence();
+      updateOBPreview();
+    });
+
+    container.appendChild(el);
+  });
+}
+
+function updateOBPreview() {
+  const el = document.getElementById('ob-preview');
+  if (el) el.textContent = generateOpModeCode();
+}
+
+function generateOpModeCode() {
+  const className = document.getElementById('ob-class-name').value || 'MyAutonomous';
+  const startX = document.getElementById('ob-start-x').value || '0';
+  const startY = document.getElementById('ob-start-y').value || '0';
+  const startHeading = document.getElementById('ob-start-heading').value || '0';
+
+  // Collect unique subsystems and commands
+  const subsystems = new Set();
+  const commands = new Set();
+  for (const step of obSteps) {
+    if (step.type === 'command') {
+      subsystems.add(step.subsystemName);
+      commands.add(step.commandName);
+    }
+    if (step.type === 'parallel') {
+      step.commands.forEach(c => commands.add(c));
+    }
+  }
+
+  let code = '// Generated by ChuckleIDE OpMode Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'import com.pedropathing.follower.Follower;\n';
+  code += 'import com.pedropathing.localization.Pose;\n';
+  code += 'import com.pedropathing.pathgen.BezierLine;\n';
+  code += 'import com.pedropathing.pathgen.Path;\n';
+  code += 'import com.pedropathing.pathgen.Point;\n\n';
+  code += `@Autonomous(name = "${className}")\n`;
+  code += `public class ${className} extends LinearOpMode {\n\n`;
+
+  // Fields
+  code += '    private Follower follower;\n';
+  for (const sub of subsystems) {
+    code += `    private ${sub} ${sub.charAt(0).toLowerCase() + sub.slice(1)};\n`;
+  }
+  code += '\n';
+
+  // runOpMode
+  code += '    @Override\n';
+  code += '    public void runOpMode() {\n';
+  code += `        follower = new Follower(hardwareMap);\n`;
+  code += `        follower.setStartingPose(new Pose(${startX}, ${startY}, Math.toRadians(${startHeading})));\n\n`;
+
+  for (const sub of subsystems) {
+    const varName = sub.charAt(0).toLowerCase() + sub.slice(1);
+    code += `        ${varName} = new ${sub}(hardwareMap);\n`;
+  }
+  code += '\n';
+
+  // Build paths
+  let pathIndex = 0;
+  for (const step of obSteps) {
+    if (step.type === 'path' && step.waypoints.length >= 2) {
+      code += `        Path path${pathIndex} = new Path(\n`;
+      code += `            new BezierLine(\n`;
+      code += `                new Point(${step.waypoints[0].x}, ${step.waypoints[0].y}, Point.CARTESIAN),\n`;
+      code += `                new Point(${step.waypoints[step.waypoints.length - 1].x}, ${step.waypoints[step.waypoints.length - 1].y}, Point.CARTESIAN)\n`;
+      code += `            )\n`;
+      code += `        );\n`;
+      const lastWp = step.waypoints[step.waypoints.length - 1];
+      code += `        path${pathIndex}.setLinearHeadingInterpolation(Math.toRadians(${step.waypoints[0].heading}), Math.toRadians(${lastWp.heading}));\n\n`;
+      pathIndex++;
+    }
+  }
+
+  code += '        waitForStart();\n\n';
+
+  // Execute sequence
+  pathIndex = 0;
+  for (const step of obSteps) {
+    if (step.type === 'path') {
+      code += `        // Follow path ${pathIndex}\n`;
+      code += `        follower.followPath(path${pathIndex});\n`;
+      code += `        while (!isStopRequested() && follower.isBusy()) {\n`;
+      code += `            follower.update();\n`;
+      code += `        }\n\n`;
+      pathIndex++;
+    } else if (step.type === 'command') {
+      const varName = step.subsystemName.charAt(0).toLowerCase() + step.subsystemName.slice(1);
+      code += `        // Run command: ${step.commandName}\n`;
+      code += `        ${step.commandName} cmd${step.id} = new ${step.commandName}(${varName});\n`;
+      code += `        cmd${step.id}.initialize();\n`;
+      code += `        while (!isStopRequested() && !cmd${step.id}.isFinished()) {\n`;
+      code += `            cmd${step.id}.execute();\n`;
+      code += `        }\n`;
+      code += `        cmd${step.id}.end();\n\n`;
+    } else if (step.type === 'parallel') {
+      code += `        // Run parallel commands: ${step.commands.join(', ')}\n`;
+      for (const cmd of step.commands) {
+        code += `        // TODO: run ${cmd} in parallel\n`;
+      }
+      code += '\n';
+    } else if (step.type === 'wait') {
+      code += `        // Wait ${step.ms}ms\n`;
+      code += `        sleep(${step.ms});\n\n`;
+    }
+  }
+
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+// ── Shared helper to insert generated code into editor ────
+function insertGeneratedCode(code) {
+  if (monacoEditor && state.activeFile) {
+    const pos = monacoEditor.getPosition();
+    monacoEditor.executeEdits('builder', [{
+      range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+      text: code
+    }]);
+    closeAppView();
+    showToast('Code inserted into editor', 'success');
+  } else {
+    navigator.clipboard.writeText(code);
+    showToast('No file open — code copied to clipboard instead', 'info');
+  }
+}
+
+// ── Path Visualizer (embedded pedropathing.com) ───────────
+function initPathVisualizer() {
+  document.getElementById('pv-close').addEventListener('click', closeAppView);
+  document.getElementById('pv-open-external').addEventListener('click', () => {
+    window.ftcIDE.shell.openExternal('https://visualizer.pedropathing.com');
+  });
+}
+
+// ── FTC Dashboard View ────────────────────────────────────
+let dashInitialized = false;
+
+function initDashboardView() {
+  if (dashInitialized) return;
+  dashInitialized = true;
+
+  document.getElementById('dash-close').addEventListener('click', closeAppView);
+  document.getElementById('dash-connect').addEventListener('click', () => {
+    const url = document.getElementById('dash-url').value.trim();
+    if (!url) { showToast('Enter a dashboard URL', 'warning'); return; }
+    const iframe = document.getElementById('dash-iframe');
+    const placeholder = document.getElementById('dash-placeholder');
+    iframe.src = url;
+    iframe.style.display = '';
+    placeholder.style.display = 'none';
+    showToast('Connecting to FTC Dashboard...', 'info');
+  });
+}
+
+// ── Panels View ───────────────────────────────────────────
+let panelsInitialized = false;
+
+function initPanelsView() {
+  if (panelsInitialized) return;
+  panelsInitialized = true;
+
+  document.getElementById('panels-close').addEventListener('click', closeAppView);
+  document.getElementById('panels-connect').addEventListener('click', () => {
+    const url = document.getElementById('panels-url').value.trim();
+    if (!url) { showToast('Enter a Panels URL', 'warning'); return; }
+    const iframe = document.getElementById('panels-iframe');
+    const placeholder = document.getElementById('panels-placeholder');
+    iframe.src = url;
+    iframe.style.display = '';
+    placeholder.style.display = 'none';
+    showToast('Connecting to Panels...', 'info');
+  });
 }

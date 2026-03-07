@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src blob:; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:" />
+    content="default-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src blob:; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; frame-src https://visualizer.pedropathing.com http://192.168.43.1:* http://192.168.49.1:* http://localhost:*" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ChuckleIDE</title>
   <link rel="stylesheet" href="styles.css" />
@@ -79,6 +79,9 @@
           <button class="btn-secondary" id="btn-open-project-2">Open Project</button>
           <button class="btn-secondary" id="btn-new-project">New Project</button>
         </div>
+      </div>
+      <div id="deps-section" class="deps-section" style="display:none">
+        <button class="btn-secondary small deps-btn" id="btn-view-deps" title="View project dependencies and build files">🐘 Dependencies &amp; Build Files</button>
       </div>
     </div>
 
@@ -286,15 +289,35 @@
         </div>
 
         <div class="home-apps-grid">
-          <div class="home-app-card" id="app-code-builder">
+          <div class="home-app-card" id="app-subsystem-builder">
+            <div class="app-icon">⚙️</div>
+            <div class="app-name">Subsystem Builder</div>
+            <div class="app-desc">Define hardware subsystems with motors, servos, and sensors visually</div>
+          </div>
+          <div class="home-app-card" id="app-command-builder">
+            <div class="app-icon">📦</div>
+            <div class="app-name">Command Builder</div>
+            <div class="app-desc">Build reusable commands from your subsystems — no typing needed</div>
+          </div>
+          <div class="home-app-card" id="app-opmode-builder">
             <div class="app-icon">🧩</div>
-            <div class="app-name">Code Builder</div>
-            <div class="app-desc">Drag &amp; drop blocks to build Java code — no typing needed</div>
+            <div class="app-name">OpMode Builder</div>
+            <div class="app-desc">Sequence paths &amp; commands into full autonomous OpModes</div>
           </div>
           <div class="home-app-card" id="app-pedro-visualizer">
             <div class="app-icon">🗺️</div>
             <div class="app-name">Path Visualizer</div>
-            <div class="app-desc">Draw and edit PedroPathing autonomous routes visually</div>
+            <div class="app-desc">PedroPathing autonomous route designer from visualizer.pedropathing.com</div>
+          </div>
+          <div class="home-app-card" id="app-ftc-dashboard">
+            <div class="app-icon">📊</div>
+            <div class="app-name">FTC Dashboard</div>
+            <div class="app-desc">View real-time telemetry and tune parameters on your robot</div>
+          </div>
+          <div class="home-app-card" id="app-panels-view">
+            <div class="app-icon">📋</div>
+            <div class="app-name">Panels</div>
+            <div class="app-desc">Telemetry dashboard for monitoring and debugging your robot</div>
           </div>
           <div class="home-app-card" id="app-template-gallery">
             <div class="app-icon">📋</div>
@@ -339,71 +362,179 @@
       </div>
       <div id="monaco-editor-wrapper" style="display:none; width:100%; height:100%;"></div>
 
-      <!-- CODE BUILDER APP -->
-      <div id="app-view-code-builder" class="app-view">
+      <!-- SUBSYSTEM BUILDER APP -->
+      <div id="app-view-subsystem-builder" class="app-view">
         <div class="app-view-header">
-          <span style="font-size:18px">🧩</span>
-          <h2>Code Builder — Drag &amp; Drop</h2>
-          <button class="btn-secondary small" id="cb-copy-code">📋 Copy Code</button>
-          <button class="btn-primary small" id="cb-insert-code">Insert into Editor</button>
-          <button class="icon-btn" id="cb-close" title="Close">✕</button>
+          <span style="font-size:18px">⚙️</span>
+          <h2>Subsystem Builder</h2>
+          <button class="btn-secondary small" id="sb-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="sb-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="sb-close" title="Close">✕</button>
         </div>
         <div class="app-view-body">
-          <div class="code-builder-layout">
-            <div class="block-palette" id="block-palette"></div>
-            <div class="code-builder-workspace">
-              <div class="block-workspace" id="block-workspace">
-                <div class="workspace-hint" id="workspace-hint">Drag blocks here to build your OpMode</div>
-              </div>
-              <div class="code-preview-panel">
-                <div class="code-preview-header">
-                  <span>Generated Java Code</span>
-                  <button class="icon-btn" id="cb-refresh-preview" title="Refresh">↻</button>
+          <div class="builder-layout">
+            <div class="builder-palette" id="sb-palette"></div>
+            <div class="builder-workspace-area">
+              <div class="builder-config">
+                <div class="form-group">
+                  <label>Subsystem Name</label>
+                  <input type="text" id="sb-class-name" value="MySubsystem" class="text-input" />
                 </div>
-                <div class="code-preview-content" id="code-preview"></div>
               </div>
+              <div class="builder-workspace" id="sb-workspace">
+                <div class="workspace-hint" id="sb-hint">Add hardware and methods to build your subsystem</div>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="sb-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="sb-preview"></div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- PATH VISUALIZER APP -->
+      <!-- COMMAND BUILDER APP -->
+      <div id="app-view-command-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📦</span>
+          <h2>Command Builder</h2>
+          <button class="btn-secondary small" id="cmb-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="cmb-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="cmb-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="builder-layout">
+            <div class="builder-palette" id="cmb-palette"></div>
+            <div class="builder-workspace-area">
+              <div class="builder-config">
+                <div class="form-group">
+                  <label>Command Name</label>
+                  <input type="text" id="cmb-class-name" value="MyCommand" class="text-input" />
+                </div>
+                <div class="form-group">
+                  <label>Required Subsystem</label>
+                  <input type="text" id="cmb-subsystem" value="MySubsystem" class="text-input" />
+                </div>
+              </div>
+              <div class="builder-workspace" id="cmb-workspace">
+                <div class="workspace-hint" id="cmb-hint">Add actions to build your command</div>
+              </div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="cmb-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="cmb-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OPMODE BUILDER APP -->
+      <div id="app-view-opmode-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🧩</span>
+          <h2>OpMode Builder — Paths &amp; Commands</h2>
+          <button class="btn-secondary small" id="ob-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="ob-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="ob-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="opmode-builder-layout">
+            <div class="ob-palette">
+              <div class="panel-section-title">ADD STEP</div>
+              <button class="btn-secondary small ob-add-btn" id="ob-add-path">🗺️ Follow Path</button>
+              <button class="btn-secondary small ob-add-btn" id="ob-add-command">📦 Run Command</button>
+              <button class="btn-secondary small ob-add-btn" id="ob-add-parallel">⏩ Parallel Commands</button>
+              <button class="btn-secondary small ob-add-btn" id="ob-add-wait">⏱️ Wait / Sleep</button>
+              <div class="panel-section-title" style="margin-top:12px">OPMODE CONFIG</div>
+              <div class="form-group">
+                <label>OpMode Name</label>
+                <input type="text" id="ob-class-name" value="MyAutonomous" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Start Pose X</label>
+                <input type="number" id="ob-start-x" value="0" class="text-input small" />
+              </div>
+              <div class="form-group">
+                <label>Start Pose Y</label>
+                <input type="number" id="ob-start-y" value="0" class="text-input small" />
+              </div>
+              <div class="form-group">
+                <label>Start Heading (deg)</label>
+                <input type="number" id="ob-start-heading" value="0" class="text-input small" />
+              </div>
+            </div>
+            <div class="ob-sequence" id="ob-sequence">
+              <div class="workspace-hint" id="ob-hint">Add paths and commands to build your autonomous OpMode</div>
+            </div>
+            <div class="builder-preview-panel">
+              <div class="code-preview-header">
+                <span>Generated Java Code</span>
+                <button class="icon-btn" id="ob-refresh" title="Refresh">↻</button>
+              </div>
+              <div class="code-preview-content" id="ob-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PATH VISUALIZER APP (embedded pedropathing.com) -->
       <div id="app-view-path-visualizer" class="app-view">
         <div class="app-view-header">
           <span style="font-size:18px">🗺️</span>
           <h2>PedroPathing Visualizer</h2>
-          <button class="btn-secondary small" id="pv-clear">Clear All</button>
-          <button class="btn-primary small" id="pv-export">Export Code</button>
+          <button class="btn-secondary small" id="pv-open-external" title="Open in browser">🌐 Open in Browser</button>
           <button class="icon-btn" id="pv-close" title="Close">✕</button>
         </div>
-        <div class="app-view-body">
-          <div class="path-viz-layout">
-            <div class="path-viz-sidebar">
-              <div class="form-group">
-                <label>Field Size (inches)</label>
-                <input type="number" id="pv-field-size" value="144" class="text-input small" />
-              </div>
-              <div class="form-group">
-                <label>Robot Width (in)</label>
-                <input type="number" id="pv-robot-width" value="18" class="text-input small" />
-              </div>
-              <div class="form-group">
-                <label>Heading (deg)</label>
-                <input type="number" id="pv-heading" value="0" class="text-input small" />
-              </div>
-              <div style="font-size:11px;color:var(--fg-dim);line-height:1.4">
-                Click on the field to add waypoints. Right-click a point to remove it.
-              </div>
-              <div class="panel-section-title">WAYPOINTS</div>
-              <div class="path-point-list" id="pv-point-list">
-                <div style="padding:12px;color:var(--fg-dim);font-size:11px;text-align:center">No waypoints yet</div>
-              </div>
-              <button class="btn-primary small" id="pv-generate" style="width:100%">Generate PedroPathing Code</button>
-            </div>
-            <div class="path-viz-canvas-wrap">
-              <canvas id="pv-canvas" width="540" height="540"></canvas>
-            </div>
+        <div class="app-view-body" style="padding:0">
+          <iframe id="pv-iframe" src="https://visualizer.pedropathing.com" style="width:100%;height:100%;border:none;"></iframe>
+        </div>
+      </div>
+
+      <!-- FTC DASHBOARD VIEW -->
+      <div id="app-view-ftc-dashboard" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📊</span>
+          <h2>FTC Dashboard</h2>
+          <div class="dashboard-url-bar">
+            <input type="text" id="dash-url" value="http://192.168.43.1:8080/dash" class="text-input" placeholder="Dashboard URL" />
+            <button class="btn-primary small" id="dash-connect">Connect</button>
           </div>
+          <button class="icon-btn" id="dash-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body" style="padding:0">
+          <div id="dash-placeholder" class="embedded-placeholder">
+            <div class="placeholder-icon">📊</div>
+            <h3>FTC Dashboard</h3>
+            <p>Enter your Control Hub's dashboard URL above and click Connect.<br/>Default: <code>http://192.168.43.1:8080/dash</code></p>
+          </div>
+          <iframe id="dash-iframe" style="width:100%;height:100%;border:none;display:none;"></iframe>
+        </div>
+      </div>
+
+      <!-- PANELS VIEW -->
+      <div id="app-view-panels" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">📋</span>
+          <h2>Panels</h2>
+          <div class="dashboard-url-bar">
+            <input type="text" id="panels-url" value="http://192.168.43.1:7070" class="text-input" placeholder="Panels URL" />
+            <button class="btn-primary small" id="panels-connect">Connect</button>
+          </div>
+          <button class="icon-btn" id="panels-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body" style="padding:0">
+          <div id="panels-placeholder" class="embedded-placeholder">
+            <div class="placeholder-icon">📋</div>
+            <h3>Panels Dashboard</h3>
+            <p>Enter your Panels dashboard URL above and click Connect.<br/>Default: <code>http://192.168.43.1:7070</code></p>
+          </div>
+          <iframe id="panels-iframe" style="width:100%;height:100%;border:none;display:none;"></iframe>
         </div>
       </div>
     </div>
@@ -526,7 +657,8 @@
           <label><input type="checkbox" id="lib-pedro" checked /> PedroPathing</label>
           <label><input type="checkbox" id="lib-nextftc" checked /> NextFTC</label>
           <label><input type="checkbox" id="lib-dashboard" checked /> FTC Dashboard</label>
-          <label><input type="checkbox" id="lib-roadrunner" /> Road Runner</label>
+          <label><input type="checkbox" id="lib-solverslib" checked /> SolversLib</label>
+          <label><input type="checkbox" id="lib-panels" checked /> Panels</label>
         </div>
       </div>
     </div>
