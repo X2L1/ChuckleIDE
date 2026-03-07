@@ -438,6 +438,9 @@
         </div>
       </div>
       <div id="monaco-editor-wrapper" style="display:none; width:100%; height:100%;"></div>
+      <div id="fallback-editor-wrapper" style="display:none; width:100%; height:100%;">
+        <textarea id="fallback-editor" spellcheck="false" aria-label="Code editor"></textarea>
+      </div>
 
       <!-- SUBSYSTEM BUILDER APP -->
       <div id="app-view-subsystem-builder" class="app-view">
@@ -1102,31 +1105,6 @@
 </div>
 
 <!-- Scripts -->
-<script>
-  // Configure Monaco worker environment before loading
-  const monacoBase = new URL('../../node_modules/monaco-editor/min', window.location.href).href;
-  window.MonacoEnvironment = {
-    getWorkerUrl: function(workerId, label) {
-      return `data:text/javascript;charset=utf-8,${encodeURIComponent(
-        "self.MonacoEnvironment = { baseUrl: '" + monacoBase + "/' };\n" +
-        "importScripts('" + monacoBase + "/vs/base/worker/workerMain.js');"
-      )}`;
-    }
-  };
-</script>
-<script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
-<script>
-  // Load Monaco Editor from local node_modules
-  if (typeof require !== 'undefined' && typeof require.config === 'function') {
-    require.config({ paths: { 'vs': '../../node_modules/monaco-editor/min/vs' } });
-    require(['vs/editor/editor.main'], function() {
-      window.monacoReady = true;
-      document.dispatchEvent(new Event('monaco-ready'));
-    });
-  } else {
-    console.error('Monaco AMD loader failed to load');
-  }
-</script>
 <script src="app.js"></script>
 </body>
 </html>

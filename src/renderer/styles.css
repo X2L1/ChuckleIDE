@@ -650,6 +650,26 @@ body.bottom-panel-hidden #main-layout {
   position: relative;
 }
 
+#fallback-editor-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+#fallback-editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--bg-editor);
+  color: var(--fg-main);
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+  line-height: 1.45;
+  padding: 10px 12px;
+  tab-size: 4;
+  white-space: pre;
+}
+
 /* ── WELCOME SCREEN ─────────────────────────────────────── */
 .welcome-screen {
   display: flex;

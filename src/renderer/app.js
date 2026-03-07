@@ -18,6 +18,8 @@ const state = {
 };
 
 let monacoEditor = null;
+let fallbackEditor = null;
+let isSettingFallbackContent = false;
 let selectedTemplateId = null;
 const EDITOR_READY_TIMEOUT_MS = 15000;
 
@@ -43,12 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSettingsPanel();
   bindHomeScreen();
 
-  // Wait for Monaco
-  if (window.monacoReady) {
-    initMonaco();
-  } else {
-    document.addEventListener('monaco-ready', initMonaco);
-  }
+  // Use a built-in editor backend that is always available
+  initFallbackEditor();
 
   // Listen for main-process events
   window.ftcIDE.on('menu-action', handleMenuAction);
@@ -141,6 +139,39 @@ function initMonaco() {
   appendOutput('Monaco Editor initialized.', 'success');
 }
 
+function initFallbackEditor() {
+  if (fallbackEditor) return;
+  fallbackEditor = document.getElementById('fallback-editor');
+  if (!fallbackEditor) return;
+
+  applyFallbackEditorSettings();
+  fallbackEditor.addEventListener('input', () => {
+    if (isSettingFallbackContent || !state.activeFile) return;
+    const info = state.openFiles.get(state.activeFile);
+    if (!info) return;
+    info.modified = true;
+    info.content = fallbackEditor.value;
+    updateTabModified(state.activeFile, true);
+    updateOutline();
+    updateFallbackCursorPosition();
+  });
+  fallbackEditor.addEventListener('blur', () => {
+    if (state.activeFile) autoSave(state.activeFile);
+  });
+  ['click', 'keyup', 'select'].forEach((evt) => {
+    fallbackEditor.addEventListener(evt, updateFallbackCursorPosition);
+  });
+  appendOutput('Basic editor initialized.', 'success');
+}
+
+function applyFallbackEditorSettings() {
+  if (!fallbackEditor) return;
+  fallbackEditor.style.fontSize = `${state.editorFontSize}px`;
+  const tabSize = parseInt(state.settings['editor.tabSize'], 10) || 4;
+  fallbackEditor.style.tabSize = String(tabSize);
+  fallbackEditor.style.whiteSpace = state.settings['editor.wordWrap'] === 'on' ? 'pre-wrap' : 'pre';
+}
+
 function registerJavaCompletions() {
   if (!monaco) return;
 
@@ -221,6 +252,7 @@ async function loadSettings() {
     setInputVal('setting-github-user', state.settings['git.username'] || '');
     setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
+    applyFallbackEditorSettings();
 
     // Restore last project
     const lastProject = state.settings['project.lastPath'];
@@ -264,6 +296,7 @@ async function saveSettings() {
     });
     monaco.editor.setTheme(state.settings['editor.theme']);
   }
+  applyFallbackEditorSettings();
 
   applyColorMode(state.settings['ui.colorMode']);
   showToast('Settings saved', 'success');
@@ -277,9 +310,9 @@ function handleMenuAction(action) {
     'save-file': () => saveCurrentFile(),
     'save-all': () => saveAllFiles(),
     'open-settings': () => switchPanel('settings'),
-    'find': () => monacoEditor && monacoEditor.trigger('', 'actions.find'),
-    'replace': () => monacoEditor && monacoEditor.trigger('', 'editor.action.startFindReplaceAction'),
-    'goto-line': () => monacoEditor && monacoEditor.trigger('', 'editor.action.gotoLine'),
+    'find': () => monacoEditor ? monacoEditor.trigger('', 'actions.find') : showToast('Find is unavailable in basic editor', 'info'),
+    'replace': () => monacoEditor ? monacoEditor.trigger('', 'editor.action.startFindReplaceAction') : showToast('Replace is unavailable in basic editor', 'info'),
+    'goto-line': () => monacoEditor ? monacoEditor.trigger('', 'editor.action.gotoLine') : promptGotoLine(),
     'toggle-explorer': () => switchPanel('explorer'),
     'toggle-terminal': () => toggleBottomPanel(),
     'toggle-devices': () => switchPanel('devices'),
@@ -517,13 +550,13 @@ function getFileIcon(name) {
 
 // ── File Opening / Saving ─────────────────────────────────
 async function openFile(filePath) {
-  if (!monacoEditor) {
+  if (!monacoEditor && !fallbackEditor) {
     const ready = await waitForEditorReady();
     if (!ready) { showToast('Editor not ready', 'warning'); return; }
   }
 
   // Save current view state
-  if (state.activeFile && state.openFiles.has(state.activeFile)) {
+  if (monacoEditor && state.activeFile && state.openFiles.has(state.activeFile)) {
     state.openFiles.get(state.activeFile).viewState = monacoEditor.saveViewState();
   }
 
@@ -535,7 +568,9 @@ async function openFile(filePath) {
   try {
     const content = await window.ftcIDE.fs.readFile(filePath);
     const lang = getLanguageForFile(filePath);
-    const model = monaco.editor.createModel(content, lang, monaco.Uri.file(filePath));
+    const model = monacoEditor && monaco?.editor
+      ? monaco.editor.createModel(content, lang, monaco.Uri.file(filePath))
+      : null;
 
     state.openFiles.set(filePath, { content, modified: false, model, viewState: null });
     addTab(filePath);
@@ -547,7 +582,9 @@ async function openFile(filePath) {
 }
 
 async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
-  if (monacoEditor) return true;
+  if (monacoEditor || fallbackEditor) return true;
+  initFallbackEditor();
+  if (fallbackEditor) return true;
 
   return new Promise((resolve) => {
     let done = false;
@@ -562,13 +599,8 @@ async function waitForEditorReady(timeoutMs = EDITOR_READY_TIMEOUT_MS) {
       done = true;
       if (timer) clearTimeout(timer);
       if (poll) clearInterval(poll);
-      document.removeEventListener('monaco-ready', onReady);
       resolve(ok);
     };
-    const onReady = () => {
-      tryInit();
-    };
-    document.addEventListener('monaco-ready', onReady);
     if (window.monacoReady || (typeof monaco !== 'undefined' && monaco?.editor)) {
       tryInit();
       if (monacoEditor) return;
@@ -601,7 +633,9 @@ async function saveFile(filePath) {
   const info = state.openFiles.get(filePath);
   if (!info) return;
   try {
-    const content = info.model ? info.model.getValue() : info.content;
+    const content = info.model
+      ? info.model.getValue()
+      : ((state.activeFile === filePath && fallbackEditor) ? fallbackEditor.value : info.content);
     await window.ftcIDE.fs.writeFile(filePath, content);
     info.modified = false;
     info.content = content;
@@ -657,7 +691,8 @@ function activateTab(filePath) {
 
   // Show editor
   document.getElementById('welcome-screen').style.display = 'none';
-  document.getElementById('monaco-editor-wrapper').style.display = '';
+  document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
+  document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
 
   // Switch model
   const info = state.openFiles.get(filePath);
@@ -665,6 +700,12 @@ function activateTab(filePath) {
     monacoEditor.setModel(info.model);
     if (info.viewState) monacoEditor.restoreViewState(info.viewState);
     monacoEditor.focus();
+  } else if (info && fallbackEditor) {
+    isSettingFallbackContent = true;
+    fallbackEditor.value = info.content || '';
+    isSettingFallbackContent = false;
+    fallbackEditor.focus();
+    updateFallbackCursorPosition();
   }
 
   // Update breadcrumb
@@ -685,7 +726,7 @@ function closeTab(filePath) {
     }
   }
 
-  if (info && info.model) info.model.dispose();
+  if (info && info.model && typeof info.model.dispose === 'function') info.model.dispose();
   state.openFiles.delete(filePath);
 
   const tab = document.querySelector(`.editor-tab[data-path="${CSS.escape(filePath)}"]`);
@@ -707,6 +748,7 @@ function showWelcomeScreen() {
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
   document.getElementById('welcome-screen').style.display = '';
   document.getElementById('monaco-editor-wrapper').style.display = 'none';
+  document.getElementById('fallback-editor-wrapper').style.display = 'none';
   if (monacoEditor) monacoEditor.setModel(null);
 }
 
@@ -727,12 +769,12 @@ function updateBreadcrumb(filePath) {
 // ── Outline ───────────────────────────────────────────────
 function updateOutline() {
   const container = document.getElementById('outline-content');
-  if (!state.activeFile || !monacoEditor) {
+  if (!state.activeFile) {
     container.innerHTML = '<div class="hint-text">Open a file to see its outline.</div>';
     return;
   }
 
-  const content = monacoEditor.getValue();
+  const content = getCurrentEditorContent();
   const items = parseJavaOutline(content);
 
   if (items.length === 0) {
@@ -750,7 +792,11 @@ function updateOutline() {
   container.querySelectorAll('.outline-item').forEach(el => {
     el.addEventListener('click', () => {
       const line = parseInt(el.dataset.line);
-      if (monacoEditor) monacoEditor.revealLineInCenter(line);
+      if (monacoEditor) {
+        monacoEditor.revealLineInCenter(line);
+      } else {
+        goToLineInFallbackEditor(line);
+      }
     });
   });
 }
@@ -776,6 +822,50 @@ function parseJavaOutline(code) {
     }
   });
   return items;
+}
+
+function getCurrentEditorContent() {
+  if (!state.activeFile) return '';
+  const info = state.openFiles.get(state.activeFile);
+  if (!info) return '';
+  if (info.model) return info.model.getValue();
+  if (fallbackEditor) return fallbackEditor.value;
+  return info.content || '';
+}
+
+function updateFallbackCursorPosition() {
+  if (!fallbackEditor) return;
+  const pos = fallbackEditor.selectionStart || 0;
+  const before = fallbackEditor.value.slice(0, pos);
+  const lines = before.split('\n');
+  const lineNumber = lines.length;
+  const column = lines[lines.length - 1].length + 1;
+  document.getElementById('status-position').textContent = `Ln ${lineNumber}, Col ${column}`;
+}
+
+function goToLineInFallbackEditor(line) {
+  if (!fallbackEditor) return;
+  const numericLine = Number(line);
+  if (!Number.isFinite(numericLine)) return;
+  const safeLine = Math.max(1, Math.floor(numericLine));
+  const lines = fallbackEditor.value.split('\n');
+  const targetLine = Math.min(safeLine, lines.length);
+  let offset = 0;
+  for (let i = 0; i < targetLine - 1; i++) offset += lines[i].length + 1;
+  fallbackEditor.focus();
+  fallbackEditor.setSelectionRange(offset, offset);
+  updateFallbackCursorPosition();
+}
+
+async function promptGotoLine() {
+  const value = await showInputPrompt('Go to line');
+  if (!value) return;
+  const line = parseInt(value, 10);
+  if (!Number.isInteger(line) || line < 1) {
+    showToast('Enter a valid line number', 'warning');
+    return;
+  }
+  goToLineInFallbackEditor(line);
 }
 
 // ── Git Panel ─────────────────────────────────────────────
@@ -1107,6 +1197,18 @@ async function insertSelectedTemplate() {
         range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
         text: content
       }]);
+      showToast('Template inserted', 'success');
+    } else if (fallbackEditor && state.activeFile) {
+      const start = fallbackEditor.selectionStart ?? fallbackEditor.value.length;
+      const end = fallbackEditor.selectionEnd ?? start;
+      fallbackEditor.setRangeText(content, start, end, 'end');
+      const info = state.openFiles.get(state.activeFile);
+      if (info) {
+        info.modified = true;
+        info.content = fallbackEditor.value;
+        updateTabModified(state.activeFile, true);
+      }
+      updateOutline();
       showToast('Template inserted', 'success');
     } else {
       // Create a new file
@@ -1612,6 +1714,7 @@ function changeEditorFontSize(delta) {
   if (delta === 0) { state.editorFontSize = 14; }
   else { state.editorFontSize = Math.max(10, Math.min(28, state.editorFontSize + delta)); }
   if (monacoEditor) monacoEditor.updateOptions({ fontSize: state.editorFontSize });
+  applyFallbackEditorSettings();
 }
 
 // ── Toast ─────────────────────────────────────────────────
@@ -1821,6 +1924,7 @@ function openAppView(name) {
   // Hide welcome & editor
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('monaco-editor-wrapper').style.display = 'none';
+  document.getElementById('fallback-editor-wrapper').style.display = 'none';
   // Hide all app views
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
   // Show target
@@ -1843,7 +1947,8 @@ function openAppView(name) {
 function closeAppView() {
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
   if (state.activeFile) {
-    document.getElementById('monaco-editor-wrapper').style.display = '';
+    document.getElementById('monaco-editor-wrapper').style.display = monacoEditor ? '' : 'none';
+    document.getElementById('fallback-editor-wrapper').style.display = monacoEditor ? 'none' : '';
   } else {
     document.getElementById('welcome-screen').style.display = '';
   }
@@ -2577,6 +2682,19 @@ function insertGeneratedCode(code) {
       range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
       text: code
     }]);
+    closeAppView();
+    showToast('Code inserted into editor', 'success');
+  } else if (fallbackEditor && state.activeFile) {
+    const start = fallbackEditor.selectionStart ?? fallbackEditor.value.length;
+    const end = fallbackEditor.selectionEnd ?? start;
+    fallbackEditor.setRangeText(code, start, end, 'end');
+    const info = state.openFiles.get(state.activeFile);
+    if (info) {
+      info.modified = true;
+      info.content = fallbackEditor.value;
+      updateTabModified(state.activeFile, true);
+    }
+    updateOutline();
     closeAppView();
     showToast('Code inserted into editor', 'success');
   } else {
