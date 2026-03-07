@@ -467,6 +467,13 @@ async function loadSettings() {
     setInputVal('setting-github-user', state.settings['git.username'] || '');
     setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
+
+    // Show token status
+    try {
+      const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
+      updateGitHubTokenStatus(hasToken);
+    } catch { /* ignore */ }
+
     applyFallbackEditorSettings();
 
     // Restore last project
@@ -475,6 +482,13 @@ async function loadSettings() {
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
+}
+
+function updateGitHubTokenStatus(saved) {
+  const el = document.getElementById('github-token-status');
+  if (!el) return;
+  el.textContent = saved ? '✓ Token saved' : '';
+  el.style.color = saved ? 'var(--green, #4caf50)' : 'var(--fg-dim)';
 }
 
 function setupSettingsPanel() {
@@ -495,7 +509,8 @@ function setupSettingsPanel() {
       statusEl.style.display = '';
       btn.textContent = 'Waiting for authorization…';
     } catch (e) {
-      showToast(`GitHub sign-in failed: ${e.message}`, 'error');
+      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
+      showToast(`GitHub sign-in failed: ${msg}`, 'error');
       btn.disabled = false;
       btn.textContent = 'Sign in with GitHub';
     }
@@ -515,6 +530,7 @@ function setupSettingsPanel() {
     const btn = document.getElementById('btn-github-device-flow');
     btn.disabled = false;
     btn.textContent = 'Sign in with GitHub';
+    updateGitHubTokenStatus(true);
     showToast('Signed in with GitHub!', 'success');
   });
 
@@ -553,6 +569,7 @@ async function saveSettings() {
   if (githubToken) {
     await window.ftcIDE.credentials.setGitHubToken(githubToken);
     document.getElementById('setting-github-token').value = '';
+    updateGitHubTokenStatus(true);
   }
 
   // Apply to Monaco

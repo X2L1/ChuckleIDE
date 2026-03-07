@@ -24,10 +24,19 @@ class GitHubAuth {
    * Returns { user_code, verification_uri, device_code, interval, expires_in }.
    */
   async startDeviceFlow() {
-    const body = await this._post('github.com', '/login/device/code', {
-      client_id: GITHUB_CLIENT_ID,
-      scope: SCOPES
-    });
+    let body;
+    try {
+      body = await this._post('github.com', '/login/device/code', {
+        client_id: GITHUB_CLIENT_ID,
+        scope: SCOPES
+      });
+    } catch (err) {
+      console.error('Device flow request failed:', err);
+      throw new Error(
+        'GitHub device sign-in is unavailable. ' +
+        'Please enter a Personal Access Token in the Token field instead.'
+      );
+    }
 
     if (!body.device_code || !body.user_code) {
       throw new Error(body.error_description || body.error || 'Failed to start device flow');
