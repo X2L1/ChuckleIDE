@@ -104,8 +104,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg-main); color: 
 /* ── Scrollbars ────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
+::-webkit-scrollbar-thumb { background: var(--fg-muted); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-dim); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ── TOP BAR ───────────────────────────────────────────── */
@@ -166,6 +166,7 @@ body.platform-linux #window-controls { display: flex; }
   align-items: center;
   gap: 2px;
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
 }
 
 .top-menu-group {
