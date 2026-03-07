@@ -43,7 +43,7 @@ class GitHubAuth {
   }
 
   /**
-   * Poll GitHub until the user completes authorisation.
+   * Poll GitHub until the user completes authorization.
    * Resolves with the access token string, or rejects on error / timeout.
    */
   pollForToken(deviceCode, interval) {

@@ -491,6 +491,7 @@ function setupSettingsPanel() {
       statusEl.style.display = '';
       btn.textContent = 'Waiting for authorization…';
     } catch (e) {
+      // Electron wraps IPC errors; strip the prefix for a cleaner toast.
       const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
       showToast(`GitHub sign-in failed: ${msg}`, 'error');
       btn.disabled = false;
@@ -523,7 +524,7 @@ function setupSettingsPanel() {
     try {
       const { signedIn, user } = await window.ftcIDE.auth.getUser();
       updateGitHubAuthUI(signedIn, user);
-    } catch { /* ignore */ }
+    } catch (e) { console.error('Failed to refresh GitHub auth UI:', e); }
   });
 
   window.ftcIDE.on('auth:deviceFlowError', (msg) => {
@@ -544,7 +545,7 @@ async function refreshGitHubAuthUI() {
   try {
     const { signedIn, user } = await window.ftcIDE.auth.getUser();
     updateGitHubAuthUI(signedIn, user);
-  } catch { /* ignore */ }
+  } catch (e) { console.error('Failed to load GitHub auth state:', e); }
 }
 
 function updateGitHubAuthUI(signedIn, user) {
