@@ -63,7 +63,7 @@ class GitManager {
         ]);
       } catch (secondError) {
         const reason = secondError?.message || `Authentication failed (${secondError?.name || 'Error'})`;
-        throw new Error(`Git authentication failed: ${reason}`);
+        throw new Error(`Git authentication failed with x-access-token: ${reason}`);
       }
     }
   }
