@@ -127,7 +127,7 @@ class GitHubAuth {
         res.on('end', () => {
           if (res.statusCode >= 400) {
             let msg = `GitHub returned HTTP ${res.statusCode}`;
-            try { const j = JSON.parse(body); msg = j.message || j.error || msg; } catch {}
+            try { const j = JSON.parse(body); msg = j.message || j.error || msg; } catch { /* use default msg */ }
             return reject(new Error(msg));
           }
           try {
