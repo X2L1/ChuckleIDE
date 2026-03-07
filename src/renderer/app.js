@@ -1330,6 +1330,7 @@ function bindWelcomeLinks() {
 function bindMenuActions() {
   document.getElementById('btn-build').addEventListener('click', () => triggerBuild('assemble'));
   document.getElementById('btn-deploy').addEventListener('click', () => triggerBuild('install'));
+  document.getElementById('btn-check-updates').addEventListener('click', () => manualCheckForUpdates());
   document.getElementById('btn-split-editor').addEventListener('click', () => {
     showToast('Split editor view is not yet available', 'info');
   });
