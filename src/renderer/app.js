@@ -378,7 +378,9 @@ async function findTeamCodePath(projectPath) {
     try {
       const exists = await window.ftcIDE.fs.exists(p);
       if (exists) return p;
-    } catch (e) {}
+    } catch (e) {
+      appendOutput(`TeamCode detection: ${e.message}`, 'warning');
+    }
   }
   return null;
 }
@@ -2317,6 +2319,15 @@ function initPathVisualizer() {
 // ── FTC Dashboard View ────────────────────────────────────
 let dashInitialized = false;
 
+function isValidEmbedUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
+
 function initDashboardView() {
   if (dashInitialized) return;
   dashInitialized = true;
@@ -2325,6 +2336,7 @@ function initDashboardView() {
   document.getElementById('dash-connect').addEventListener('click', () => {
     const url = document.getElementById('dash-url').value.trim();
     if (!url) { showToast('Enter a dashboard URL', 'warning'); return; }
+    if (!isValidEmbedUrl(url)) { showToast('Enter a valid HTTP/HTTPS URL', 'warning'); return; }
     const iframe = document.getElementById('dash-iframe');
     const placeholder = document.getElementById('dash-placeholder');
     iframe.src = url;
@@ -2345,6 +2357,7 @@ function initPanelsView() {
   document.getElementById('panels-connect').addEventListener('click', () => {
     const url = document.getElementById('panels-url').value.trim();
     if (!url) { showToast('Enter a Panels URL', 'warning'); return; }
+    if (!isValidEmbedUrl(url)) { showToast('Enter a valid HTTP/HTTPS URL', 'warning'); return; }
     const iframe = document.getElementById('panels-iframe');
     const placeholder = document.getElementById('panels-placeholder');
     iframe.src = url;
