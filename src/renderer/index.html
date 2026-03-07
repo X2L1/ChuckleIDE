@@ -286,11 +286,18 @@
             <input type="text" id="setting-github-email" placeholder="email@example.com" class="text-input" />
           </div>
           <div class="setting-row">
-            <label>Token</label>
-            <input type="password" id="setting-github-token" placeholder="ghp_..." class="text-input" />
+            <span id="github-token-status" style="font-size:11px; color:var(--fg-dim)"></span>
+          </div>
+          <div class="setting-row" style="justify-content:center">
+            <button class="btn-primary small" id="btn-import-external-token">Use token from system</button>
+          </div>
+          <div id="external-token-status" style="font-size:11px; color:var(--fg-dim); text-align:center; padding:2px 0"></div>
+          <div class="setting-row" style="justify-content:center; padding-top:4px">
+            <span style="font-size:11px; color:var(--fg-dim)">or enter a token manually</span>
           </div>
           <div class="setting-row">
-            <span id="github-token-status" style="font-size:11px; color:var(--fg-dim)"></span>
+            <label>Token</label>
+            <input type="password" id="setting-github-token" placeholder="ghp_..." class="text-input" />
           </div>
           <div class="setting-row" style="justify-content:center; padding-top:6px">
             <span style="font-size:11px; color:var(--fg-dim)">or</span>
