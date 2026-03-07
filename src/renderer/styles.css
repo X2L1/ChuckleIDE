@@ -653,21 +653,49 @@ body.bottom-panel-hidden #main-layout {
 #fallback-editor-wrapper {
   width: 100%;
   height: 100%;
+  position: relative;
 }
 
+#fallback-highlight,
 #fallback-editor {
   width: 100%;
   height: 100%;
-  resize: none;
-  border: none;
-  outline: none;
-  background: var(--bg-editor);
-  color: var(--fg-main);
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
   line-height: 1.45;
   padding: 10px 12px;
   tab-size: 4;
   white-space: pre;
+  box-sizing: border-box;
+}
+
+#fallback-highlight {
+  margin: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-editor);
+  color: var(--fg-main);
+  pointer-events: none;
+}
+
+#fallback-editor {
+  position: absolute;
+  inset: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--fg-main);
+  overflow: auto;
+}
+
+#fallback-highlight .token-keyword { color: #c586c0; }
+#fallback-highlight .token-type { color: #4ec9b0; }
+#fallback-highlight .token-ftc { color: #569cd6; }
+#fallback-highlight .token-annotation { color: #dcdcaa; }
+#fallback-highlight .token-comment { color: #6a9955; }
+#fallback-highlight .token-string { color: #ce9178; }
 }
 
 /* ── WELCOME SCREEN ─────────────────────────────────────── */
