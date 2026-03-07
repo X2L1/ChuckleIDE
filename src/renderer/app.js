@@ -665,7 +665,7 @@ async function refreshFileTree(dirPath, containerEl, depth) {
     const sorted = entries.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
       return a.name.localeCompare(b.name);
-    }).filter(e => !['node_modules', '.git', '.gradle', 'build', 'dist'].includes(e.name) || depth === 0);
+    }).filter(e => e.name !== '.gitkeep' && (!['node_modules', '.git', '.gradle', 'build', 'dist'].includes(e.name) || depth === 0));
 
     for (const entry of sorted) {
       const item = document.createElement('div');
