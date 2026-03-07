@@ -1197,6 +1197,9 @@ function toggleBottomPanel() {
   const panel = document.getElementById('bottom-panel');
   const isHidden = panel.style.display === 'none';
   panel.style.display = isHidden ? '' : 'none';
+  document.body.classList.toggle('bottom-panel-hidden', !isHidden);
+  const toggleBtn = document.getElementById('btn-toggle-bottom');
+  if (toggleBtn) toggleBtn.textContent = isHidden ? '▼' : '▲';
   if (monacoEditor) setTimeout(() => monacoEditor.layout(), 50);
 }
 
@@ -1417,6 +1420,27 @@ function bindMenuActions() {
   document.getElementById('btn-build').addEventListener('click', () => triggerBuild('assemble'));
   document.getElementById('btn-deploy').addEventListener('click', () => triggerBuild('install'));
   document.getElementById('btn-check-updates').addEventListener('click', () => manualCheckForUpdates());
+  document.querySelectorAll('.top-menu-item[data-menu-action]').forEach((item) => {
+    item.addEventListener('click', () => {
+      handleMenuAction(item.dataset.menuAction);
+      const parentMenu = item.closest('.top-menu-group');
+      if (parentMenu) parentMenu.open = false;
+    });
+  });
+  document.querySelectorAll('.top-menu-group > summary').forEach((summary) => {
+    summary.addEventListener('click', () => {
+      const current = summary.parentElement;
+      document.querySelectorAll('.top-menu-group').forEach((group) => {
+        if (group !== current) group.open = false;
+      });
+    });
+  });
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('#top-menu-bar')) return;
+    document.querySelectorAll('.top-menu-group').forEach((group) => {
+      group.open = false;
+    });
+  });
   document.getElementById('btn-split-editor').addEventListener('click', () => {
     showToast('Split editor view is not yet available', 'info');
   });

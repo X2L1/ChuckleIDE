@@ -19,6 +19,41 @@
     </svg>
     <span>ChuckleIDE</span>
   </div>
+  <div id="top-menu-bar">
+    <details class="top-menu-group">
+      <summary>File</summary>
+      <div class="top-menu-dropdown">
+        <button class="top-menu-item" data-menu-action="new-project">New Project</button>
+        <button class="top-menu-item" data-menu-action="new-file">New File</button>
+        <button class="top-menu-item" data-menu-action="save-file">Save</button>
+        <button class="top-menu-item" data-menu-action="open-settings">Settings</button>
+      </div>
+    </details>
+    <details class="top-menu-group">
+      <summary>Edit</summary>
+      <div class="top-menu-dropdown">
+        <button class="top-menu-item" data-menu-action="find">Find</button>
+        <button class="top-menu-item" data-menu-action="replace">Replace</button>
+        <button class="top-menu-item" data-menu-action="goto-line">Go to Line</button>
+      </div>
+    </details>
+    <details class="top-menu-group">
+      <summary>View</summary>
+      <div class="top-menu-dropdown">
+        <button class="top-menu-item" data-menu-action="toggle-explorer">Toggle Explorer</button>
+        <button class="top-menu-item" data-menu-action="toggle-terminal">Toggle Terminal</button>
+      </div>
+    </details>
+    <details class="top-menu-group">
+      <summary>Git</summary>
+      <div class="top-menu-dropdown">
+        <button class="top-menu-item" data-menu-action="git-status">Show Status</button>
+        <button class="top-menu-item" data-menu-action="git-commit">Commit</button>
+        <button class="top-menu-item" data-menu-action="git-pull">Pull</button>
+        <button class="top-menu-item" data-menu-action="git-push">Push</button>
+      </div>
+    </details>
+  </div>
   <div id="project-title" class="project-title"></div>
   <div id="top-actions">
     <button class="top-btn" id="btn-build" title="Build (F6)">
