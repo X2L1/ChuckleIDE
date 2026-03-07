@@ -11,7 +11,6 @@ const state = {
   activeFile: null,
   activeTab: null,           // current tab id (filePath or 'app:<name>')
   settings: {},
-  gitStatus: null,
   devices: [],
   editorFontSize: 14,
   bottomHeight: 200,
@@ -91,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindMenuActions();
   bindSidebarNav();
   bindFileExplorer();
-  bindGitPanel();
   bindDevicePanel();
   bindBottomPanel();
   bindResizeHandles();
@@ -100,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindKeyboardShortcuts();
   bindWindowControls();
   setupTemplatePanel();
-  setupCopilotPanel();
   setupSettingsPanel();
   bindHomeScreen();
 
@@ -464,19 +461,7 @@ async function loadSettings() {
     setInputVal('setting-java-home', state.settings['build.javaHome'] || '');
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
-    setInputVal('setting-github-user', state.settings['git.username'] || '');
-    setInputVal('setting-github-email', state.settings['git.email'] || '');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
-
-    // Show token status
-    try {
-      const hasToken = await window.ftcIDE.credentials.hasGitHubToken();
-      if (hasToken) {
-        updateGitHubTokenStatus(true);
-      } else {
-        updateGitHubTokenStatus(false);
-      }
-    } catch { /* ignore */ }
 
     applyFallbackEditorSettings();
 
@@ -488,112 +473,8 @@ async function loadSettings() {
   }
 }
 
-function updateGitHubTokenStatus(saved, source) {
-  const el = document.getElementById('github-token-status');
-  if (!el) return;
-  if (saved && source) {
-    el.textContent = `✓ Using token from ${source}`;
-    el.style.color = 'var(--green, #4caf50)';
-  } else if (saved) {
-    el.textContent = '✓ Token saved';
-    el.style.color = 'var(--green, #4caf50)';
-  } else {
-    el.textContent = '';
-    el.style.color = 'var(--fg-dim)';
-  }
-}
-
 function setupSettingsPanel() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-
-  // ── External token detection ────────────────────────────────────────────────
-  document.getElementById('btn-import-external-token').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-import-external-token');
-    const extStatus = document.getElementById('external-token-status');
-    btn.disabled = true;
-    btn.textContent = 'Detecting…';
-    extStatus.textContent = '';
-    try {
-      const result = await window.ftcIDE.credentials.importExternalToken();
-      if (result.imported) {
-        updateGitHubTokenStatus(true, result.source);
-        extStatus.textContent = `✓ Imported from ${result.source}`;
-        extStatus.style.color = 'var(--green, #4caf50)';
-        showToast(`Token imported from ${result.source}`, 'success');
-      } else {
-        extStatus.textContent = 'No external token found. Run "gh auth login" in a terminal, or set GH_TOKEN / GITHUB_TOKEN, then try again.';
-        extStatus.style.color = 'var(--fg-dim)';
-        showToast('No external token found', 'warning');
-      }
-    } catch (e) {
-      extStatus.textContent = `Detection failed: ${e.message}`;
-      extStatus.style.color = 'var(--red, #f44336)';
-    }
-    btn.disabled = false;
-    btn.textContent = 'Use token from system';
-  });
-
-  // Probe for external token on panel load
-  (async () => {
-    try {
-      const ext = await window.ftcIDE.credentials.detectExternalToken();
-      const extStatus = document.getElementById('external-token-status');
-      if (ext) {
-        extStatus.textContent = `Found: ${ext.source}`;
-        extStatus.style.color = 'var(--fg-dim)';
-      }
-    } catch { /* ignore */ }
-  })();
-
-  // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
-  document.getElementById('btn-github-device-flow').addEventListener('click', async () => {
-    const statusEl = document.getElementById('device-flow-status');
-    const codeEl   = document.getElementById('device-flow-code');
-    const btn      = document.getElementById('btn-github-device-flow');
-
-    try {
-      btn.disabled = true;
-      btn.textContent = 'Starting…';
-      const { userCode, verificationUri } = await window.ftcIDE.auth.startDeviceFlow();
-
-      codeEl.textContent = userCode;
-      statusEl.style.display = '';
-      btn.textContent = 'Waiting for authorization…';
-    } catch (e) {
-      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Sign in with GitHub';
-    }
-  });
-
-  document.getElementById('btn-cancel-device-flow').addEventListener('click', async () => {
-    await window.ftcIDE.auth.cancelDeviceFlow();
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    showToast('GitHub sign-in cancelled', 'info');
-  });
-
-  window.ftcIDE.on('auth:deviceFlowSuccess', () => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    updateGitHubTokenStatus(true);
-    showToast('Signed in with GitHub!', 'success');
-  });
-
-  window.ftcIDE.on('auth:deviceFlowError', (msg) => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-device-flow');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    if (msg !== 'cancelled') {
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
-    }
-  });
 }
 
 async function saveSettings() {
@@ -605,8 +486,6 @@ async function saveSettings() {
     ['build.javaHome', document.getElementById('setting-java-home').value],
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
-    ['git.username', document.getElementById('setting-github-user').value],
-    ['git.email', document.getElementById('setting-github-email').value],
     ['adb.path', document.getElementById('setting-adb-path').value],
     ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
@@ -614,13 +493,6 @@ async function saveSettings() {
   for (const [k, v] of kvPairs) {
     await window.ftcIDE.settings.set(k, v);
     state.settings[k] = v;
-  }
-
-  const githubToken = document.getElementById('setting-github-token').value.trim();
-  if (githubToken) {
-    await window.ftcIDE.credentials.setGitHubToken(githubToken);
-    document.getElementById('setting-github-token').value = '';
-    updateGitHubTokenStatus(true);
   }
 
   // Apply to Monaco
@@ -662,12 +534,6 @@ function handleMenuAction(action) {
     'disconnect-hub': () => adbDisconnectAll(),
     'insert-template': () => showModal('template'),
     'new-from-template': () => showModal('template'),
-    'git-init': () => gitInit(),
-    'git-clone': () => showModal('clone'),
-    'git-commit': () => showModal('commit'),
-    'git-pull': () => gitPull(),
-    'git-push': () => gitPush(),
-    'git-status': () => { switchPanel('git'); refreshGitStatus(); },
     'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info'),
     'check-updates': () => manualCheckForUpdates()
   };
@@ -738,7 +604,6 @@ async function openProject(projectPath) {
     state.showingDeps = false;
 
     await refreshFileTree();
-    await refreshGitStatus();
 
     // Show Dependencies button if project has TeamCode
     const depsSection = document.getElementById('deps-section');
@@ -1004,6 +869,7 @@ const appTabMeta = {
   'enum-manager':      { icon: '🏷️', label: 'Global Enums' },
   'object-manager':    { icon: '📦', label: 'Global Objects' },
   'util-builder':      { icon: '🛠️', label: 'Utilities' }
+  'vision-builder':    { icon: '👁️', label: 'Vision Builder' }
 };
 
 function isAppTab(tabId) {
@@ -1282,166 +1148,6 @@ async function promptGotoLine() {
     return;
   }
   goToLineInFallbackEditor(line);
-}
-
-// ── Git Panel ─────────────────────────────────────────────
-function bindGitPanel() {
-  document.getElementById('btn-git-refresh').addEventListener('click', refreshGitStatus);
-  document.getElementById('btn-git-commit-shortcut').addEventListener('click', () => showModal('commit'));
-  document.getElementById('btn-git-stage-all').addEventListener('click', gitStageAll);
-  document.getElementById('btn-git-commit').addEventListener('click', () => {
-    const msg = document.getElementById('git-commit-message').value;
-    if (msg) gitCommit(msg);
-    else showModal('commit');
-  });
-  document.getElementById('btn-git-pull').addEventListener('click', gitPull);
-  document.getElementById('btn-git-push').addEventListener('click', gitPush);
-  document.getElementById('btn-do-commit').addEventListener('click', async () => {
-    const msg = document.getElementById('modal-commit-message').value;
-    if (!msg) { showToast('Please enter a commit message', 'warning'); return; }
-    await gitCommit(msg);
-    closeModal('commit');
-  });
-}
-
-async function refreshGitStatus() {
-  if (!state.projectPath) return;
-  try {
-    const status = await window.ftcIDE.git.status(state.projectPath);
-    state.gitStatus = status;
-    renderGitChanges(status);
-    renderGitBranches();
-    renderGitLog();
-    document.getElementById('branch-name').textContent = status.current || 'unknown';
-  } catch (e) {
-    document.getElementById('branch-name').textContent = 'No repo';
-  }
-}
-
-function renderGitChanges(status) {
-  const list = document.getElementById('git-changes-list');
-  if (!status || (!status.modified.length && !status.not_added.length && !status.deleted.length)) {
-    list.innerHTML = '<div class="git-change-item"><span style="color:var(--fg-dim);font-size:11px">No changes</span></div>';
-    return;
-  }
-
-  const items = [
-    ...status.modified.map(f => ({ file: f, type: 'M' })),
-    ...status.not_added.map(f => ({ file: f, type: 'A' })),
-    ...status.deleted.map(f => ({ file: f, type: 'D' })),
-    ...((status.renamed || []).map(f => ({ file: f.to, type: 'R' })))
-  ];
-
-  list.innerHTML = items.map(({ file, type }) => `
-    <div class="git-change-item" title="${file}">
-      <span class="change-letter ${type}">${type}</span>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.split('/').pop()}</span>
-    </div>
-  `).join('');
-}
-
-async function renderGitBranches() {
-  if (!state.projectPath) return;
-  try {
-    const branches = await window.ftcIDE.git.branches(state.projectPath);
-    const list = document.getElementById('git-branches-list');
-    const all = branches.all || [];
-    list.innerHTML = all.map(b => `
-      <div class="git-branch-item ${b === branches.current ? 'current' : ''}">
-        <span class="branch-icon">⎇</span> ${b}
-      </div>
-    `).join('');
-    list.querySelectorAll('.git-branch-item').forEach((el, i) => {
-      el.addEventListener('click', () => gitCheckout(all[i]));
-    });
-  } catch (e) {}
-}
-
-async function renderGitLog() {
-  if (!state.projectPath) return;
-  try {
-    const log = await window.ftcIDE.git.log(state.projectPath, 10);
-    const list = document.getElementById('git-log-list');
-    if (!log || !log.all) return;
-    list.innerHTML = log.all.slice(0, 8).map(c => `
-      <div class="git-log-item" title="${c.message}">
-        <span class="git-log-hash">${c.hash.substring(0, 7)}</span>
-        <span class="git-log-msg">${c.message.substring(0, 40)}</span>
-        <div class="git-log-author">${c.author_name} · ${new Date(c.date).toLocaleDateString()}</div>
-      </div>
-    `).join('');
-  } catch (e) {}
-}
-
-async function gitStageAll() {
-  if (!state.projectPath) return;
-  try {
-    await window.ftcIDE.git.add(state.projectPath, ['.']);
-    showToast('All changes staged', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Stage failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitCommit(message) {
-  if (!state.projectPath || !message) return;
-  try {
-    await window.ftcIDE.git.add(state.projectPath, ['.']);
-    await window.ftcIDE.git.commit(state.projectPath, message);
-    document.getElementById('git-commit-message').value = '';
-    showToast('Committed successfully', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Commit failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitPull() {
-  if (!state.projectPath) return;
-  try {
-    showToast('Pulling...', 'info');
-    const token = await window.ftcIDE.credentials.getGitHubToken();
-    await window.ftcIDE.git.pull(state.projectPath, 'origin', '', token);
-    showToast('Pull complete', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Pull failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitPush() {
-  if (!state.projectPath) return;
-  try {
-    showToast('Pushing...', 'info');
-    const token = await window.ftcIDE.credentials.getGitHubToken();
-    await window.ftcIDE.git.push(state.projectPath, 'origin', '', token);
-    showToast('Push complete', 'success');
-  } catch (e) {
-    showToast(`Push failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitInit() {
-  if (!state.projectPath) { showToast('Open a project first', 'warning'); return; }
-  try {
-    await window.ftcIDE.git.init(state.projectPath);
-    showToast('Git repository initialized', 'success');
-    refreshGitStatus();
-  } catch (e) {
-    showToast(`Git init failed: ${e.message}`, 'error');
-  }
-}
-
-async function gitCheckout(branch) {
-  if (!state.projectPath) return;
-  try {
-    await window.ftcIDE.git.checkout(state.projectPath, branch);
-    refreshGitStatus();
-    showToast(`Switched to ${branch}`, 'success');
-  } catch (e) {
-    showToast(`Checkout failed: ${e.message}`, 'error');
-  }
 }
 
 // ── Device Panel ──────────────────────────────────────────
@@ -1948,25 +1654,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-// ── Copilot ───────────────────────────────────────────────
-function setupCopilotPanel() {
-  document.getElementById('btn-copilot-auth').addEventListener('click', async () => {
-    const token = document.getElementById('copilot-token-input').value.trim();
-    if (!token) { showToast('Enter a GitHub token', 'warning'); return; }
-    try {
-      await window.ftcIDE.copilot.setToken(token);
-      const ok = await window.ftcIDE.copilot.isAuthenticated();
-      const msg = document.getElementById('copilot-status-msg');
-      msg.className = `status-msg ${ok ? 'success' : 'error'}`;
-      msg.textContent = ok ? '✓ Authenticated with GitHub Copilot' : '✗ Authentication failed';
-      if (ok) showToast('Copilot authenticated!', 'success');
-    } catch (e) {
-      document.getElementById('copilot-status-msg').className = 'status-msg error';
-      document.getElementById('copilot-status-msg').textContent = `Error: ${e.message}`;
-    }
-  });
-}
-
 // ── Bottom Panel ──────────────────────────────────────────
 function bindBottomPanel() {
   document.querySelectorAll('.bottom-tab').forEach(tab => {
@@ -2039,13 +1726,6 @@ function bindModals() {
     if (!r.canceled) document.getElementById('new-project-path').value = r.filePaths[0];
   });
   document.getElementById('btn-create-project').addEventListener('click', createNewProject);
-
-  // Clone
-  document.getElementById('btn-clone-browse').addEventListener('click', async () => {
-    const r = await window.ftcIDE.fs.openDialog({ properties: ['openDirectory'] });
-    if (!r.canceled) document.getElementById('clone-dest').value = r.filePaths[0];
-  });
-  document.getElementById('btn-do-clone').addEventListener('click', doClone);
 }
 
 function showModal(name) {
@@ -2083,31 +1763,6 @@ async function createNewProject() {
     showToast(`Project "${name}" created!`, 'success');
   } catch (e) {
     showToast(`Failed: ${e.message}`, 'error');
-  }
-}
-
-async function doClone() {
-  const url = document.getElementById('clone-url').value.trim();
-  const dest = document.getElementById('clone-dest').value.trim();
-  let token = document.getElementById('clone-token').value.trim();
-
-  if (!url || !dest) { showToast('Enter URL and destination', 'warning'); return; }
-
-  // Fall back to stored token when none entered in clone dialog
-  if (!token) {
-    token = await window.ftcIDE.credentials.getGitHubToken();
-  }
-
-  closeModal('clone');
-  showToast('Cloning...', 'info');
-
-  try {
-    await window.ftcIDE.git.clone(url, dest, token);
-    const repoName = url.split('/').pop().replace('.git', '');
-    await openProject(`${dest}/${repoName}`);
-    showToast('Clone complete!', 'success');
-  } catch (e) {
-    showToast(`Clone failed: ${e.message}`, 'error');
   }
 }
 
@@ -2209,11 +1864,10 @@ function bindKeyboardShortcuts() {
 
 // ── Welcome Links ─────────────────────────────────────────
 function bindWelcomeLinks() {
-  const ids = ['wl-new-project','wl-open-project','wl-clone','wl-template-auto','wl-template-teleop','wl-template-pedro','wl-ftc-docs','wl-pedro-docs','wl-nextftc-docs'];
+  const ids = ['wl-new-project','wl-open-project','wl-template-auto','wl-template-teleop','wl-template-pedro','wl-ftc-docs','wl-pedro-docs','wl-nextftc-docs'];
   const handlers = {
     'wl-new-project': (e) => { e.preventDefault(); showModal('new-project'); },
     'wl-open-project': (e) => { e.preventDefault(); browseForProject(); },
-    'wl-clone': (e) => { e.preventDefault(); showModal('clone'); },
     'wl-template-auto': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-autonomous'; showModal('template'); },
     'wl-template-teleop': async (e) => { e.preventDefault(); selectedTemplateId = 'basic-teleop'; showModal('template'); },
     'wl-template-pedro': async (e) => { e.preventDefault(); selectedTemplateId = 'pedro-autonomous'; showModal('template'); },
@@ -2601,7 +2255,6 @@ function bindHomeScreen() {
     'app-template-gallery':  () => { switchPanel('templates'); showModal('template'); },
     'app-open-editor':       () => browseForProject(),
     'app-device-manager':    () => switchPanel('devices'),
-    'app-git-manager':       () => switchPanel('git'),
     'app-new-project':       () => showModal('new-project'),
     'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
     'app-pedro-constants':   () => openAppView('pedro-constants'),
@@ -2610,6 +2263,7 @@ function bindHomeScreen() {
     'app-enum-manager':      () => openAppView('enum-manager'),
     'app-object-manager':    () => openAppView('object-manager'),
     'app-util-builder':      () => openAppView('util-builder'),
+    'app-vision-builder':    () => openAppView('vision-builder'),
     'home-open-project':     () => browseForProject(),
     'home-clone-repo':       () => showModal('clone')
   };
@@ -2644,6 +2298,7 @@ function initAppIfNeeded(name) {
   if (name === 'enum-manager') initEnumManager();
   if (name === 'object-manager') initObjectManager();
   if (name === 'util-builder') initUtilBuilder();
+  if (name === 'vision-builder') initVisionBuilder();
 }
 
 function closeAppView() {
@@ -3273,7 +2928,8 @@ function generateOpModeCode() {
     code += 'import com.pedropathing.pathgen.BezierCurve;\n';
   }
   code += 'import com.pedropathing.pathgen.Path;\n';
-  code += 'import com.pedropathing.pathgen.Point;\n\n';
+  code += 'import com.pedropathing.pathgen.Point;\n';
+  code += 'import com.pedropathing.util.Constants;\n\n';
   for (const sub of subsystems) {
     code += `import org.firstinspires.ftc.teamcode.subsystems.${sub};\n`;
   }
@@ -3294,6 +2950,7 @@ function generateOpModeCode() {
   // runOpMode
   code += '    @Override\n';
   code += '    public void runOpMode() {\n';
+  code += `        Constants.setConstants(FConstants.class, LConstants.class);\n`;
   code += `        follower = new Follower(hardwareMap);\n`;
   code += `        follower.setStartingPose(new Pose(${startX}, ${startY}, Math.toRadians(${startHeading})));\n\n`;
 
@@ -3548,9 +3205,10 @@ function initPedroConstantsManager() {
   });
   document.getElementById('pc-refresh').addEventListener('click', updatePCPreview);
 
-  // Bind all inputs to update preview
-  document.getElementById('pc-form').querySelectorAll('input').forEach(input => {
-    input.addEventListener('input', updatePCPreview);
+  // Bind all inputs and selects to update preview
+  document.getElementById('pc-form').querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', updatePCPreview);
+    el.addEventListener('change', updatePCPreview);
   });
 
   updatePCPreview();
@@ -3563,11 +3221,13 @@ function updatePCPreview() {
 
 function generatePedroConstantsCode() {
   const v = (id) => document.getElementById(id).value || '0';
+  const checked = (id) => document.getElementById(id).checked;
 
   let code = '// Generated by ChuckleIDE Pedro Constants Manager\n';
   code += 'package org.firstinspires.ftc.teamcode;\n\n';
-  code += 'import com.pedropathing.localization.constants.ThreeWheelConstants;\n';
-  code += 'import com.pedropathing.follower.FollowerConstants;\n\n';
+  code += 'import com.pedropathing.localization.constants.PinpointConstants;\n';
+  code += 'import com.pedropathing.follower.FollowerConstants;\n';
+  code += 'import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;\n\n';
 
   // FConstants
   code += '/**\n * PedroPathing follower constants.\n * Tune these values using the PedroPathing tuning OpModes.\n */\n';
@@ -3580,21 +3240,54 @@ function generatePedroConstantsCode() {
   code += `        FollowerConstants.translationalPIDFCoefficients.setCoefficients(${v('pc-transP')}, ${v('pc-transI')}, ${v('pc-transD')}, ${v('pc-transF')});\n`;
   code += `        FollowerConstants.headingPIDFCoefficients.setCoefficients(${v('pc-headP')}, ${v('pc-headI')}, ${v('pc-headD')}, ${v('pc-headF')});\n`;
   code += `        FollowerConstants.drivePIDFCoefficients.setCoefficients(${v('pc-driveP')}, ${v('pc-driveI')}, ${v('pc-driveD')}, ${v('pc-driveF')});\n`;
+
+  // Secondary Translational PIDF
+  if (checked('pc-useSecTrans')) {
+    code += '\n        FollowerConstants.useSecondaryTranslationalPID = true;\n';
+    code += `        FollowerConstants.secondaryTranslationalPIDFCoefficients.setCoefficients(${v('pc-secTransP')}, ${v('pc-secTransI')}, ${v('pc-secTransD')}, ${v('pc-secTransF')});\n`;
+    code += `        FollowerConstants.secondaryTranslationalPIDFSwitch = ${v('pc-secTransSwitch')};\n`;
+  }
+  // Secondary Heading PIDF
+  if (checked('pc-useSecHead')) {
+    code += '\n        FollowerConstants.useSecondaryHeadingPID = true;\n';
+    code += `        FollowerConstants.secondaryHeadingPIDFCoefficients.setCoefficients(${v('pc-secHeadP')}, ${v('pc-secHeadI')}, ${v('pc-secHeadD')}, ${v('pc-secHeadF')});\n`;
+    code += `        FollowerConstants.secondaryHeadingPIDFSwitch = Math.toRadians(${v('pc-secHeadSwitch')});\n`;
+  }
+  // Secondary Drive PIDF
+  if (checked('pc-useSecDrive')) {
+    code += '\n        FollowerConstants.useSecondaryDrivePID = true;\n';
+    code += `        FollowerConstants.secondaryDrivePIDFCoefficients.setCoefficients(${v('pc-secDriveP')}, ${v('pc-secDriveI')}, ${v('pc-secDriveD')}, ${v('pc-secDriveF')});\n`;
+    code += `        FollowerConstants.secondaryDrivePIDFSwitch = ${v('pc-secDriveSwitch')};\n`;
+  }
+
   code += '    }\n';
   code += '}\n\n';
 
-  // LConstants
-  const ticksPerRev = v('pc-ticksPerRev');
-  const wheelRadius = v('pc-wheelRadius');
-  code += '/**\n * PedroPathing localization constants for three dead-wheel odometry.\n */\n';
+  // LConstants – Pinpoint localizer
+  const hwName = document.getElementById('pc-ppHwName').value || 'pinpoint';
+  const encoderRes = document.getElementById('pc-ppEncoderRes').value;
+  const useCustomRes = encoderRes === 'custom';
+  code += '/**\n * PedroPathing localization constants for GoBilda Pinpoint.\n */\n';
   code += 'public class LConstants {\n';
   code += '    static {\n';
-  code += `        ThreeWheelConstants.forwardTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
-  code += `        ThreeWheelConstants.strafeTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
-  code += `        ThreeWheelConstants.turnTicksToInches = ${ticksPerRev} / (2 * Math.PI * ${wheelRadius});\n`;
-  code += `        ThreeWheelConstants.leftY = ${v('pc-leftY')};\n`;
-  code += `        ThreeWheelConstants.rightY = ${v('pc-rightY')};\n`;
-  code += `        ThreeWheelConstants.strafeX = ${v('pc-strafeX')};\n`;
+  code += `        PinpointConstants.hardwareMapName = "${hwName}";\n`;
+  if (useCustomRes) {
+    code += '        PinpointConstants.useCustomEncoderResolution = true;\n';
+    code += `        PinpointConstants.customEncoderResolution = ${v('pc-ppCustomRes')};\n`;
+  } else {
+    code += '        PinpointConstants.useCustomEncoderResolution = false;\n';
+    code += `        PinpointConstants.encoderResolution = GoBildaPinpointDriver.GoBildaOdometryPods.${encoderRes};\n`;
+  }
+  code += `        PinpointConstants.forwardEncoderDirection = GoBildaPinpointDriver.EncoderDirection.${v('pc-ppFwdDir')};\n`;
+  code += `        PinpointConstants.strafeEncoderDirection = GoBildaPinpointDriver.EncoderDirection.${v('pc-ppStrDir')};\n`;
+  if (checked('pc-ppUseYawScalar')) {
+    code += '        PinpointConstants.useYawScalar = true;\n';
+    code += `        PinpointConstants.yawScalar = ${v('pc-ppYawScalar')};\n`;
+  } else {
+    code += '        PinpointConstants.useYawScalar = false;\n';
+  }
+  code += `        PinpointConstants.xOffset = ${v('pc-ppXOffset')};\n`;
+  code += `        PinpointConstants.yOffset = ${v('pc-ppYOffset')};\n`;
   code += '    }\n';
   code += '}\n';
 
@@ -3619,8 +3312,9 @@ function initLUTManager() {
     navigator.clipboard.writeText(generateLUTCode());
     showToast('LUT code copied', 'success');
   });
-  document.getElementById('lut-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateLUTCode());
+  document.getElementById('lut-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('lut-class-name', 'MyLookupTable');
+    await insertGeneratedClass(generateLUTCode(), 'global', className, 'GlobalLut');
   });
   document.getElementById('lut-refresh').addEventListener('click', updateLUTPreview);
   document.getElementById('lut-class-name').addEventListener('input', updateLUTPreview);
@@ -3675,7 +3369,7 @@ function generateLUTCode() {
   const boxedVal = valueType === 'int' ? 'Integer' : valueType === 'double' ? 'Double' : 'String';
 
   let code = '// Generated by ChuckleIDE LUT Manager\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.global;\n\n';
   code += 'import java.util.HashMap;\n';
   code += 'import java.util.Map;\n\n';
   code += `public class ${className} {\n\n`;
@@ -3721,8 +3415,9 @@ function initInterpLUTManager() {
     navigator.clipboard.writeText(generateILUTCode());
     showToast('InterpLUT code copied', 'success');
   });
-  document.getElementById('ilut-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateILUTCode());
+  document.getElementById('ilut-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('ilut-class-name', 'MyInterpLUT');
+    await insertGeneratedClass(generateILUTCode(), 'global', className, 'GlobalInterpLut');
   });
   document.getElementById('ilut-refresh').addEventListener('click', updateILUTPreview);
   document.getElementById('ilut-class-name').addEventListener('input', updateILUTPreview);
@@ -3772,7 +3467,7 @@ function generateILUTCode() {
   const desc = document.getElementById('ilut-description').value || '';
 
   let code = '// Generated by ChuckleIDE Interpolated LUT Manager\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.global;\n\n';
   code += 'import java.util.TreeMap;\n';
   code += 'import java.util.Map;\n\n';
   if (desc) code += `/** ${desc} */\n`;
@@ -3823,8 +3518,9 @@ function initEnumManager() {
     navigator.clipboard.writeText(generateEnumCode());
     showToast('Enum code copied', 'success');
   });
-  document.getElementById('enum-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateEnumCode());
+  document.getElementById('enum-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('enum-class-name', 'RobotState');
+    await insertGeneratedClass(generateEnumCode(), 'global', className, 'GlobalEnum');
   });
   document.getElementById('enum-refresh').addEventListener('click', updateEnumPreview);
   document.getElementById('enum-class-name').addEventListener('input', updateEnumPreview);
@@ -3881,7 +3577,7 @@ function generateEnumCode() {
   const hasValue = document.getElementById('enum-has-value').value;
 
   let code = '// Generated by ChuckleIDE Enum Manager\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.global;\n\n';
   code += `public enum ${className} {\n`;
 
   const validEntries = enumEntries.filter(e => e.name.trim());
@@ -3927,8 +3623,9 @@ function initObjectManager() {
     navigator.clipboard.writeText(generateObjectCode());
     showToast('Object code copied', 'success');
   });
-  document.getElementById('obj-insert-code').addEventListener('click', () => {
-    insertGeneratedCode(generateObjectCode());
+  document.getElementById('obj-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('obj-class-name', 'RobotConfig');
+    await insertGeneratedClass(generateObjectCode(), 'global', className, 'GlobalObject');
   });
   document.getElementById('obj-refresh').addEventListener('click', updateObjPreview);
   document.getElementById('obj-class-name').addEventListener('input', updateObjPreview);
@@ -3992,7 +3689,7 @@ function generateObjectCode() {
   const isStatic = document.getElementById('obj-static').value === 'yes';
 
   let code = '// Generated by ChuckleIDE Object Manager\n';
-  code += 'package org.firstinspires.ftc.teamcode;\n\n';
+  code += 'package org.firstinspires.ftc.teamcode.global;\n\n';
   code += `public class ${className} {\n\n`;
 
   const validFields = objFields.filter(f => f.name.trim());
@@ -4514,6 +4211,473 @@ function generateUtilCode() {
     code += '\n' + m.code + '\n';
   }
 
+// ── Vision Builder ────────────────────────────────────────
+let visInitialized = false;
+
+function initVisionBuilder() {
+  if (visInitialized) { updateVisPreview(); return; }
+  visInitialized = true;
+
+  const typeSelect = document.getElementById('vis-type');
+
+  function showOptionsForType() {
+    document.querySelectorAll('.vis-options-group').forEach(g => g.style.display = 'none');
+    const sel = typeSelect.value;
+    const group = document.getElementById('vis-options-' + sel);
+    if (group) group.style.display = '';
+    updateVisPreview();
+  }
+
+  typeSelect.addEventListener('change', showOptionsForType);
+
+  document.getElementById('vis-close').addEventListener('click', closeAppView);
+  document.getElementById('vis-copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(generateVisionCode());
+    showToast('Vision code copied', 'success');
+  });
+  document.getElementById('vis-insert-code').addEventListener('click', async () => {
+    const className = getGeneratedClassName('vis-class-name', 'VisionOpMode');
+    await insertGeneratedClass(generateVisionCode(), 'vision', className, 'Vision');
+  });
+  document.getElementById('vis-refresh').addEventListener('click', updateVisPreview);
+
+  document.getElementById('vis-class-name').addEventListener('input', updateVisPreview);
+
+  document.querySelectorAll('#app-view-vision-builder select, #app-view-vision-builder input').forEach(el => {
+    el.addEventListener('change', updateVisPreview);
+    el.addEventListener('input', updateVisPreview);
+  });
+
+  showOptionsForType();
+  updateVisPreview();
+}
+
+function updateVisPreview() {
+  const el = document.getElementById('vis-preview');
+  if (el) el.textContent = generateVisionCode();
+}
+
+function generateVisionCode() {
+  const type = document.getElementById('vis-type').value;
+  switch (type) {
+    case 'apriltag':    return generateAprilTagCode();
+    case 'tensorflow':  return generateTensorFlowCode();
+    case 'huskylens':   return generateHuskyLensCode();
+    case 'limelight':   return generateLimelightCode();
+    default:            return '// Select a vision type';
+  }
+}
+
+function generateAprilTagCode() {
+  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const camera    = document.getElementById('vis-at-camera').value || 'Webcam 1';
+  const res       = (document.getElementById('vis-at-resolution').value || '640,480').split(',');
+  const resW      = res[0] || '640';
+  const resH      = res[1] || '480';
+  const family    = document.getElementById('vis-at-family').value;
+  const axes      = document.getElementById('vis-at-axes').value;
+  const cube      = document.getElementById('vis-at-cube').value;
+  const outline   = document.getElementById('vis-at-outline').value;
+  const navigate  = document.getElementById('vis-at-navigate').value === 'true';
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n';
+  code += 'import org.firstinspires.ftc.vision.VisionPortal;\n';
+  code += 'import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;\n';
+  code += 'import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;\n';
+  code += 'import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;\n\n';
+  code += 'import java.util.List;\n\n';
+  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
+  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += '    private VisionPortal visionPortal;\n';
+  code += '    private AprilTagProcessor aprilTagProcessor;\n\n';
+  code += '    @Override\n';
+  code += '    public void runOpMode() throws InterruptedException {\n';
+  code += '        initVision();\n\n';
+  code += '        telemetry.addData("Status", "Vision Initialized");\n';
+  code += '        telemetry.addData("Camera State", visionPortal.getCameraState());\n';
+  code += '        telemetry.update();\n\n';
+  code += '        waitForStart();\n\n';
+  code += '        while (opModeIsActive()) {\n';
+  code += '            List<AprilTagDetection> detections = aprilTagProcessor.getDetections();\n';
+  code += '            telemetry.addData("Tags Detected", detections.size());\n\n';
+  code += '            for (AprilTagDetection detection : detections) {\n';
+  code += '                if (detection.metadata != null) {\n';
+  code += '                    telemetry.addLine(String.format(\n';
+  code += '                            "\\n==== Tag #%d (%s) ====",\n';
+  code += '                            detection.id, detection.metadata.name));\n';
+  code += '                    telemetry.addData("  Range",   "%.2f inches", detection.ftcPose.range);\n';
+  code += '                    telemetry.addData("  Bearing", "%.2f degrees", detection.ftcPose.bearing);\n';
+  code += '                    telemetry.addData("  Yaw",     "%.2f degrees", detection.ftcPose.yaw);\n';
+  code += '                } else {\n';
+  code += '                    telemetry.addLine(String.format(\n';
+  code += '                            "\\n==== Unknown Tag #%d ====", detection.id));\n';
+  code += '                }\n';
+  if (navigate) {
+    code += '                navigateToTag(detection);\n';
+  }
+  code += '            }\n\n';
+  code += '            telemetry.update();\n';
+  code += '        }\n\n';
+  code += '        visionPortal.close();\n';
+  code += '    }\n';
+
+  if (navigate) {
+    code += '\n    private void navigateToTag(AprilTagDetection detection) {\n';
+    code += '        if (detection.ftcPose == null) return;\n';
+    code += '        double rangeError   = detection.ftcPose.range  - 12.0;\n';
+    code += '        double headingError = detection.ftcPose.bearing;\n';
+    code += '        double yawError     = detection.ftcPose.yaw;\n\n';
+    code += '        double drive  = -rangeError   * 0.05;\n';
+    code += '        double strafe =  headingError * 0.05;\n';
+    code += '        double turn   = -yawError     * 0.03;\n\n';
+    code += '        telemetry.addData("Nav Drive",  "%.2f", drive);\n';
+    code += '        telemetry.addData("Nav Strafe", "%.2f", strafe);\n';
+    code += '        telemetry.addData("Nav Turn",   "%.2f", turn);\n';
+    code += '    }\n';
+  }
+
+  code += '\n    private void initVision() {\n';
+  code += '        aprilTagProcessor = new AprilTagProcessor.Builder()\n';
+  code += `                .setDrawAxes(${axes})\n`;
+  code += `                .setDrawCubeProjection(${cube})\n`;
+  code += `                .setDrawTagOutline(${outline})\n`;
+  code += `                .setTagFamily(AprilTagProcessor.TagFamily.${family})\n`;
+  code += '                .setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())\n';
+  code += '                .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)\n';
+  code += '                .build();\n\n';
+  code += '        visionPortal = new VisionPortal.Builder()\n';
+  code += `                .setCamera(hardwareMap.get(WebcamName.class, "${camera}"))\n`;
+  code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
+  code += '                .setStreamFormat(VisionPortal.StreamFormat.YUY2)\n';
+  code += '                .addProcessor(aprilTagProcessor)\n';
+  code += '                .build();\n\n';
+  code += '        while (!isStarted() && !isStopRequested() &&\n';
+  code += '               visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {\n';
+  code += '            telemetry.addData("Camera", "Waiting...");\n';
+  code += '            telemetry.update();\n';
+  code += '        }\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+function generateTensorFlowCode() {
+  const className  = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const camera     = document.getElementById('vis-tf-camera').value || 'Webcam 1';
+  const res        = (document.getElementById('vis-tf-resolution').value || '640,480').split(',');
+  const resW       = res[0] || '640';
+  const resH       = res[1] || '480';
+  const model      = document.getElementById('vis-tf-model').value.trim();
+  const labelsRaw  = document.getElementById('vis-tf-labels').value;
+  const confidence = document.getElementById('vis-tf-confidence').value || '0.6';
+  const detectPos  = document.getElementById('vis-tf-position').value === 'true';
+  const labels     = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;\n';
+  code += 'import org.firstinspires.ftc.vision.VisionPortal;\n';
+  code += 'import org.firstinspires.ftc.vision.tfod.TfodProcessor;\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.tfod.Recognition;\n\n';
+  code += 'import java.util.List;\n\n';
+  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
+  code += `public class ${className} extends LinearOpMode {\n\n`;
+
+  if (model) {
+    code += `    private static final String TFOD_MODEL_ASSET = "${model}";\n`;
+  } else {
+    code += '    private static final String TFOD_MODEL_ASSET = null;\n';
+  }
+  if (labels.length > 0) {
+    code += '    private static final String[] LABELS = {\n';
+    code += labels.map(l => `        "${l}"`).join(',\n') + '\n';
+    code += '    };\n';
+  } else {
+    code += '    private static final String[] LABELS = {};\n';
+  }
+
+  code += '\n    private VisionPortal visionPortal;\n';
+  code += '    private TfodProcessor tfodProcessor;\n';
+
+  if (detectPos) {
+    code += '\n    public enum DetectedPosition { LEFT, CENTER, RIGHT, UNKNOWN }\n';
+    code += '    private DetectedPosition detectedPosition = DetectedPosition.UNKNOWN;\n';
+  }
+
+  code += '\n    @Override\n';
+  code += '    public void runOpMode() throws InterruptedException {\n';
+  code += '        initVision();\n\n';
+
+  if (detectPos) {
+    code += '        while (!isStarted() && !isStopRequested()) {\n';
+    code += '            detectPosition();\n';
+    code += '            telemetry.addData("Detected Position", detectedPosition);\n';
+    code += '            telemetry.update();\n';
+    code += '        }\n\n';
+  }
+
+  code += '        waitForStart();\n\n';
+  code += '        while (opModeIsActive()) {\n';
+  code += '            List<Recognition> recognitions = tfodProcessor.getRecognitions();\n';
+  code += '            telemetry.addData("Objects Detected", recognitions.size());\n\n';
+  code += '            for (Recognition rec : recognitions) {\n';
+  code += '                double x = (rec.getLeft() + rec.getRight()) / 2.0;\n';
+  code += '                double y = (rec.getTop() + rec.getBottom()) / 2.0;\n';
+  code += '                telemetry.addData("Image", "%s (%.0f %% conf.)", rec.getLabel(), rec.getConfidence() * 100);\n';
+  code += '                telemetry.addData("- Position", "%.0f / %.0f", x, y);\n';
+  code += '                telemetry.addData("- Size", "%.0f x %.0f", rec.getWidth(), rec.getHeight());\n';
+  code += '            }\n\n';
+  code += '            telemetry.update();\n';
+  code += '        }\n\n';
+  code += '        visionPortal.close();\n';
+  code += '    }\n';
+
+  if (detectPos) {
+    code += '\n    private void detectPosition() {\n';
+    code += '        List<Recognition> recognitions = tfodProcessor.getRecognitions();\n';
+    code += '        double highestConfidence = 0;\n';
+    code += '        Recognition bestDetection = null;\n\n';
+    code += '        for (Recognition rec : recognitions) {\n';
+    code += '            if (rec.getConfidence() > highestConfidence) {\n';
+    code += '                highestConfidence = rec.getConfidence();\n';
+    code += '                bestDetection = rec;\n';
+    code += '            }\n';
+    code += '        }\n\n';
+    code += `        if (bestDetection != null && bestDetection.getConfidence() > ${confidence}) {\n`;
+    code += '            double centerX = (bestDetection.getLeft() + bestDetection.getRight()) / 2.0;\n';
+    code += '            double imageWidth = bestDetection.getImageWidth();\n';
+    code += '            if (centerX < imageWidth / 3.0) {\n';
+    code += '                detectedPosition = DetectedPosition.LEFT;\n';
+    code += '            } else if (centerX < 2.0 * imageWidth / 3.0) {\n';
+    code += '                detectedPosition = DetectedPosition.CENTER;\n';
+    code += '            } else {\n';
+    code += '                detectedPosition = DetectedPosition.RIGHT;\n';
+    code += '            }\n';
+    code += '        } else {\n';
+    code += '            detectedPosition = DetectedPosition.UNKNOWN;\n';
+    code += '        }\n';
+    code += '    }\n';
+  }
+
+  code += '\n    private void initVision() {\n';
+  code += '        TfodProcessor.Builder tfodBuilder = new TfodProcessor.Builder()\n';
+  code += `                .setMinResultConfidence(${confidence}f)\n`;
+  code += '                .setIsModelTensorFlow2(true)\n';
+  code += '                .setInputSize(300);\n\n';
+  code += '        if (TFOD_MODEL_ASSET != null) {\n';
+  code += '            tfodBuilder.setModelAssetName(TFOD_MODEL_ASSET);\n';
+  code += '            tfodBuilder.setModelLabels(LABELS);\n';
+  code += '        }\n\n';
+  code += '        tfodProcessor = tfodBuilder.build();\n\n';
+  code += '        visionPortal = new VisionPortal.Builder()\n';
+  code += `                .setCamera(hardwareMap.get(WebcamName.class, "${camera}"))\n`;
+  code += `                .setCameraResolution(new android.util.Size(${resW}, ${resH}))\n`;
+  code += '                .addProcessor(tfodProcessor)\n';
+  code += '                .build();\n\n';
+  code += '        while (!isStarted() && !isStopRequested() &&\n';
+  code += '               visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {\n';
+  code += '            telemetry.addData("Camera", "Opening...");\n';
+  code += '            telemetry.update();\n';
+  code += '        }\n';
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+function generateHuskyLensCode() {
+  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const hwName    = document.getElementById('vis-hl-name').value || 'huskyLens';
+  const algorithm = document.getElementById('vis-hl-algorithm').value;
+  const center    = document.getElementById('vis-hl-center').value === 'true';
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'import com.qualcomm.hardware.dfrobot.HuskyLens;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n\n';
+  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
+  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += '    private HuskyLens huskyLens;\n\n';
+  code += '    @Override\n';
+  code += '    public void runOpMode() throws InterruptedException {\n';
+  code += '        initHuskyLens();\n\n';
+  code += '        telemetry.addData("Status", "HuskyLens Initialized");\n';
+  code += '        telemetry.addData(">", "Press START to begin detection");\n';
+  code += '        telemetry.update();\n\n';
+  code += '        waitForStart();\n\n';
+  code += '        while (opModeIsActive()) {\n';
+  code += '            HuskyLens.Block[] blocks = huskyLens.blocks();\n';
+  code += '            telemetry.addData("Objects Detected", blocks.length);\n\n';
+  code += '            for (HuskyLens.Block block : blocks) {\n';
+  code += '                telemetry.addLine(String.format(\n';
+  code += '                        "  Block: ID=%d  x=%d  y=%d  w=%d  h=%d",\n';
+  code += '                        block.id, block.x, block.y, block.width, block.height));\n';
+  code += '            }\n\n';
+
+  if (center) {
+    code += '            if (blocks.length > 0) {\n';
+    code += '                HuskyLens.Block largest = getLargestBlock(blocks);\n';
+    code += '                processDetection(largest);\n';
+    code += '            }\n\n';
+  }
+
+  code += '            telemetry.update();\n';
+  code += '        }\n';
+  code += '    }\n';
+
+  if (center) {
+    code += '\n    private void processDetection(HuskyLens.Block block) {\n';
+    code += '        int frameCenterX = 160;\n';
+    code += '        int frameCenterY = 120;\n';
+    code += '        int errorX = block.x - frameCenterX;\n';
+    code += '        int errorY = block.y - frameCenterY;\n\n';
+    code += '        telemetry.addData("Target ID", block.id);\n';
+    code += '        telemetry.addData("Error X", errorX);\n';
+    code += '        telemetry.addData("Error Y", errorY);\n\n';
+    code += '        double turnPower  = errorX * 0.003;\n';
+    code += '        double drivePower = -errorY * 0.003;\n';
+    code += '        telemetry.addData("Turn Power",  "%.2f", turnPower);\n';
+    code += '        telemetry.addData("Drive Power", "%.2f", drivePower);\n';
+    code += '    }\n';
+
+    code += '\n    private HuskyLens.Block getLargestBlock(HuskyLens.Block[] blocks) {\n';
+    code += '        if (blocks.length == 0) return null;\n';
+    code += '        HuskyLens.Block largest = blocks[0];\n';
+    code += '        int maxArea = largest.width * largest.height;\n';
+    code += '        for (int i = 1; i < blocks.length; i++) {\n';
+    code += '            int area = blocks[i].width * blocks[i].height;\n';
+    code += '            if (area > maxArea) {\n';
+    code += '                maxArea = area;\n';
+    code += '                largest = blocks[i];\n';
+    code += '            }\n';
+    code += '        }\n';
+    code += '        return largest;\n';
+    code += '    }\n';
+  }
+
+  code += '\n    private void initHuskyLens() {\n';
+  code += `        huskyLens = hardwareMap.get(HuskyLens.class, "${hwName}");\n`;
+  code += `        huskyLens.selectAlgorithm(HuskyLens.Algorithm.${algorithm});\n`;
+  code += '    }\n';
+  code += '}\n';
+  return code;
+}
+
+function generateLimelightCode() {
+  const className = document.getElementById('vis-class-name').value || 'VisionOpMode';
+  const hwName    = document.getElementById('vis-ll-name').value || 'limelight';
+  const pipeline  = document.getElementById('vis-ll-pipeline').value;
+  const apriltag  = document.getElementById('vis-ll-apriltag').value === 'true';
+  const neural    = document.getElementById('vis-ll-neural').value === 'true';
+  const color     = document.getElementById('vis-ll-color').value === 'true';
+  const pose      = document.getElementById('vis-ll-pose').value === 'true';
+
+  let code = '// Generated by ChuckleIDE Vision Builder\n';
+  code += 'package org.firstinspires.ftc.teamcode.vision;\n\n';
+  code += 'import com.qualcomm.hardware.limelightvision.LLResult;\n';
+  code += 'import com.qualcomm.hardware.limelightvision.LLResultTypes;\n';
+  code += 'import com.qualcomm.hardware.limelightvision.Limelight3A;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.Autonomous;\n';
+  code += 'import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n';
+  if (apriltag || pose) {
+    code += 'import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;\n';
+  }
+  code += '\nimport java.util.List;\n\n';
+  code += `@Autonomous(name = "${className}", group = "Vision")\n`;
+  code += `public class ${className} extends LinearOpMode {\n\n`;
+  code += '    private Limelight3A limelight;\n\n';
+  code += '    @Override\n';
+  code += '    public void runOpMode() throws InterruptedException {\n';
+  code += '        initLimelight();\n\n';
+  code += '        telemetry.addData("Status", "Limelight Initialized");\n';
+  code += '        telemetry.addData(">", "Press START to begin detection");\n';
+  code += '        telemetry.update();\n\n';
+  code += '        waitForStart();\n\n';
+  code += '        while (opModeIsActive()) {\n';
+  code += '            LLResult result = limelight.getLatestResult();\n\n';
+  code += '            if (result != null && result.isValid()) {\n';
+
+  if (apriltag) {
+    code += '                processAprilTags(result);\n';
+  }
+  if (neural) {
+    code += '                processNeuralDetections(result);\n';
+  }
+  if (color) {
+    code += '                processColorTargets(result);\n';
+  }
+  if (pose) {
+    code += '\n                Pose3D botPose = result.getBotpose();\n';
+    code += '                if (botPose != null) {\n';
+    code += '                    telemetry.addData("Bot Pose X (m)", "%.3f", botPose.getPosition().x);\n';
+    code += '                    telemetry.addData("Bot Pose Y (m)", "%.3f", botPose.getPosition().y);\n';
+    code += '                    telemetry.addData("Bot Pose Z (m)", "%.3f", botPose.getPosition().z);\n';
+    code += '                }\n';
+  }
+
+  code += '\n                telemetry.addData("Pipeline", result.getPipelineIndex());\n';
+  code += '                telemetry.addData("Tx", "%.2f", result.getTx());\n';
+  code += '                telemetry.addData("Ty", "%.2f", result.getTy());\n';
+  code += '            } else {\n';
+  code += '                telemetry.addData("Limelight", "No valid result");\n';
+  code += '            }\n\n';
+  code += '            telemetry.update();\n';
+  code += '        }\n\n';
+  code += '        limelight.stop();\n';
+  code += '    }\n';
+
+  if (apriltag) {
+    code += '\n    private void processAprilTags(LLResult result) {\n';
+    code += '        List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();\n';
+    code += '        for (LLResultTypes.FiducialResult fiducial : fiducials) {\n';
+    code += '            int tagId = fiducial.getFiducialId();\n';
+    code += '            double tx = fiducial.getTargetXDegrees();\n';
+    code += '            double ty = fiducial.getTargetYDegrees();\n';
+    code += '            telemetry.addLine(String.format(\n';
+    code += '                    "  AprilTag #%d  tx=%.1f°  ty=%.1f°", tagId, tx, ty));\n';
+    code += '        }\n';
+    code += '    }\n';
+  }
+
+  if (neural) {
+    code += '\n    private void processNeuralDetections(LLResult result) {\n';
+    code += '        List<LLResultTypes.DetectorResult> detections = result.getDetectorResults();\n';
+    code += '        for (LLResultTypes.DetectorResult detection : detections) {\n';
+    code += '            telemetry.addLine(String.format(\n';
+    code += '                    "  Detector: %s (%.0f%% conf)  tx=%.1f  ty=%.1f",\n';
+    code += '                    detection.getClassName(), detection.getConfidence() * 100,\n';
+    code += '                    detection.getTargetXDegrees(), detection.getTargetYDegrees()));\n';
+    code += '        }\n';
+    code += '    }\n';
+  }
+
+  if (color) {
+    code += '\n    private void processColorTargets(LLResult result) {\n';
+    code += '        List<LLResultTypes.ColorResult> colorResults = result.getColorResults();\n';
+    code += '        for (LLResultTypes.ColorResult colorTarget : colorResults) {\n';
+    code += '            telemetry.addLine(String.format(\n';
+    code += '                    "  Color target: tx=%.1f  ty=%.1f  ta=%.2f",\n';
+    code += '                    colorTarget.getTargetXDegrees(),\n';
+    code += '                    colorTarget.getTargetYDegrees(),\n';
+    code += '                    colorTarget.getTargetArea()));\n';
+    code += '        }\n';
+    code += '    }\n';
+  }
+
+  code += '\n    private void initLimelight() {\n';
+  code += `        limelight = hardwareMap.get(Limelight3A.class, "${hwName}");\n`;
+  code += `        limelight.pipelineSwitch(${pipeline});\n`;
+  code += '        limelight.start();\n';
+  code += '        telemetry.addData("Limelight", "Connected: %b", limelight.isConnected());\n';
+  code += '    }\n';
   code += '}\n';
   return code;
 }

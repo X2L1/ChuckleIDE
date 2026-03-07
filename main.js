@@ -1,135 +1,25 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell, safeStorage } = require('electron');
-const { execFile } = require('child_process');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const Store = require('electron-store');
 
 const AdbManager = require('./src/main/adb-manager');
-const GitManager = require('./src/main/git-manager');
-const CopilotManager = require('./src/main/copilot');
 const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
 const Updater = require('./src/main/updater');
-const GitHubAuth = require('./src/main/github-auth');
 const templates = require('./src/templates/index');
 
 const store = new Store();
-const SECRET_KEYS = {
-  gitToken: 'secrets.git.token',
-  copilotToken: 'secrets.copilot.token'
-};
-const LEGACY_SECRET_KEYS = {
-  gitToken: 'git.token',
-  copilotToken: 'copilot.token'
-};
-const volatileSecrets = Object.create(null);
-
-function encryptSecret(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return null;
-  return safeStorage.encryptString(value).toString('base64');
-}
-
-function decryptSecret(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return '';
-  try {
-    return safeStorage.decryptString(Buffer.from(value, 'base64'));
-  } catch {
-    return '';
-  }
-}
-
-function setSecret(key, value) {
-  const normalized = typeof value === 'string' ? value.trim() : '';
-  if (!normalized) {
-    delete volatileSecrets[key];
-    store.delete(key);
-    return false;
-  }
-  if (safeStorage.isEncryptionAvailable()) {
-    store.set(key, encryptSecret(normalized));
-    delete volatileSecrets[key];
-  } else {
-    volatileSecrets[key] = normalized;
-    store.delete(key);
-  }
-  return true;
-}
-
-function getSecret(key) {
-  if (typeof volatileSecrets[key] === 'string') return volatileSecrets[key];
-  return decryptSecret(store.get(key));
-}
-
-function deleteSecret(key) {
-  delete volatileSecrets[key];
-  store.delete(key);
-}
-
-function hasSecret(key) {
-  return Boolean(getSecret(key));
-}
-
-function migrateLegacySecrets() {
-  const legacyGitToken = store.get(LEGACY_SECRET_KEYS.gitToken);
-  if (legacyGitToken) setSecret(SECRET_KEYS.gitToken, legacyGitToken);
-  const legacyCopilotToken = store.get(LEGACY_SECRET_KEYS.copilotToken);
-  if (legacyCopilotToken) setSecret(SECRET_KEYS.copilotToken, legacyCopilotToken);
-  store.delete(LEGACY_SECRET_KEYS.gitToken);
-  store.delete(LEGACY_SECRET_KEYS.copilotToken);
-}
-
-function scrubSensitiveSettings(settings) {
-  const sanitized = { ...settings };
-  delete sanitized[LEGACY_SECRET_KEYS.gitToken];
-  delete sanitized[LEGACY_SECRET_KEYS.copilotToken];
-  delete sanitized[SECRET_KEYS.gitToken];
-  delete sanitized[SECRET_KEYS.copilotToken];
-  return sanitized;
-}
-
-// ── External token detection (gh CLI & environment variables) ──────────────────
-
-function _runGhAuthToken() {
-  return new Promise((resolve) => {
-    const cmd = process.platform === 'win32' ? 'gh.exe' : 'gh';
-    execFile(cmd, ['auth', 'token'], { timeout: 5000 }, (err, stdout) => {
-      if (err) return resolve('');
-      const token = (stdout || '').trim();
-      resolve(token || '');
-    });
-  });
-}
-
-/**
- * Try to find a GitHub token from external sources (outside the app).
- * Checks in order: GH_TOKEN env, GITHUB_TOKEN env, `gh auth token` CLI.
- * Returns { token, source } or null.
- */
-async function detectExternalToken() {
-  const envGH = (process.env.GH_TOKEN || '').trim();
-  if (envGH) return { token: envGH, source: 'GH_TOKEN environment variable' };
-
-  const envGitHub = (process.env.GITHUB_TOKEN || '').trim();
-  if (envGitHub) return { token: envGitHub, source: 'GITHUB_TOKEN environment variable' };
-
-  const ghToken = await _runGhAuthToken();
-  if (ghToken) return { token: ghToken, source: 'GitHub CLI (gh auth token)' };
-
-  return null;
-}
 
 let mainWindow;
 let adbManager;
-let gitManager;
-let copilotManager;
 let updater;
 let lspManager;
 let buildManager;
 let projectManager;
-let githubAuth;
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
@@ -370,37 +260,6 @@ function buildApplicationMenu() {
       ]
     },
     {
-      label: 'Git',
-      submenu: [
-        {
-          label: 'Initialize Repository',
-          click: () => mainWindow.webContents.send('menu-action', 'git-init')
-        },
-        {
-          label: 'Clone Repository',
-          click: () => mainWindow.webContents.send('menu-action', 'git-clone')
-        },
-        { type: 'separator' },
-        {
-          label: 'Commit',
-          accelerator: 'CmdOrCtrl+Shift+G',
-          click: () => mainWindow.webContents.send('menu-action', 'git-commit')
-        },
-        {
-          label: 'Pull',
-          click: () => mainWindow.webContents.send('menu-action', 'git-pull')
-        },
-        {
-          label: 'Push',
-          click: () => mainWindow.webContents.send('menu-action', 'git-push')
-        },
-        {
-          label: 'Show Status',
-          click: () => mainWindow.webContents.send('menu-action', 'git-status')
-        }
-      ]
-    },
-    {
       label: 'Help',
       submenu: [
         {
@@ -520,80 +379,6 @@ ipcMain.handle('adb:getStatus', async () => {
   return adbManager.getStatus();
 });
 
-// ── IPC: Git ──────────────────────────────────────────────────────────────────
-
-ipcMain.handle('git:init', async (_, repoPath) => {
-  return gitManager.init(repoPath);
-});
-
-ipcMain.handle('git:clone', async (_, url, destPath, token) => {
-  return gitManager.clone(url, destPath, token);
-});
-
-ipcMain.handle('git:status', async (_, repoPath) => {
-  return gitManager.status(repoPath);
-});
-
-ipcMain.handle('git:diff', async (_, repoPath, file) => {
-  return gitManager.diff(repoPath, file);
-});
-
-ipcMain.handle('git:add', async (_, repoPath, files) => {
-  return gitManager.add(repoPath, files);
-});
-
-ipcMain.handle('git:commit', async (_, repoPath, message) => {
-  return gitManager.commit(repoPath, message);
-});
-
-ipcMain.handle('git:pull', async (_, repoPath, remote, branch, token) => {
-  return gitManager.pull(repoPath, remote, branch, token);
-});
-
-ipcMain.handle('git:push', async (_, repoPath, remote, branch, token) => {
-  return gitManager.push(repoPath, remote, branch, token);
-});
-
-ipcMain.handle('git:branches', async (_, repoPath) => {
-  return gitManager.branches(repoPath);
-});
-
-ipcMain.handle('git:checkout', async (_, repoPath, branch) => {
-  return gitManager.checkout(repoPath, branch);
-});
-
-ipcMain.handle('git:log', async (_, repoPath, maxCount) => {
-  return gitManager.log(repoPath, maxCount);
-});
-
-// ── IPC: Copilot ──────────────────────────────────────────────────────────────
-
-ipcMain.handle('copilot:getCompletions', async (_, context) => {
-  return copilotManager.getCompletions(context);
-});
-
-ipcMain.handle('copilot:setToken', async (_, token) => {
-  const stored = setSecret(SECRET_KEYS.copilotToken, token);
-  return copilotManager.setToken(stored ? getSecret(SECRET_KEYS.copilotToken) : '');
-});
-
-ipcMain.handle('copilot:isAuthenticated', async () => {
-  const authed = await copilotManager.isAuthenticated();
-  if (authed) return true;
-
-  // If not authenticated, try falling back to the git token or external token
-  let fallback = getSecret(SECRET_KEYS.gitToken);
-  if (!fallback) {
-    const ext = await detectExternalToken();
-    if (ext) fallback = ext.token;
-  }
-  if (fallback && fallback !== copilotManager.token) {
-    copilotManager.setToken(fallback);
-    return copilotManager.isAuthenticated();
-  }
-  return false;
-});
-
 // ── IPC: Build ────────────────────────────────────────────────────────────────
 
 function applyBuildSettings() {
@@ -665,100 +450,22 @@ ipcMain.handle('templates:create', async (_, templateId, options) => {
 // ── IPC: Settings ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('settings:get', async (_, key) => {
-  if (key === LEGACY_SECRET_KEYS.gitToken || key === LEGACY_SECRET_KEYS.copilotToken) return '';
   return store.get(key);
 });
 
 ipcMain.handle('settings:set', async (_, key, value) => {
-  if (key === LEGACY_SECRET_KEYS.gitToken) {
-    setSecret(SECRET_KEYS.gitToken, value);
-    return true;
-  }
-  if (key === LEGACY_SECRET_KEYS.copilotToken) {
-    const stored = setSecret(SECRET_KEYS.copilotToken, value);
-    copilotManager.setToken(stored ? getSecret(SECRET_KEYS.copilotToken) : '');
-    return true;
-  }
   store.set(key, value);
   return true;
 });
 
 ipcMain.handle('settings:getAll', async () => {
-  return scrubSensitiveSettings(store.store);
+  return { ...store.store };
 });
 
 ipcMain.handle('settings:delete', async (_, key) => {
-  if (key === LEGACY_SECRET_KEYS.gitToken) {
-    deleteSecret(SECRET_KEYS.gitToken);
-    return true;
-  }
-  if (key === LEGACY_SECRET_KEYS.copilotToken) {
-    deleteSecret(SECRET_KEYS.copilotToken);
-    copilotManager.setToken('');
-    return true;
-  }
   store.delete(key);
   return true;
 });
-
-// ── IPC: Credentials ───────────────────────────────────────────────────────────
-
-ipcMain.handle('credentials:getGitHubToken', async () => {
-  // First check stored (in-app) token
-  const stored = getSecret(SECRET_KEYS.gitToken);
-  if (stored) return stored;
-
-  // Fall back to external sources (env vars, gh CLI)
-  const ext = await detectExternalToken();
-  return ext ? ext.token : '';
-});
-
-ipcMain.handle('credentials:setGitHubToken', async (_, token) => {
-  return setSecret(SECRET_KEYS.gitToken, token);
-});
-
-ipcMain.handle('credentials:hasGitHubToken', async () => {
-  if (hasSecret(SECRET_KEYS.gitToken)) return true;
-
-  // Also check external sources
-  const ext = await detectExternalToken();
-  return ext !== null;
-});
-
-ipcMain.handle('credentials:detectExternalToken', async () => {
-  return detectExternalToken();
-});
-
-ipcMain.handle('credentials:importExternalToken', async () => {
-  const ext = await detectExternalToken();
-  if (!ext) return { imported: false, source: null };
-  setSecret(SECRET_KEYS.gitToken, ext.token);
-  return { imported: true, source: ext.source };
-});
-
-// ── IPC: GitHub OAuth Device Flow ─────────────────────────────────────────────
-
-ipcMain.handle('auth:startDeviceFlow', async () => {
-  const flowInfo = await githubAuth.startDeviceFlow();
-
-  // Open the verification page in the user's default browser.
-  shell.openExternal(flowInfo.verificationUri);
-
-  // Start polling in the background; notify the renderer when complete.
-  githubAuth.pollForToken(flowInfo.deviceCode, flowInfo.interval)
-    .then(async (token) => {
-      setSecret(SECRET_KEYS.gitToken, token);
-      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowSuccess');
-    })
-    .catch((err) => {
-      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowError', err.message);
-    });
-
-  return { userCode: flowInfo.userCode, verificationUri: flowInfo.verificationUri };
-});
-
-ipcMain.handle('auth:cancelDeviceFlow', async () => {
-  githubAuth.cancelDeviceFlow();
   return true;
 });
 
@@ -826,27 +533,11 @@ ipcMain.handle('update:status', async () => {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  migrateLegacySecrets();
   adbManager = new AdbManager();
-  gitManager = new GitManager();
-  copilotManager = new CopilotManager();
-
-  // Use stored copilot token, fall back to stored git token, then external sources
-  let cpToken = getSecret(SECRET_KEYS.copilotToken);
-  if (!cpToken) {
-    cpToken = getSecret(SECRET_KEYS.gitToken);
-  }
-  if (!cpToken) {
-    const ext = await detectExternalToken();
-    if (ext) cpToken = ext.token;
-  }
-  copilotManager.setToken(cpToken || '');
-
   lspManager = new LspManager(store);
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
   updater = new Updater(store);
-  githubAuth = new GitHubAuth();
 
   createWindow();
 

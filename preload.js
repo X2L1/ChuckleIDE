@@ -40,28 +40,6 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     getStatus: () => ipcRenderer.invoke('adb:getStatus')
   },
 
-  // ── Git ─────────────────────────────────────────────────────────────────────
-  git: {
-    init: (repoPath) => ipcRenderer.invoke('git:init', repoPath),
-    clone: (url, destPath, token) => ipcRenderer.invoke('git:clone', url, destPath, token),
-    status: (repoPath) => ipcRenderer.invoke('git:status', repoPath),
-    diff: (repoPath, file) => ipcRenderer.invoke('git:diff', repoPath, file),
-    add: (repoPath, files) => ipcRenderer.invoke('git:add', repoPath, files),
-    commit: (repoPath, message) => ipcRenderer.invoke('git:commit', repoPath, message),
-    pull: (repoPath, remote, branch, token) => ipcRenderer.invoke('git:pull', repoPath, remote, branch, token),
-    push: (repoPath, remote, branch, token) => ipcRenderer.invoke('git:push', repoPath, remote, branch, token),
-    branches: (repoPath) => ipcRenderer.invoke('git:branches', repoPath),
-    checkout: (repoPath, branch) => ipcRenderer.invoke('git:checkout', repoPath, branch),
-    log: (repoPath, maxCount) => ipcRenderer.invoke('git:log', repoPath, maxCount)
-  },
-
-  // ── Copilot ──────────────────────────────────────────────────────────────────
-  copilot: {
-    getCompletions: (context) => ipcRenderer.invoke('copilot:getCompletions', context),
-    setToken: (token) => ipcRenderer.invoke('copilot:setToken', token),
-    isAuthenticated: () => ipcRenderer.invoke('copilot:isAuthenticated')
-  },
-
   // ── Build ───────────────────────────────────────────────────────────────────
   build: {
     assemble: (projectPath) => ipcRenderer.invoke('build:assemble', projectPath),
@@ -91,20 +69,6 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     set: (key, value) => ipcRenderer.invoke('settings:set', key, value),
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     delete: (key) => ipcRenderer.invoke('settings:delete', key)
-  },
-
-  credentials: {
-    getGitHubToken: () => ipcRenderer.invoke('credentials:getGitHubToken'),
-    setGitHubToken: (token) => ipcRenderer.invoke('credentials:setGitHubToken', token),
-    hasGitHubToken: () => ipcRenderer.invoke('credentials:hasGitHubToken'),
-    detectExternalToken: () => ipcRenderer.invoke('credentials:detectExternalToken'),
-    importExternalToken: () => ipcRenderer.invoke('credentials:importExternalToken')
-  },
-
-  // ── GitHub OAuth ────────────────────────────────────────────────────────────
-  auth: {
-    startDeviceFlow: () => ipcRenderer.invoke('auth:startDeviceFlow'),
-    cancelDeviceFlow: () => ipcRenderer.invoke('auth:cancelDeviceFlow')
   },
 
   // ── LSP ──────────────────────────────────────────────────────────────────────
@@ -137,12 +101,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
       'build:output',
       'project:progress',
       'adb:deviceChanged',
-      'git:statusChanged',
       'lsp:notification',
       'update:available',
-      'update:progress',
-      'auth:deviceFlowSuccess',
-      'auth:deviceFlowError'
+      'update:progress'
     ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));
