@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src blob:; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FTC IDE</title>
+  <title>ChuckleIDE</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,10 +14,10 @@
 <div id="top-bar">
   <div id="app-logo">
     <svg width="22" height="22" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100" height="100" rx="16" fill="#f97316"/>
-      <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">F</text>
+      <rect width="100" height="100" rx="16" fill="#ff69b4"/>
+      <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">C</text>
     </svg>
-    <span>FTC IDE</span>
+    <span>ChuckleIDE</span>
   </div>
   <div id="project-title" class="project-title"></div>
   <div id="top-actions">
@@ -196,6 +196,13 @@
               <option value="hc-black">High Contrast</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label>Color Mode</label>
+            <select id="setting-color-mode" class="select-input">
+              <option value="dark">Dark (Black &amp; Hot Pink)</option>
+              <option value="light">Light (Sakura &amp; Light Yellow)</option>
+            </select>
+          </div>
         </div>
         <div class="setting-group">
           <div class="setting-group-title">Build</div>
@@ -267,36 +274,138 @@
     <!-- MONACO EDITOR CONTAINER -->
     <div id="editor-container">
       <div id="welcome-screen" class="welcome-screen">
-        <div class="welcome-logo">
-          <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" rx="16" fill="#f97316"/>
-            <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">F</text>
-          </svg>
+        <div class="home-header">
+          <div class="welcome-logo">
+            <svg width="64" height="64" viewBox="0 0 100 100" fill="none">
+              <rect width="100" height="100" rx="20" fill="var(--accent)"/>
+              <text x="50" y="70" font-size="56" text-anchor="middle" fill="white" font-family="monospace" font-weight="bold">C</text>
+            </svg>
+          </div>
+          <h1>ChuckleIDE</h1>
+          <p class="welcome-subtitle">FTC Development Made Easy</p>
         </div>
-        <h1>FTC IDE</h1>
-        <p class="welcome-subtitle">FIRST Tech Challenge Development Environment</p>
-        <div class="welcome-actions">
-          <div class="welcome-section">
-            <h3>Start</h3>
-            <a href="#" class="welcome-link" id="wl-new-project">New FTC Project</a>
-            <a href="#" class="welcome-link" id="wl-open-project">Open Project</a>
-            <a href="#" class="welcome-link" id="wl-clone">Clone from GitHub</a>
+
+        <div class="home-apps-grid">
+          <div class="home-app-card" id="app-code-builder">
+            <div class="app-icon">🧩</div>
+            <div class="app-name">Code Builder</div>
+            <div class="app-desc">Drag &amp; drop blocks to build Java code — no typing needed</div>
           </div>
-          <div class="welcome-section">
-            <h3>Templates</h3>
-            <a href="#" class="welcome-link" id="wl-template-auto">Autonomous OpMode</a>
-            <a href="#" class="welcome-link" id="wl-template-teleop">TeleOp OpMode</a>
-            <a href="#" class="welcome-link" id="wl-template-pedro">PedroPathing Autonomous</a>
+          <div class="home-app-card" id="app-pedro-visualizer">
+            <div class="app-icon">🗺️</div>
+            <div class="app-name">Path Visualizer</div>
+            <div class="app-desc">Draw and edit PedroPathing autonomous routes visually</div>
           </div>
-          <div class="welcome-section">
-            <h3>Learn</h3>
-            <a href="#" class="welcome-link" id="wl-ftc-docs">FTC SDK Documentation</a>
-            <a href="#" class="welcome-link" id="wl-pedro-docs">PedroPathing Docs</a>
-            <a href="#" class="welcome-link" id="wl-nextftc-docs">NextFTC Docs</a>
+          <div class="home-app-card" id="app-template-gallery">
+            <div class="app-icon">📋</div>
+            <div class="app-name">Template Gallery</div>
+            <div class="app-desc">Browse and insert ready-made OpMode templates instantly</div>
           </div>
+          <div class="home-app-card" id="app-open-editor">
+            <div class="app-icon">✏️</div>
+            <div class="app-name">Code Editor</div>
+            <div class="app-desc">Open a file or project to start writing Java code</div>
+          </div>
+          <div class="home-app-card" id="app-device-manager">
+            <div class="app-icon">📱</div>
+            <div class="app-name">Device Manager</div>
+            <div class="app-desc">Connect, pair, and manage your Control Hub &amp; devices</div>
+          </div>
+          <div class="home-app-card" id="app-git-manager">
+            <div class="app-icon">🔀</div>
+            <div class="app-name">Git Manager</div>
+            <div class="app-desc">Clone, commit, push — manage your code with Git</div>
+          </div>
+          <div class="home-app-card" id="app-new-project">
+            <div class="app-icon">🚀</div>
+            <div class="app-name">New Project</div>
+            <div class="app-desc">Create a fresh FTC project with your favorite libraries</div>
+          </div>
+          <div class="home-app-card" id="app-learn">
+            <div class="app-icon">📚</div>
+            <div class="app-name">Learn FTC</div>
+            <div class="app-desc">FTC SDK docs, PedroPathing guides, and NextFTC tutorials</div>
+          </div>
+        </div>
+
+        <div class="home-quick-actions">
+          <button class="home-quick-btn" id="home-open-project">
+            <span>📂</span> Open Project
+          </button>
+          <button class="home-quick-btn" id="home-clone-repo">
+            <span>⬇️</span> Clone from GitHub
+          </button>
         </div>
       </div>
       <div id="monaco-editor-wrapper" style="display:none; width:100%; height:100%;"></div>
+
+      <!-- CODE BUILDER APP -->
+      <div id="app-view-code-builder" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🧩</span>
+          <h2>Code Builder — Drag &amp; Drop</h2>
+          <button class="btn-secondary small" id="cb-copy-code">📋 Copy Code</button>
+          <button class="btn-primary small" id="cb-insert-code">Insert into Editor</button>
+          <button class="icon-btn" id="cb-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="code-builder-layout">
+            <div class="block-palette" id="block-palette"></div>
+            <div class="code-builder-workspace">
+              <div class="block-workspace" id="block-workspace">
+                <div class="workspace-hint" id="workspace-hint">Drag blocks here to build your OpMode</div>
+              </div>
+              <div class="code-preview-panel">
+                <div class="code-preview-header">
+                  <span>Generated Java Code</span>
+                  <button class="icon-btn" id="cb-refresh-preview" title="Refresh">↻</button>
+                </div>
+                <div class="code-preview-content" id="code-preview"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PATH VISUALIZER APP -->
+      <div id="app-view-path-visualizer" class="app-view">
+        <div class="app-view-header">
+          <span style="font-size:18px">🗺️</span>
+          <h2>PedroPathing Visualizer</h2>
+          <button class="btn-secondary small" id="pv-clear">Clear All</button>
+          <button class="btn-primary small" id="pv-export">Export Code</button>
+          <button class="icon-btn" id="pv-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body">
+          <div class="path-viz-layout">
+            <div class="path-viz-sidebar">
+              <div class="form-group">
+                <label>Field Size (inches)</label>
+                <input type="number" id="pv-field-size" value="144" class="text-input small" />
+              </div>
+              <div class="form-group">
+                <label>Robot Width (in)</label>
+                <input type="number" id="pv-robot-width" value="18" class="text-input small" />
+              </div>
+              <div class="form-group">
+                <label>Heading (deg)</label>
+                <input type="number" id="pv-heading" value="0" class="text-input small" />
+              </div>
+              <div style="font-size:11px;color:var(--fg-dim);line-height:1.4">
+                Click on the field to add waypoints. Right-click a point to remove it.
+              </div>
+              <div class="panel-section-title">WAYPOINTS</div>
+              <div class="path-point-list" id="pv-point-list">
+                <div style="padding:12px;color:var(--fg-dim);font-size:11px;text-align:center">No waypoints yet</div>
+              </div>
+              <button class="btn-primary small" id="pv-generate" style="width:100%">Generate PedroPathing Code</button>
+            </div>
+            <div class="path-viz-canvas-wrap">
+              <canvas id="pv-canvas" width="540" height="540"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
