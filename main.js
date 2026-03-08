@@ -172,6 +172,28 @@ function buildApplicationMenu() {
           label: 'Go to Line',
           accelerator: 'CmdOrCtrl+G',
           click: () => mainWindow.webContents.send('menu-action', 'goto-line')
+        },
+        {
+          label: 'Trigger Completion',
+          accelerator: 'CmdOrCtrl+Space',
+          click: () => mainWindow.webContents.send('menu-action', 'trigger-completion')
+        }
+      ]
+    },
+    {
+      label: 'Git',
+      submenu: [
+        {
+          label: 'Commit',
+          click: () => mainWindow.webContents.send('menu-action', 'git-commit')
+        },
+        {
+          label: 'Push',
+          click: () => mainWindow.webContents.send('menu-action', 'git-push')
+        },
+        {
+          label: 'Pull',
+          click: () => mainWindow.webContents.send('menu-action', 'git-pull')
         }
       ]
     },
@@ -472,6 +494,10 @@ ipcMain.handle('settings:delete', async (_, key) => {
 // ── IPC: GitHub REST API ──────────────────────────────────────────────────────
 
 ipcMain.handle('auth:startDeviceFlow', async () => {
+  const configuredClientId = store.get('github.clientId');
+  githubApi.setClientId(configuredClientId);
+  const activeClientId = githubApi.getClientId();
+  console.info('[github-auth] startDeviceFlow clientId source=settings value=' + maskClientIdForLog(activeClientId));
   const flowInfo = await githubApi.startDeviceFlow();
   shell.openExternal(flowInfo.verificationUri);
 
@@ -505,6 +531,12 @@ ipcMain.handle('auth:setClientId', async (_, clientId) => {
   githubApi.setClientId(clientId);
   return true;
 });
+
+function maskClientIdForLog(clientId) {
+  if (!clientId || typeof clientId !== 'string') return '<missing>';
+  if (clientId.length <= 8) return `${clientId[0]}***${clientId.slice(-1)}`;
+  return `${clientId.slice(0, 4)}***${clientId.slice(-4)}`;
+}
 
 // ── GitHub Repos ──────────────────────────────────────────────────────────────
 

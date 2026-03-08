@@ -2,9 +2,6 @@
 
 const https = require('https');
 
-// ── GitHub OAuth App Client ID ────────────────────────────────────────────────
-const DEFAULT_GITHUB_CLIENT_ID = 'Ov23liYVVBMH5fJxm0xc';
-
 // Scopes requested during authorization.
 const SCOPES = 'repo read:user user:email';
 
@@ -19,7 +16,7 @@ const PUSH_SKIP_DIRS = ['.git', 'node_modules', 'build', '.gradle', '.idea', '__
 class GitHubAPI {
   constructor(store) {
     this._store = store;
-    this._clientId = store.get('github.clientId') || DEFAULT_GITHUB_CLIENT_ID;
+    this._clientId = this._normalizeClientId(store.get('github.clientId'));
     this._polling = false;
     this._aborted = false;
   }
@@ -35,6 +32,7 @@ class GitHubAPI {
   /* ── Auth: Device Flow ──────────────────────────────────────────────────── */
 
   async startDeviceFlow() {
+    this._requireClientId();
     const body = await this._post('github.com', '/login/device/code', {
       client_id: this._clientId,
       scope: SCOPES
@@ -54,6 +52,7 @@ class GitHubAPI {
   }
 
   pollForToken(deviceCode, interval) {
+    this._requireClientId();
     this._polling = true;
     this._aborted = false;
 
@@ -99,13 +98,17 @@ class GitHubAPI {
   get isPolling() { return this._polling; }
 
   setClientId(clientId) {
-    const id = (clientId || '').trim();
-    this._clientId = id || DEFAULT_GITHUB_CLIENT_ID;
-    if (id) {
+    const id = this._normalizeClientId(clientId);
+    this._clientId = id;
+    if (id !== null) {
       this._store.set('github.clientId', id);
     } else {
       this._store.delete('github.clientId');
     }
+  }
+
+  getClientId() {
+    return this._clientId;
   }
 
   signOut() {
@@ -523,6 +526,17 @@ class GitHubAPI {
       req.write(data);
       req.end();
     });
+  }
+
+  _normalizeClientId(clientId) {
+    const id = typeof clientId === 'string' ? clientId.trim() : '';
+    return id || null;
+  }
+
+  _requireClientId() {
+    if (!this._clientId) {
+      throw new Error('GitHub OAuth Client ID is not configured.');
+    }
   }
 }
 

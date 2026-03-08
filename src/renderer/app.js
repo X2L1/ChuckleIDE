@@ -886,6 +886,7 @@ function handleMenuAction(action) {
     'find': () => monacoEditor ? monacoEditor.trigger('', 'actions.find') : showToast('Find is unavailable in basic editor', 'info'),
     'replace': () => monacoEditor ? monacoEditor.trigger('', 'editor.action.startFindReplaceAction') : showToast('Replace is unavailable in basic editor', 'info'),
     'goto-line': () => monacoEditor ? monacoEditor.trigger('', 'editor.action.gotoLine') : promptGotoLine(),
+    'trigger-completion': () => triggerEditorCompletion(),
     'toggle-explorer': () => switchPanel('explorer'),
     'toggle-terminal': () => toggleBottomPanel(),
     'toggle-devices': () => switchPanel('devices'),
@@ -899,10 +900,44 @@ function handleMenuAction(action) {
     'disconnect-hub': () => adbDisconnectAll(),
     'insert-template': () => showModal('template'),
     'new-from-template': () => showModal('template'),
+    'git-commit': () => openGitHubGitTab('Commit is created when you push changes to GitHub.'),
+    'git-push': () => triggerGitHubPushFromMenu(),
+    'git-pull': () => triggerGitHubPullFromMenu(),
     'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info'),
     'check-updates': () => manualCheckForUpdates()
   };
   (handlers[action] || (() => appendOutput(`Unknown action: ${action}`, 'warn')))();
+}
+
+function triggerEditorCompletion() {
+  if (monacoEditor) {
+    monacoEditor.focus();
+    monacoEditor.trigger('', 'editor.action.triggerSuggest');
+    return;
+  }
+  if (!tryApplyFallbackAutocomplete()) {
+    showToast('No autocomplete suggestions found', 'info');
+  }
+}
+
+function openGitHubGitTab(infoMessage) {
+  openAppView('github');
+  initGitHubView();
+  const cloneTabBtn = document.querySelector('.gh-tab[data-gh-tab="clone"]');
+  if (cloneTabBtn) cloneTabBtn.click();
+  if (infoMessage) showToast(infoMessage, 'info');
+}
+
+function triggerGitHubPushFromMenu() {
+  openGitHubGitTab();
+  const pushBtn = document.getElementById('gh-push-btn');
+  if (pushBtn) pushBtn.click();
+}
+
+function triggerGitHubPullFromMenu() {
+  openGitHubGitTab();
+  const cloneBtn = document.getElementById('gh-clone-btn');
+  if (cloneBtn) cloneBtn.click();
 }
 
 // ── Sidebar Navigation ─────────────────────────────────────
@@ -2214,6 +2249,7 @@ function bindKeyboardShortcuts() {
     if (ctrl && e.key === 'n') { e.preventDefault(); promptNewFile(); }
     if (ctrl && e.shiftKey && e.key === 'N') { e.preventDefault(); showModal('new-project'); }
     if (ctrl && e.key === 'b') { e.preventDefault(); document.getElementById('sidebar').style.display = document.getElementById('sidebar').style.display === 'none' ? '' : 'none'; }
+    if (ctrl && e.code === 'Space') { e.preventDefault(); triggerEditorCompletion(); }
     if (e.key === 'F6') { e.preventDefault(); triggerBuild('assemble'); }
     if (e.key === 'F7') { e.preventDefault(); triggerBuild('install'); }
     if (e.key === 'Escape') { hideContextMenu(); }
