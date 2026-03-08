@@ -10,6 +10,12 @@ const SCOPES = 'repo read:user user:email';
 
 const API_VERSION = '2022-11-28';
 
+/** Maximum file size (bytes) to download when cloning a repo via the Git Trees API. */
+const MAX_DOWNLOAD_FILE_SIZE = 1_000_000;
+
+/** Directories to skip when pushing local project files. */
+const PUSH_SKIP_DIRS = ['.git', 'node_modules', 'build', '.gradle', '.idea', '__pycache__'];
+
 class GitHubAPI {
   constructor(store) {
     this._store = store;
@@ -277,6 +283,7 @@ class GitHubAPI {
         temperature: 0.1,
         top_p: 1,
         n: 1,
+        // Stop after three consecutive newlines (end of logical code block)
         stop: ['\n\n\n']
       }, 'api.githubcopilot.com');
     } catch (err) {
@@ -353,7 +360,7 @@ class GitHubAPI {
 
     const files = [];
     for (const item of tree.tree) {
-      if (item.type === 'blob' && item.size < 1000000) { // Skip files > 1MB
+      if (item.type === 'blob' && item.size < MAX_DOWNLOAD_FILE_SIZE) {
         try {
           const blob = await this.getBlob(owner, repo, item.sha);
           const content = blob.encoding === 'base64'

@@ -618,7 +618,8 @@ ipcMain.handle('github:pushProject', async (_, owner, repo, branch, projectPath)
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(base, fullPath).replace(/\\/g, '/');
       // Skip common non-essential directories
-      if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'build' || entry.name === '.gradle') continue;
+      const SKIP_DIRS = ['.git', 'node_modules', 'build', '.gradle', '.idea', '__pycache__'];
+      if (entry.isDirectory() && SKIP_DIRS.includes(entry.name)) continue;
       if (entry.isDirectory()) {
         await walkDir(fullPath, base);
       } else {
