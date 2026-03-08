@@ -10,7 +10,7 @@ const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
 const Updater = require('./src/main/updater');
-const GitHubAuth = require('./src/main/github-auth');
+const GitHubAPI = require('./src/main/github-api');
 const templates = require('./src/templates/index');
 
 const store = new Store();
@@ -21,7 +21,7 @@ let updater;
 let lspManager;
 let buildManager;
 let projectManager;
-let githubAuth;
+let githubApi;
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
@@ -469,23 +469,15 @@ ipcMain.handle('settings:delete', async (_, key) => {
   return true;
 });
 
-// ── IPC: GitHub OAuth Device Flow ─────────────────────────────────────────────
+// ── IPC: GitHub REST API ──────────────────────────────────────────────────────
 
 ipcMain.handle('auth:startDeviceFlow', async () => {
-  const flowInfo = await githubAuth.startDeviceFlow();
-
-  // Open the verification page in the user's default browser.
+  const flowInfo = await githubApi.startDeviceFlow();
   shell.openExternal(flowInfo.verificationUri);
 
-  // Start polling in the background; notify the renderer when complete.
-  githubAuth.pollForToken(flowInfo.deviceCode, flowInfo.interval)
-    .then(async (token) => {
-      store.set('github.token', token);
-      // Fetch the user's profile and store it.
-      try {
-        const user = await githubAuth.fetchUser(token);
-        store.set('github.user', { login: user.login, name: user.name || '', avatar_url: user.avatar_url || '' });
-      } catch { /* profile fetch is best-effort */ }
+  githubApi.pollForToken(flowInfo.deviceCode, flowInfo.interval)
+    .then(async () => {
+      try { await githubApi.fetchAndStoreUser(); } catch { /* best-effort */ }
       if (mainWindow) mainWindow.webContents.send('auth:deviceFlowSuccess');
     })
     .catch((err) => {
@@ -496,31 +488,158 @@ ipcMain.handle('auth:startDeviceFlow', async () => {
 });
 
 ipcMain.handle('auth:cancelDeviceFlow', async () => {
-  githubAuth.cancelDeviceFlow();
+  githubApi.cancelDeviceFlow();
   return true;
 });
 
 ipcMain.handle('auth:getUser', async () => {
-  const user = store.get('github.user');
-  const hasToken = Boolean(store.get('github.token'));
-  return { signedIn: hasToken && Boolean(user), user: user || null };
+  return githubApi.getUserProfile();
 });
 
 ipcMain.handle('auth:signOut', async () => {
-  store.delete('github.token');
-  store.delete('github.user');
+  githubApi.signOut();
   return true;
 });
 
 ipcMain.handle('auth:setClientId', async (_, clientId) => {
-  const id = (clientId || '').trim();
-  if (id) {
-    store.set('github.clientId', id);
-  } else {
-    store.delete('github.clientId');
-  }
-  githubAuth = new GitHubAuth(id);
+  githubApi.setClientId(clientId);
   return true;
+});
+
+// ── GitHub Repos ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('github:listRepos', async (_, opts) => {
+  return githubApi.listRepos(opts);
+});
+
+ipcMain.handle('github:getRepo', async (_, owner, repo) => {
+  return githubApi.getRepo(owner, repo);
+});
+
+ipcMain.handle('github:createRepo', async (_, name, options) => {
+  return githubApi.createRepo(name, options);
+});
+
+ipcMain.handle('github:deleteRepo', async (_, owner, repo) => {
+  return githubApi.deleteRepo(owner, repo);
+});
+
+ipcMain.handle('github:forkRepo', async (_, owner, repo) => {
+  return githubApi.forkRepo(owner, repo);
+});
+
+ipcMain.handle('github:searchRepos', async (_, query) => {
+  return githubApi.searchRepos(query);
+});
+
+// ── GitHub Contents ───────────────────────────────────────────────────────────
+
+ipcMain.handle('github:getContents', async (_, owner, repo, path, ref) => {
+  return githubApi.getContents(owner, repo, path || '', ref);
+});
+
+ipcMain.handle('github:createOrUpdateFile', async (_, owner, repo, path, content, message, sha) => {
+  return githubApi.createOrUpdateFile(owner, repo, path, content, message, sha);
+});
+
+ipcMain.handle('github:deleteFile', async (_, owner, repo, path, sha, message) => {
+  return githubApi.deleteFile(owner, repo, path, sha, message);
+});
+
+// ── GitHub Branches ───────────────────────────────────────────────────────────
+
+ipcMain.handle('github:listBranches', async (_, owner, repo) => {
+  return githubApi.listBranches(owner, repo);
+});
+
+ipcMain.handle('github:createBranch', async (_, owner, repo, branchName, sha) => {
+  return githubApi.createBranch(owner, repo, branchName, sha);
+});
+
+// ── GitHub Commits ────────────────────────────────────────────────────────────
+
+ipcMain.handle('github:listCommits', async (_, owner, repo, opts) => {
+  return githubApi.listCommits(owner, repo, opts);
+});
+
+ipcMain.handle('github:getCommit', async (_, owner, repo, ref) => {
+  return githubApi.getCommit(owner, repo, ref);
+});
+
+// ── GitHub Issues ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('github:listIssues', async (_, owner, repo, opts) => {
+  return githubApi.listIssues(owner, repo, opts);
+});
+
+ipcMain.handle('github:createIssue', async (_, owner, repo, title, body) => {
+  return githubApi.createIssue(owner, repo, title, body);
+});
+
+ipcMain.handle('github:updateIssue', async (_, owner, repo, issueNumber, data) => {
+  return githubApi.updateIssue(owner, repo, issueNumber, data);
+});
+
+// ── GitHub Pull Requests ──────────────────────────────────────────────────────
+
+ipcMain.handle('github:listPullRequests', async (_, owner, repo, opts) => {
+  return githubApi.listPullRequests(owner, repo, opts);
+});
+
+ipcMain.handle('github:createPullRequest', async (_, owner, repo, title, head, base, body) => {
+  return githubApi.createPullRequest(owner, repo, title, head, base, body);
+});
+
+// ── GitHub Releases ───────────────────────────────────────────────────────────
+
+ipcMain.handle('github:listReleases', async (_, owner, repo) => {
+  return githubApi.listReleases(owner, repo);
+});
+
+// ── GitHub Git operations (clone/push via REST) ───────────────────────────────
+
+ipcMain.handle('github:downloadRepo', async (_, owner, repo, branch, destPath) => {
+  const files = await githubApi.downloadRepo(owner, repo, branch);
+  // Write files to destPath
+  for (const file of files) {
+    const filePath = path.join(destPath, file.path);
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.writeFile(filePath, file.content, 'utf-8');
+  }
+  return { filesWritten: files.length, destPath };
+});
+
+ipcMain.handle('github:pushProject', async (_, owner, repo, branch, projectPath) => {
+  // Read all project files and push them
+  const files = [];
+  async function walkDir(dir, base) {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(base, fullPath).replace(/\\/g, '/');
+      // Skip common non-essential directories
+      if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'build' || entry.name === '.gradle') continue;
+      if (entry.isDirectory()) {
+        await walkDir(fullPath, base);
+      } else {
+        try {
+          const content = await fs.readFile(fullPath, 'utf-8');
+          files.push({ path: relPath, content });
+        } catch {
+          // Skip binary files or files that can't be read as UTF-8
+        }
+      }
+    }
+  }
+  await walkDir(projectPath, projectPath);
+  const commit = await githubApi.pushFiles(owner, repo, branch || 'main', files, 'Push from ChuckleIDE');
+  return { sha: commit.sha, filesCount: files.length };
+});
+
+// ── GitHub Copilot ────────────────────────────────────────────────────────────
+
+ipcMain.handle('github:copilotSuggest', async (_, prompt, language, filename) => {
+  return githubApi.copilotSuggest(prompt, language, filename);
 });
 
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
@@ -592,7 +711,7 @@ app.whenReady().then(async () => {
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
   updater = new Updater(store);
-  githubAuth = new GitHubAuth(store.get('github.clientId'));
+  githubApi = new GitHubAPI(store);
 
   createWindow();
 

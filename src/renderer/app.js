@@ -29,6 +29,7 @@ const DEFAULT_HOME_LAYOUT = [
   { type: 'app', id: 'app-open-editor', visible: true },
   { type: 'app', id: 'app-device-manager', visible: true },
   { type: 'app', id: 'app-new-project', visible: true },
+  { type: 'app', id: 'app-github', visible: true },
   { type: 'app', id: 'app-learn', visible: true },
   { type: 'app', id: 'app-pedro-constants', visible: true },
   { type: 'app', id: 'app-lut-manager', visible: true },
@@ -55,35 +56,44 @@ function applyHomeLayout(layout) {
   const grid = document.querySelector('.home-apps-grid');
   if (!grid) return;
 
-  // Hide all app cards first
-  grid.querySelectorAll('.home-app-card').forEach(card => card.style.display = 'none');
+  // Collect all app cards for re-insertion
+  const allCards = {};
+  grid.querySelectorAll('.home-app-card').forEach(card => {
+    allCards[card.id] = card;
+    card.style.display = 'none';
+    card.remove();
+  });
 
   // Remove any existing folder elements
   grid.querySelectorAll('.home-folder').forEach(f => f.remove());
 
   // Apply layout: show visible apps in order, create folders
-  let currentFolder = null;
   let currentFolderGrid = null;
 
   for (const item of layout) {
     if (item.type === 'folder') {
       const folderEl = document.createElement('div');
       folderEl.className = 'home-folder';
+      folderEl.dataset.folderId = item.id || '';
       const titleEl = document.createElement('div');
       titleEl.className = 'home-folder-title';
-      titleEl.textContent = item.name || 'Folder';
-      folderEl.appendChild(titleEl);
+      titleEl.innerHTML = `<span class="folder-icon">📁</span> ${escapeHtml(item.name || 'Folder')}`;
+      // Allow collapsing folders
+      titleEl.style.cursor = 'pointer';
       const folderGrid = document.createElement('div');
       folderGrid.className = 'home-folder-grid';
+      titleEl.addEventListener('click', () => {
+        folderGrid.style.display = folderGrid.style.display === 'none' ? '' : 'none';
+        folderEl.classList.toggle('collapsed');
+      });
+      folderEl.appendChild(titleEl);
       folderEl.appendChild(folderGrid);
       grid.appendChild(folderEl);
-      currentFolder = folderEl;
-      currentFolderGrid = folderEl.querySelector('.home-folder-grid');
+      currentFolderGrid = folderGrid;
     } else if (item.type === 'folder-end') {
-      currentFolder = null;
       currentFolderGrid = null;
     } else if (item.type === 'app') {
-      const card = document.getElementById(item.id);
+      const card = allCards[item.id];
       if (card) {
         card.style.display = item.visible ? '' : 'none';
         if (item.visible) {
@@ -92,8 +102,19 @@ function applyHomeLayout(layout) {
           } else {
             grid.appendChild(card);
           }
+        } else {
+          // Keep hidden cards in grid so they remain accessible
+          grid.appendChild(card);
         }
       }
+    }
+  }
+
+  // Append any cards not mentioned in layout (e.g. newly added)
+  for (const [id, card] of Object.entries(allCards)) {
+    if (!card.parentElement) {
+      card.style.display = '';
+      grid.appendChild(card);
     }
   }
 }
@@ -111,14 +132,20 @@ async function renderCustomizeList() {
     if (nameEl) appNames[card.id] = nameEl.textContent;
   });
 
+  // Track folder nesting
+  let inFolder = false;
+  let folderStartIdx = -1;
+
   layout.forEach((item, idx) => {
     if (item.type === 'folder') {
+      inFolder = true;
+      folderStartIdx = idx;
       const folderEl = document.createElement('div');
       folderEl.className = 'home-customize-folder';
       folderEl.dataset.idx = idx;
       const headerEl = document.createElement('div');
       headerEl.className = 'home-customize-folder-header';
-      headerEl.appendChild(document.createTextNode('📁 '));
+      headerEl.innerHTML = '<span style="margin-right:4px">📁</span>';
       const nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.value = item.name || 'Folder';
@@ -126,59 +153,76 @@ async function renderCustomizeList() {
       headerEl.appendChild(nameInput);
       const removeBtn = document.createElement('button');
       removeBtn.className = 'icon-btn remove-folder';
-      removeBtn.title = 'Remove folder';
+      removeBtn.title = 'Remove folder (keeps apps)';
       removeBtn.style.fontSize = '12px';
       removeBtn.textContent = '✕';
       headerEl.appendChild(removeBtn);
       folderEl.appendChild(headerEl);
+
       nameInput.addEventListener('input', async (e) => {
         const currentLayout = await getHomeLayout();
-        currentLayout[idx].name = e.target.value;
-        await saveHomeLayout(currentLayout);
+        if (currentLayout[idx] && currentLayout[idx].type === 'folder') {
+          currentLayout[idx].name = e.target.value;
+          await saveHomeLayout(currentLayout);
+        }
       });
+
       removeBtn.addEventListener('click', async () => {
         const currentLayout = await getHomeLayout();
-        // Remove folder start and end markers, keep apps inside
-        let endIdx = currentLayout.findIndex((it, i) => i > idx && it.type === 'folder-end');
-        if (endIdx === -1) endIdx = currentLayout.length;
-        currentLayout.splice(endIdx, 1); // remove folder-end
-        currentLayout.splice(idx, 1); // remove folder
+        // Find folder-end for this folder
+        let endIdx = -1;
+        for (let i = idx + 1; i < currentLayout.length; i++) {
+          if (currentLayout[i].type === 'folder-end') { endIdx = i; break; }
+        }
+        if (endIdx !== -1) {
+          currentLayout.splice(endIdx, 1); // remove folder-end
+        }
+        currentLayout.splice(idx, 1); // remove folder start
         await saveHomeLayout(currentLayout);
         await renderCustomizeList();
+        applyHomeLayout(await getHomeLayout());
       });
+
       list.appendChild(folderEl);
     } else if (item.type === 'folder-end') {
-      // Visual separator
+      inFolder = false;
       const sep = document.createElement('div');
-      sep.style.cssText = 'height:2px;background:var(--border);margin:4px 0 8px;border-radius:1px;';
+      sep.className = 'home-customize-folder-end';
+      sep.dataset.idx = idx;
+      sep.style.cssText = 'height:3px;background:var(--accent);margin:2px 0 8px;border-radius:2px;opacity:0.4;';
       list.appendChild(sep);
     } else if (item.type === 'app') {
       const el = document.createElement('div');
-      el.className = 'home-customize-item';
+      el.className = 'home-customize-item' + (inFolder ? ' in-folder' : '');
       el.draggable = true;
       el.dataset.idx = idx;
       const name = appNames[item.id] || item.id;
       el.innerHTML = `
         <span class="item-grip">⠿</span>
-        <span class="item-name">${name}</span>
+        <span class="item-name">${escapeHtml(name)}</span>
         <input type="checkbox" class="item-toggle" ${item.visible ? 'checked' : ''} />
       `;
 
       // Toggle visibility
       el.querySelector('.item-toggle').addEventListener('change', async (e) => {
         const currentLayout = await getHomeLayout();
-        currentLayout[idx].visible = e.target.checked;
-        await saveHomeLayout(currentLayout);
+        if (currentLayout[idx]) {
+          currentLayout[idx].visible = e.target.checked;
+          await saveHomeLayout(currentLayout);
+          applyHomeLayout(currentLayout);
+        }
       });
 
       // Drag and drop reordering
       el.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', idx.toString());
+        e.dataTransfer.effectAllowed = 'move';
         el.classList.add('dragging');
       });
       el.addEventListener('dragend', () => el.classList.remove('dragging'));
       el.addEventListener('dragover', (e) => {
         e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
         el.style.borderTop = '2px solid var(--accent)';
       });
       el.addEventListener('dragleave', () => {
@@ -189,13 +233,16 @@ async function renderCustomizeList() {
         el.style.borderTop = '';
         const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
         const toIdx = parseInt(el.dataset.idx);
-        if (fromIdx !== toIdx) {
-          const currentLayout = await getHomeLayout();
-          const [moved] = currentLayout.splice(fromIdx, 1);
-          currentLayout.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
-          await saveHomeLayout(currentLayout);
-          await renderCustomizeList();
-        }
+        if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
+        const currentLayout = await getHomeLayout();
+        // Only move app items, not folder markers
+        if (!currentLayout[fromIdx] || currentLayout[fromIdx].type !== 'app') return;
+        const [moved] = currentLayout.splice(fromIdx, 1);
+        const adjustedToIdx = toIdx > fromIdx ? toIdx - 1 : toIdx;
+        currentLayout.splice(adjustedToIdx, 0, moved);
+        await saveHomeLayout(currentLayout);
+        await renderCustomizeList();
+        applyHomeLayout(currentLayout);
       });
 
       list.appendChild(el);
@@ -230,12 +277,14 @@ function bindHomeCustomization() {
   });
 
   document.getElementById('home-add-folder').addEventListener('click', async () => {
+    const folderName = prompt('Folder name:', 'New Folder');
+    if (!folderName) return;
     const layout = await getHomeLayout();
-    const folderName = 'New Folder';
     layout.push({ type: 'folder', name: folderName, id: 'folder-' + Date.now() });
     layout.push({ type: 'folder-end' });
     await saveHomeLayout(layout);
     await renderCustomizeList();
+    applyHomeLayout(layout);
   });
 }
 
@@ -1185,7 +1234,8 @@ const appTabMeta = {
   'enum-manager':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l12 12-10 10L4 16z"/><circle cx="11" cy="11" r="2" fill="currentColor"/></svg>', label: 'Global Enums' },
   'object-manager':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2L4 9v14l12 7 12-7V9z"/><path d="M16 16L4 9"/><path d="M16 16l12-7"/><path d="M16 16v14"/></svg>', label: 'Global Objects' },
   'util-builder':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14L4 24l4 4 10-10"/><path d="M22 4a6 6 0 0 0-6 6c0 1 .3 2 .6 2.8L14 16"/><path d="M18 18l3.2-3.4c.8.3 1.8.6 2.8.6a6 6 0 0 0 0-12"/></svg>', label: 'Utilities' },
-  'vision-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg>', label: 'Vision Builder' }
+  'vision-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg>', label: 'Vision Builder' },
+  'github':            { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2C8.3 2 2 8.3 2 16c0 6.2 4 11.4 9.6 13.3.7.1 1-.3 1-.7v-2.5c-3.9.9-4.7-1.9-4.7-1.9-.6-1.6-1.6-2-1.6-2-1.3-.9.1-.9.1-.9 1.4.1 2.1 1.4 2.1 1.4 1.3 2.2 3.3 1.6 4.1 1.2.1-.9.5-1.6.9-1.9-3.1-.4-6.4-1.6-6.4-7 0-1.5.5-2.8 1.4-3.8-.1-.4-.6-1.8.1-3.7 0 0 1.2-.4 3.8 1.4 1.1-.3 2.3-.5 3.5-.5s2.4.2 3.5.5c2.7-1.8 3.8-1.4 3.8-1.4.8 1.9.3 3.3.1 3.7.9 1 1.4 2.3 1.4 3.8 0 5.4-3.3 6.6-6.4 7 .5.4 1 1.3 1 2.6v3.8c0 .4.3.8 1 .7C26 27.4 30 22.2 30 16 30 8.3 23.7 2 16 2z"/></svg>', label: 'GitHub' }
 };
 
 function isAppTab(tabId) {
@@ -2572,6 +2622,7 @@ function bindHomeScreen() {
     'app-open-editor':       () => browseForProject(),
     'app-device-manager':    () => switchPanel('devices'),
     'app-new-project':       () => showModal('new-project'),
+    'app-github':            () => openAppView('github'),
     'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
     'app-pedro-constants':   () => openAppView('pedro-constants'),
     'app-lut-manager':       () => openAppView('lut-manager'),
@@ -2619,6 +2670,7 @@ function initAppIfNeeded(name) {
   if (name === 'object-manager') initObjectManager();
   if (name === 'util-builder') initUtilBuilder();
   if (name === 'vision-builder') initVisionBuilder();
+  if (name === 'github') initGitHubView();
 }
 
 function closeAppView() {
@@ -2640,15 +2692,27 @@ function closeAppView() {
 // ── Subsystem Builder ─────────────────────────────────────
 const subsystemBlocks = [
   { cat: 'hardware', label: 'DcMotor', code: 'private DcMotor {{name}};', init: '{{name}} = hardwareMap.get(DcMotor.class, "{{hwName}}");', defaults: { name: 'motor', hwName: 'motor0' } },
+  { cat: 'hardware', label: 'DcMotorEx', code: 'private DcMotorEx {{name}};', init: '{{name}} = hardwareMap.get(DcMotorEx.class, "{{hwName}}");\n        {{name}}.setMode(DcMotor.RunMode.RUN_USING_ENCODER);', defaults: { name: 'motorEx', hwName: 'motorEx0' }, imports: ['com.qualcomm.robotcore.hardware.DcMotorEx'] },
   { cat: 'hardware', label: 'Servo', code: 'private Servo {{name}};', init: '{{name}} = hardwareMap.get(Servo.class, "{{hwName}}");', defaults: { name: 'servo', hwName: 'servo0' } },
   { cat: 'hardware', label: 'CRServo', code: 'private CRServo {{name}};', init: '{{name}} = hardwareMap.get(CRServo.class, "{{hwName}}");', defaults: { name: 'crServo', hwName: 'crServo0' } },
   { cat: 'hardware', label: 'Distance Sensor', code: 'private DistanceSensor {{name}};', init: '{{name}} = hardwareMap.get(DistanceSensor.class, "{{hwName}}");', defaults: { name: 'distSensor', hwName: 'distSensor0' } },
   { cat: 'hardware', label: 'Touch Sensor', code: 'private TouchSensor {{name}};', init: '{{name}} = hardwareMap.get(TouchSensor.class, "{{hwName}}");', defaults: { name: 'touchSensor', hwName: 'touchSensor0' } },
   { cat: 'hardware', label: 'Color Sensor', code: 'private ColorSensor {{name}};', init: '{{name}} = hardwareMap.get(ColorSensor.class, "{{hwName}}");', defaults: { name: 'colorSensor', hwName: 'colorSensor0' } },
+  { cat: 'hardware', label: 'Encoder', code: 'private DcMotorEx {{name}};', init: '{{name}} = hardwareMap.get(DcMotorEx.class, "{{hwName}}");\n        {{name}}.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);\n        {{name}}.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);', defaults: { name: 'encoder', hwName: 'encoder0' }, imports: ['com.qualcomm.robotcore.hardware.DcMotorEx'] },
+  { cat: 'hardware', label: 'Break Beam Sensor', code: 'private DigitalChannel {{name}};', init: '{{name}} = hardwareMap.get(DigitalChannel.class, "{{hwName}}");\n        {{name}}.setMode(DigitalChannel.Mode.INPUT);', defaults: { name: 'breakBeam', hwName: 'breakBeam0' }, imports: ['com.qualcomm.robotcore.hardware.DigitalChannel'] },
+  { cat: 'hardware', label: 'IMU', code: 'private IMU {{name}};', init: '{{name}} = hardwareMap.get(IMU.class, "{{hwName}}");\n        {{name}}.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(\n            RevHubOrientationOnRobot.LogoFacingDirection.UP,\n            RevHubOrientationOnRobot.UsbFacingDirection.FORWARD)));', defaults: { name: 'imu', hwName: 'imu' }, imports: ['com.qualcomm.robotcore.hardware.IMU', 'com.qualcomm.hardware.rev.RevHubOrientationOnRobot'] },
+  { cat: 'hardware', label: 'Analog Input', code: 'private AnalogInput {{name}};', init: '{{name}} = hardwareMap.get(AnalogInput.class, "{{hwName}}");', defaults: { name: 'analogInput', hwName: 'analogInput0' }, imports: ['com.qualcomm.robotcore.hardware.AnalogInput'] },
+  { cat: 'hardware', label: 'LED', code: 'private DigitalChannel {{name}};', init: '{{name}} = hardwareMap.get(DigitalChannel.class, "{{hwName}}");\n        {{name}}.setMode(DigitalChannel.Mode.OUTPUT);', defaults: { name: 'led', hwName: 'led0' }, imports: ['com.qualcomm.robotcore.hardware.DigitalChannel'] },
   { cat: 'method', label: 'Set Motor Power', code: 'public void {{methodName}}(double power) {\n    {{motor}}.setPower(power);\n}', defaults: { methodName: 'setDrivePower', motor: 'motor' } },
   { cat: 'method', label: 'Set Servo Position', code: 'public void {{methodName}}(double pos) {\n    {{servo}}.setPosition(pos);\n}', defaults: { methodName: 'setArmPosition', servo: 'servo' } },
   { cat: 'method', label: 'Get Distance', code: 'public double {{methodName}}() {\n    return {{sensor}}.getDistance(DistanceUnit.CM);\n}', defaults: { methodName: 'getDistance', sensor: 'distSensor' } },
   { cat: 'method', label: 'Is Pressed', code: 'public boolean {{methodName}}() {\n    return {{sensor}}.isPressed();\n}', defaults: { methodName: 'isLimitReached', sensor: 'touchSensor' } },
+  { cat: 'method', label: 'Run To Position', code: 'public void {{methodName}}(int targetTicks, double power) {\n    {{motor}}.setTargetPosition(targetTicks);\n    {{motor}}.setMode(DcMotor.RunMode.RUN_TO_POSITION);\n    {{motor}}.setPower(Math.abs(power));\n}', defaults: { methodName: 'runToPosition', motor: 'motorEx' } },
+  { cat: 'method', label: 'Set Velocity', code: 'public void {{methodName}}(double ticksPerSecond) {\n    {{motor}}.setVelocity(ticksPerSecond);\n}', defaults: { methodName: 'setVelocity', motor: 'motorEx' } },
+  { cat: 'method', label: 'Get Encoder Position', code: 'public int {{methodName}}() {\n    return {{encoder}}.getCurrentPosition();\n}', defaults: { methodName: 'getEncoderPosition', encoder: 'encoder' } },
+  { cat: 'method', label: 'Is Break Beam Triggered', code: 'public boolean {{methodName}}() {\n    return !{{sensor}}.getState();\n}', defaults: { methodName: 'isBeamBroken', sensor: 'breakBeam' } },
+  { cat: 'method', label: 'Is Motor At Target', code: 'public boolean {{methodName}}() {\n    return !{{motor}}.isBusy();\n}', defaults: { methodName: 'isAtTarget', motor: 'motorEx' } },
+  { cat: 'method', label: 'Get IMU Heading', code: 'public double {{methodName}}() {\n    return {{imu}}.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);\n}', defaults: { methodName: 'getHeading', imu: 'imu' } },
   { cat: 'method', label: 'Stop All', code: 'public void stop() {\n    {{body}}\n}', defaults: { body: '// Stop all motors' } },
   { cat: 'method', label: 'Custom Method', code: 'public {{returnType}} {{methodName}}({{params}}) {\n    {{body}}\n}', defaults: { returnType: 'void', methodName: 'doSomething', params: '', body: '// TODO' } },
 ];
@@ -2761,10 +2825,37 @@ function generateSubsystemCode() {
   const hardware = sbBlocks.filter(b => b.cat === 'hardware');
   const methods = sbBlocks.filter(b => b.cat === 'method');
 
+  // Collect extra imports needed by blocks
+  const extraImports = new Set();
+  for (const block of sbBlocks) {
+    if (block.imports) {
+      block.imports.forEach(imp => extraImports.add(imp));
+    }
+  }
+  // Check if any method references RunMode or AngleUnit
+  const allCode = sbBlocks.map(b => {
+    let c = b.code;
+    for (const [k, v] of Object.entries(b.params)) c = c.replaceAll(`{{${k}}}`, v);
+    return c;
+  }).join('\n');
+  if (allCode.includes('RunMode.') || allCode.includes('setTargetPosition') || allCode.includes('setMode')) {
+    extraImports.add('com.qualcomm.robotcore.hardware.DcMotor');
+  }
+  if (allCode.includes('AngleUnit.')) {
+    extraImports.add('org.firstinspires.ftc.robotcore.external.navigation.AngleUnit');
+  }
+  if (allCode.includes('setVelocity')) {
+    extraImports.add('com.qualcomm.robotcore.hardware.DcMotorEx');
+  }
+
   let code = '// Generated by ChuckleIDE Subsystem Builder\n';
   code += 'package org.firstinspires.ftc.teamcode.subsystems;\n\n';
   code += 'import com.qualcomm.robotcore.hardware.*;\n';
-  code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n\n';
+  code += 'import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;\n';
+  for (const imp of extraImports) {
+    code += `import ${imp};\n`;
+  }
+  code += '\n';
   code += `public class ${className} {\n`;
 
   // Hardware fields
@@ -2796,6 +2887,49 @@ function generateSubsystemCode() {
   return code;
 }
 
+// ── Scan project for existing subsystem/command class names ──
+async function scanTeamCodeClasses(packageFolder) {
+  if (!state.teamCodePath) return [];
+  try {
+    const dir = joinProjectPath(state.teamCodePath, packageFolder);
+    const exists = await window.ftcIDE.fs.exists(dir);
+    if (!exists) return [];
+    const entries = await window.ftcIDE.fs.readDir(dir);
+    return entries
+      .filter(e => !e.isDirectory && e.name.endsWith('.java'))
+      .map(e => e.name.replace(/\.java$/, ''));
+  } catch {
+    return [];
+  }
+}
+
+function populateDropdown(selectEl, options, currentValue) {
+  const prevValue = selectEl.value || currentValue || '';
+  selectEl.innerHTML = '';
+  // Always add a custom option
+  const customOpt = document.createElement('option');
+  customOpt.value = '';
+  customOpt.textContent = '— Type custom —';
+  selectEl.appendChild(customOpt);
+  for (const name of options) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    selectEl.appendChild(opt);
+  }
+  // Restore value if it exists in options
+  if (options.includes(prevValue)) {
+    selectEl.value = prevValue;
+  } else if (prevValue) {
+    // Add as custom option
+    const opt = document.createElement('option');
+    opt.value = prevValue;
+    opt.textContent = prevValue + ' (custom)';
+    selectEl.appendChild(opt);
+    selectEl.value = prevValue;
+  }
+}
+
 // ── Command Builder ──────────────────────────────────────
 const commandBlocks = [
   { cat: 'action', label: 'Call Subsystem Method', code: '{{subsystem}}.{{method}}({{args}});', defaults: { subsystem: 'subsystem', method: 'doSomething', args: '' } },
@@ -2814,7 +2948,7 @@ let cmbIdCounter = 0;
 let cmbInitialized = false;
 
 function initCommandBuilder() {
-  if (cmbInitialized) { updateCMBPreview(); return; }
+  if (cmbInitialized) { updateCMBPreview(); refreshCMBSubsystemDropdown(); return; }
   cmbInitialized = true;
 
   const palette = document.getElementById('cmb-palette');
@@ -2861,10 +2995,43 @@ function initCommandBuilder() {
   });
   document.getElementById('cmb-refresh').addEventListener('click', updateCMBPreview);
   document.getElementById('cmb-class-name').addEventListener('input', updateCMBPreview);
-  document.getElementById('cmb-subsystem').addEventListener('input', updateCMBPreview);
 
+  // Subsystem dropdown + custom input
+  const subsystemSelect = document.getElementById('cmb-subsystem-select');
+  const subsystemCustom = document.getElementById('cmb-subsystem-custom');
+  subsystemSelect.addEventListener('change', () => {
+    if (subsystemSelect.value === '') {
+      subsystemCustom.style.display = '';
+      subsystemCustom.focus();
+    } else {
+      subsystemCustom.style.display = 'none';
+    }
+    updateCMBPreview();
+  });
+  subsystemCustom.addEventListener('input', updateCMBPreview);
+
+  refreshCMBSubsystemDropdown();
   renderCMBWorkspace();
   updateCMBPreview();
+}
+
+async function refreshCMBSubsystemDropdown() {
+  const subsystemSelect = document.getElementById('cmb-subsystem-select');
+  const subsystemCustom = document.getElementById('cmb-subsystem-custom');
+  if (!subsystemSelect) return;
+  const subsystems = await scanTeamCodeClasses('subsystems');
+  populateDropdown(subsystemSelect, subsystems, 'MySubsystem');
+  if (subsystems.length > 0 && subsystemSelect.value) {
+    subsystemCustom.style.display = 'none';
+  }
+}
+
+function getCMBSubsystemValue() {
+  const sel = document.getElementById('cmb-subsystem-select');
+  const custom = document.getElementById('cmb-subsystem-custom');
+  if (sel && sel.value) return sel.value;
+  if (custom) return custom.value || 'MySubsystem';
+  return 'MySubsystem';
 }
 
 function addCMBBlock(block) {
@@ -2915,7 +3082,7 @@ function updateCMBPreview() {
 
 function generateCommandCode() {
   const className = document.getElementById('cmb-class-name').value || 'MyCommand';
-  const subsystem = document.getElementById('cmb-subsystem').value || 'MySubsystem';
+  const subsystem = getCMBSubsystemValue();
 
   const actions = cmbBlocks.filter(b => b.cat === 'action' || b.cat === 'control' || b.cat === 'telemetry');
   const finishBlocks = cmbBlocks.filter(b => b.cat === 'finish');
@@ -2969,7 +3136,7 @@ let obIdCounter = 0;
 let obInitialized = false;
 
 function initOpModeBuilder() {
-  if (obInitialized) { updateOBPreview(); return; }
+  if (obInitialized) { updateOBPreview(); refreshOBDropdowns(); return; }
   obInitialized = true;
 
   document.getElementById('ob-close').addEventListener('click', closeAppView);
@@ -3048,8 +3215,35 @@ function initOpModeBuilder() {
     updateOBPreview();
   });
 
+  refreshOBDropdowns();
   renderOBSequence();
   updateOBPreview();
+}
+
+// Cache for OB dropdown data
+let _obSubsystems = [];
+let _obCommands = [];
+
+async function refreshOBDropdowns() {
+  _obSubsystems = await scanTeamCodeClasses('subsystems');
+  _obCommands = await scanTeamCodeClasses('commands');
+}
+
+function buildOBSelectHtml(options, currentValue, dataField, placeholder) {
+  let html = `<select class="text-input ob-dropdown" data-field="${dataField}">`;
+  html += `<option value="">— ${placeholder || 'Type custom'} —</option>`;
+  let found = false;
+  for (const opt of options) {
+    const sel = opt === currentValue ? ' selected' : '';
+    if (opt === currentValue) found = true;
+    html += `<option value="${escapeHtml(opt)}"${sel}>${escapeHtml(opt)}</option>`;
+  }
+  if (currentValue && !found) {
+    html += `<option value="${escapeHtml(currentValue)}" selected>${escapeHtml(currentValue)} (custom)</option>`;
+  }
+  html += '</select>';
+  html += `<input type="text" value="${escapeHtml(currentValue)}" data-field="${dataField}" class="text-input ob-custom-input" placeholder="Custom name" style="${(found || !currentValue) && options.length > 0 ? 'display:none' : ''}" />`;
+  return html;
 }
 
 function renderOBSequence() {
@@ -3163,15 +3357,31 @@ function renderOBSequence() {
         <div class="ob-step-body">
           <div class="ob-step-row">
             <label>Command:</label>
-            <input type="text" value="${escapeHtml(step.commandName)}" data-field="commandName" class="text-input" />
+            ${buildOBSelectHtml(_obCommands, step.commandName, 'commandName', 'Select command')}
           </div>
           <div class="ob-step-row">
             <label>Subsystem:</label>
-            <input type="text" value="${escapeHtml(step.subsystemName)}" data-field="subsystemName" class="text-input" />
+            ${buildOBSelectHtml(_obSubsystems, step.subsystemName, 'subsystemName', 'Select subsystem')}
           </div>
         </div>
       `;
-      el.querySelectorAll('.ob-step-body input').forEach(input => {
+      // Wire up dropdowns and custom inputs
+      el.querySelectorAll('.ob-dropdown').forEach(sel => {
+        sel.addEventListener('change', () => {
+          const field = sel.dataset.field;
+          const customInput = sel.parentElement.querySelector('.ob-custom-input');
+          if (sel.value === '') {
+            customInput.style.display = '';
+            customInput.focus();
+            step[field] = customInput.value;
+          } else {
+            customInput.style.display = 'none';
+            step[field] = sel.value;
+          }
+          updateOBPreview();
+        });
+      });
+      el.querySelectorAll('.ob-custom-input').forEach(input => {
         input.addEventListener('input', () => { step[input.dataset.field] = input.value; updateOBPreview(); });
       });
     } else if (step.type === 'parallel') {
@@ -5591,4 +5801,286 @@ function generateColorBlobCode() {
   code += '    }\n';
   code += '}\n';
   return code;
+}
+
+// ── GitHub View ──────────────────────────────────────────────
+let ghInitialized = false;
+
+function initGitHubView() {
+  if (ghInitialized) { refreshGitHubViewAuth(); return; }
+  ghInitialized = true;
+
+  document.getElementById('gh-close').addEventListener('click', closeAppView);
+
+  // Sign in from the GitHub view
+  document.getElementById('gh-sign-in-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('gh-sign-in-btn');
+    try {
+      btn.textContent = 'Waiting for authorization...';
+      btn.disabled = true;
+      await window.ftcIDE.auth.startDeviceFlow();
+    } catch (err) {
+      showToast('GitHub sign-in failed: ' + err.message, 'error');
+      btn.textContent = 'Sign in with GitHub';
+      btn.disabled = false;
+    }
+  });
+
+  // Tab switching
+  document.querySelectorAll('.gh-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.gh-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.gh-tab-content').forEach(c => c.style.display = 'none');
+      tab.classList.add('active');
+      const target = document.getElementById('gh-tab-' + tab.dataset.ghTab);
+      if (target) target.style.display = '';
+    });
+  });
+
+  // Repos
+  document.getElementById('gh-refresh-repos').addEventListener('click', loadGitHubRepos);
+  document.getElementById('gh-create-repo').addEventListener('click', async () => {
+    const name = prompt('Repository name:');
+    if (!name) return;
+    const desc = prompt('Description (optional):') || '';
+    try {
+      await window.ftcIDE.github.createRepo(name, { description: desc, isPrivate: true });
+      showToast('Repository created: ' + name, 'success');
+      loadGitHubRepos();
+    } catch (err) {
+      showToast('Failed to create repo: ' + err.message, 'error');
+    }
+  });
+
+  // Issues
+  document.getElementById('gh-load-issues').addEventListener('click', loadGitHubIssues);
+  document.getElementById('gh-create-issue').addEventListener('click', async () => {
+    const repoInput = document.getElementById('gh-issues-repo').value.trim();
+    if (!repoInput || !repoInput.includes('/')) {
+      showToast('Enter a valid owner/repo', 'warning');
+      return;
+    }
+    const [owner, repo] = repoInput.split('/');
+    const title = prompt('Issue title:');
+    if (!title) return;
+    const body = prompt('Issue body (optional):') || '';
+    try {
+      await window.ftcIDE.github.createIssue(owner, repo, title, body);
+      showToast('Issue created', 'success');
+      loadGitHubIssues();
+    } catch (err) {
+      showToast('Failed to create issue: ' + err.message, 'error');
+    }
+  });
+
+  // Pull Requests
+  document.getElementById('gh-load-prs').addEventListener('click', loadGitHubPRs);
+
+  // Clone / Push
+  document.getElementById('gh-clone-btn').addEventListener('click', async () => {
+    const repoInput = document.getElementById('gh-clone-repo').value.trim();
+    const branch = document.getElementById('gh-clone-branch').value.trim() || 'main';
+    const statusEl = document.getElementById('gh-clone-status');
+
+    if (!repoInput || !repoInput.includes('/')) {
+      showToast('Enter a valid owner/repo', 'warning');
+      return;
+    }
+    const [owner, repo] = repoInput.split('/');
+
+    const result = await window.ftcIDE.fs.openDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Select destination folder for clone'
+    });
+    if (!result || result.canceled || !result.filePaths || !result.filePaths[0]) return;
+    const destPath = result.filePaths[0];
+
+    try {
+      statusEl.textContent = 'Downloading repository...';
+      const res = await window.ftcIDE.github.downloadRepo(owner, repo, branch, destPath);
+      statusEl.textContent = '\u2713 Cloned ' + res.filesWritten + ' files to ' + destPath;
+      showToast('Repository cloned: ' + res.filesWritten + ' files', 'success');
+    } catch (err) {
+      statusEl.textContent = '\u2717 Clone failed: ' + err.message;
+      showToast('Clone failed: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('gh-push-btn').addEventListener('click', async () => {
+    const repoInput = document.getElementById('gh-clone-repo').value.trim();
+    const branch = document.getElementById('gh-clone-branch').value.trim() || 'main';
+    const statusEl = document.getElementById('gh-clone-status');
+
+    if (!repoInput || !repoInput.includes('/')) {
+      showToast('Enter a valid owner/repo', 'warning');
+      return;
+    }
+    if (!state.projectPath) {
+      showToast('Open a project first before pushing', 'warning');
+      return;
+    }
+    const [owner, repo] = repoInput.split('/');
+
+    try {
+      statusEl.textContent = 'Pushing project files...';
+      const res = await window.ftcIDE.github.pushProject(owner, repo, branch, state.projectPath);
+      statusEl.textContent = '\u2713 Pushed ' + res.filesCount + ' files (commit: ' + res.sha.slice(0, 7) + ')';
+      showToast('Project pushed successfully', 'success');
+    } catch (err) {
+      statusEl.textContent = '\u2717 Push failed: ' + err.message;
+      showToast('Push failed: ' + err.message, 'error');
+    }
+  });
+
+  // Copilot
+  document.getElementById('gh-copilot-generate').addEventListener('click', async () => {
+    const promptText = document.getElementById('gh-copilot-prompt').value.trim();
+    const resultEl = document.getElementById('gh-copilot-result');
+    if (!promptText) {
+      showToast('Enter a prompt first', 'warning');
+      return;
+    }
+    try {
+      resultEl.textContent = 'Generating...';
+      const result = await window.ftcIDE.github.copilotSuggest(promptText, 'java', 'Code.java');
+      if (result && result.choices && result.choices[0]) {
+        const text = result.choices[0].text || result.choices[0].message?.content || '';
+        resultEl.textContent = text;
+      } else if (typeof result === 'string') {
+        resultEl.textContent = result;
+      } else {
+        resultEl.textContent = JSON.stringify(result, null, 2);
+      }
+    } catch (err) {
+      resultEl.textContent = 'Error: ' + err.message + '\n\nNote: Copilot requires a GitHub Copilot subscription.';
+    }
+  });
+
+  document.getElementById('gh-copilot-insert').addEventListener('click', () => {
+    const code = document.getElementById('gh-copilot-result').textContent;
+    if (code && code !== 'Generating...' && !code.startsWith('Error:')) {
+      insertGeneratedCode(code);
+    }
+  });
+
+  // Listen for auth success to refresh view
+  window.ftcIDE.on('auth:deviceFlowSuccess', () => {
+    refreshGitHubViewAuth();
+    const btn = document.getElementById('gh-sign-in-btn');
+    if (btn) { btn.textContent = 'Sign in with GitHub'; btn.disabled = false; }
+  });
+
+  refreshGitHubViewAuth();
+}
+
+async function refreshGitHubViewAuth() {
+  try {
+    const { signedIn } = await window.ftcIDE.auth.getUser();
+    const notSignedIn = document.getElementById('gh-not-signed-in');
+    const mainContent = document.getElementById('gh-main-content');
+    if (notSignedIn) notSignedIn.style.display = signedIn ? 'none' : '';
+    if (mainContent) mainContent.style.display = signedIn ? '' : 'none';
+    if (signedIn) loadGitHubRepos();
+  } catch { /* ignore */ }
+}
+
+async function loadGitHubRepos() {
+  const listEl = document.getElementById('gh-repos-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
+  try {
+    const repos = await window.ftcIDE.github.listRepos({ sort: 'updated', per_page: 30 });
+    if (!repos || repos.length === 0) {
+      listEl.innerHTML = '<div class="gh-list-empty">No repositories found</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const repo of repos) {
+      const item = document.createElement('div');
+      item.className = 'gh-list-item';
+      item.innerHTML = '<div style="flex:1;min-width:0;">'
+        + '<div class="gh-item-name">' + escapeHtml(repo.full_name) + '</div>'
+        + '<div class="gh-item-desc">' + escapeHtml(repo.description || 'No description') + '</div>'
+        + '</div>'
+        + '<div class="gh-item-meta">' + (repo.private ? '\uD83D\uDD12' : '\uD83C\uDF10') + ' ' + escapeHtml(repo.language || '') + '</div>';
+      item.addEventListener('click', () => {
+        document.getElementById('gh-clone-repo').value = repo.full_name;
+        document.getElementById('gh-issues-repo').value = repo.full_name;
+        document.getElementById('gh-prs-repo').value = repo.full_name;
+        showToast('Selected: ' + repo.full_name, 'info');
+      });
+      listEl.appendChild(item);
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function loadGitHubIssues() {
+  const repoInput = document.getElementById('gh-issues-repo').value.trim();
+  const listEl = document.getElementById('gh-issues-list');
+  if (!repoInput || !repoInput.includes('/')) {
+    showToast('Enter a valid owner/repo', 'warning');
+    return;
+  }
+  const [owner, repo] = repoInput.split('/');
+  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
+  try {
+    const issues = await window.ftcIDE.github.listIssues(owner, repo, { state: 'open', per_page: 30 });
+    if (!issues || issues.length === 0) {
+      listEl.innerHTML = '<div class="gh-list-empty">No open issues</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const issue of issues) {
+      if (issue.pull_request) continue;
+      const item = document.createElement('div');
+      item.className = 'gh-list-item';
+      item.innerHTML = '<div style="flex:1;min-width:0;">'
+        + '<div class="gh-item-name">#' + issue.number + ': ' + escapeHtml(issue.title) + '</div>'
+        + '<div class="gh-item-desc">' + escapeHtml((issue.body || '').slice(0, 100)) + '</div>'
+        + '</div>'
+        + '<div class="gh-item-meta">' + escapeHtml(issue.user?.login || '') + '</div>';
+      item.addEventListener('click', () => {
+        window.ftcIDE.shell.openExternal(issue.html_url);
+      });
+      listEl.appendChild(item);
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function loadGitHubPRs() {
+  const repoInput = document.getElementById('gh-prs-repo').value.trim();
+  const listEl = document.getElementById('gh-prs-list');
+  if (!repoInput || !repoInput.includes('/')) {
+    showToast('Enter a valid owner/repo', 'warning');
+    return;
+  }
+  const [owner, repo] = repoInput.split('/');
+  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
+  try {
+    const prs = await window.ftcIDE.github.listPullRequests(owner, repo, { state: 'open', per_page: 30 });
+    if (!prs || prs.length === 0) {
+      listEl.innerHTML = '<div class="gh-list-empty">No open pull requests</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const pr of prs) {
+      const item = document.createElement('div');
+      item.className = 'gh-list-item';
+      item.innerHTML = '<div style="flex:1;min-width:0;">'
+        + '<div class="gh-item-name">#' + pr.number + ': ' + escapeHtml(pr.title) + '</div>'
+        + '<div class="gh-item-desc">' + escapeHtml(pr.head?.ref || '') + ' \u2192 ' + escapeHtml(pr.base?.ref || '') + '</div>'
+        + '</div>'
+        + '<div class="gh-item-meta">' + escapeHtml(pr.user?.login || '') + '</div>';
+      item.addEventListener('click', () => {
+        window.ftcIDE.shell.openExternal(pr.html_url);
+      });
+      listEl.appendChild(item);
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
+  }
 }

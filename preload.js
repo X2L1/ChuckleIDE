@@ -101,6 +101,41 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     setClientId: (id) => ipcRenderer.invoke('auth:setClientId', id)
   },
 
+  // ── GitHub REST API ─────────────────────────────────────────────────────────
+  github: {
+    // Repos
+    listRepos: (opts) => ipcRenderer.invoke('github:listRepos', opts),
+    getRepo: (owner, repo) => ipcRenderer.invoke('github:getRepo', owner, repo),
+    createRepo: (name, options) => ipcRenderer.invoke('github:createRepo', name, options),
+    deleteRepo: (owner, repo) => ipcRenderer.invoke('github:deleteRepo', owner, repo),
+    forkRepo: (owner, repo) => ipcRenderer.invoke('github:forkRepo', owner, repo),
+    searchRepos: (query) => ipcRenderer.invoke('github:searchRepos', query),
+    // Contents
+    getContents: (owner, repo, path, ref) => ipcRenderer.invoke('github:getContents', owner, repo, path, ref),
+    createOrUpdateFile: (owner, repo, path, content, message, sha) => ipcRenderer.invoke('github:createOrUpdateFile', owner, repo, path, content, message, sha),
+    deleteFile: (owner, repo, path, sha, message) => ipcRenderer.invoke('github:deleteFile', owner, repo, path, sha, message),
+    // Branches
+    listBranches: (owner, repo) => ipcRenderer.invoke('github:listBranches', owner, repo),
+    createBranch: (owner, repo, branchName, sha) => ipcRenderer.invoke('github:createBranch', owner, repo, branchName, sha),
+    // Commits
+    listCommits: (owner, repo, opts) => ipcRenderer.invoke('github:listCommits', owner, repo, opts),
+    getCommit: (owner, repo, ref) => ipcRenderer.invoke('github:getCommit', owner, repo, ref),
+    // Issues
+    listIssues: (owner, repo, opts) => ipcRenderer.invoke('github:listIssues', owner, repo, opts),
+    createIssue: (owner, repo, title, body) => ipcRenderer.invoke('github:createIssue', owner, repo, title, body),
+    updateIssue: (owner, repo, issueNumber, data) => ipcRenderer.invoke('github:updateIssue', owner, repo, issueNumber, data),
+    // Pull Requests
+    listPullRequests: (owner, repo, opts) => ipcRenderer.invoke('github:listPullRequests', owner, repo, opts),
+    createPullRequest: (owner, repo, title, head, base, body) => ipcRenderer.invoke('github:createPullRequest', owner, repo, title, head, base, body),
+    // Releases
+    listReleases: (owner, repo) => ipcRenderer.invoke('github:listReleases', owner, repo),
+    // Git operations
+    downloadRepo: (owner, repo, branch, destPath) => ipcRenderer.invoke('github:downloadRepo', owner, repo, branch, destPath),
+    pushProject: (owner, repo, branch, projectPath) => ipcRenderer.invoke('github:pushProject', owner, repo, branch, projectPath),
+    // Copilot
+    copilotSuggest: (prompt, language, filename) => ipcRenderer.invoke('github:copilotSuggest', prompt, language, filename)
+  },
+
   // ── Event Listeners ──────────────────────────────────────────────────────────
   on: (channel, callback) => {
     const allowedChannels = [
