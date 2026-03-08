@@ -916,7 +916,7 @@ function triggerEditorCompletion() {
     return;
   }
   if (!tryApplyFallbackAutocomplete()) {
-    showToast('No autocomplete suggestions found', 'info');
+    showToast('Autocomplete unavailable or no suggestions found', 'info');
   }
 }
 

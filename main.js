@@ -495,6 +495,7 @@ ipcMain.handle('settings:delete', async (_, key) => {
 
 ipcMain.handle('auth:startDeviceFlow', async () => {
   const configuredClientId = store.get('github.clientId');
+  // Always re-read from persisted settings so auth uses the latest value immediately.
   githubApi.setClientId(configuredClientId);
   const activeClientId = githubApi.getClientId();
   console.info('[github-auth] startDeviceFlow clientId source=settings value=' + maskClientIdForLog(activeClientId));
@@ -534,6 +535,7 @@ ipcMain.handle('auth:setClientId', async (_, clientId) => {
 
 function maskClientIdForLog(clientId) {
   if (!clientId || typeof clientId !== 'string') return '<missing>';
+  if (clientId.length <= 3) return '***';
   if (clientId.length <= 8) return `${clientId[0]}***${clientId.slice(-1)}`;
   return `${clientId.slice(0, 4)}***${clientId.slice(-4)}`;
 }
