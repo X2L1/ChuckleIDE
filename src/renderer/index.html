@@ -345,6 +345,11 @@
             <div class="app-name">New Project</div>
             <div class="app-desc">Create a fresh FTC project with your favorite libraries</div>
           </div>
+          <div class="home-app-card" id="app-github">
+            <div class="app-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2C8.3 2 2 8.3 2 16c0 6.2 4 11.4 9.6 13.3.7.1 1-.3 1-.7v-2.5c-3.9.9-4.7-1.9-4.7-1.9-.6-1.6-1.6-2-1.6-2-1.3-.9.1-.9.1-.9 1.4.1 2.1 1.4 2.1 1.4 1.3 2.2 3.3 1.6 4.1 1.2.1-.9.5-1.6.9-1.9-3.1-.4-6.4-1.6-6.4-7 0-1.5.5-2.8 1.4-3.8-.1-.4-.6-1.8.1-3.7 0 0 1.2-.4 3.8 1.4 1.1-.3 2.3-.5 3.5-.5s2.4.2 3.5.5c2.7-1.8 3.8-1.4 3.8-1.4.8 1.9.3 3.3.1 3.7.9 1 1.4 2.3 1.4 3.8 0 5.4-3.3 6.6-6.4 7 .5.4 1 1.3 1 2.6v3.8c0 .4.3.8 1 .7C26 27.4 30 22.2 30 16 30 8.3 23.7 2 16 2z"/></svg></div>
+            <div class="app-name">GitHub</div>
+            <div class="app-desc">Manage repos, issues, PRs, clone/push, and use Copilot</div>
+          </div>
           <div class="home-app-card" id="app-learn">
             <div class="app-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c4-2 8-2 14 0v22c-6-2-10-2-14 0z"/><path d="M30 6c-4-2-8-2-14 0v22c6-2 10-2 14 0z"/></svg></div>
             <div class="app-name">Learn FTC</div>
@@ -469,7 +474,10 @@
                 </div>
                 <div class="form-group">
                   <label>Required Subsystem</label>
-                  <input type="text" id="cmb-subsystem" value="MySubsystem" class="text-input" />
+                  <select id="cmb-subsystem-select" class="text-input">
+                    <option value="">— Type custom —</option>
+                  </select>
+                  <input type="text" id="cmb-subsystem-custom" value="MySubsystem" class="text-input" placeholder="Custom subsystem name" />
                 </div>
               </div>
               <div class="builder-workspace" id="cmb-workspace">
@@ -1182,6 +1190,97 @@
                 <button class="icon-btn" id="vis-refresh" title="Refresh">↻</button>
               </div>
               <div class="code-preview-content" id="vis-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GITHUB APP -->
+      <div id="app-view-github" class="app-view">
+        <div class="app-view-header">
+          <span style="display:inline-flex;align-items:center;"><svg width="18" height="18" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2C8.3 2 2 8.3 2 16c0 6.2 4 11.4 9.6 13.3.7.1 1-.3 1-.7v-2.5c-3.9.9-4.7-1.9-4.7-1.9-.6-1.6-1.6-2-1.6-2-1.3-.9.1-.9.1-.9 1.4.1 2.1 1.4 2.1 1.4 1.3 2.2 3.3 1.6 4.1 1.2.1-.9.5-1.6.9-1.9-3.1-.4-6.4-1.6-6.4-7 0-1.5.5-2.8 1.4-3.8-.1-.4-.6-1.8.1-3.7 0 0 1.2-.4 3.8 1.4 1.1-.3 2.3-.5 3.5-.5s2.4.2 3.5.5c2.7-1.8 3.8-1.4 3.8-1.4.8 1.9.3 3.3.1 3.7.9 1 1.4 2.3 1.4 3.8 0 5.4-3.3 6.6-6.4 7 .5.4 1 1.3 1 2.6v3.8c0 .4.3.8 1 .7C26 27.4 30 22.2 30 16 30 8.3 23.7 2 16 2z"/></svg></span>
+          <h2>GitHub</h2>
+          <button class="icon-btn" id="gh-close" title="Close">✕</button>
+        </div>
+        <div class="app-view-body" style="padding:16px;overflow-y:auto;">
+          <div id="gh-not-signed-in" style="text-align:center;padding:40px 0;">
+            <p style="color:var(--fg-dim);margin-bottom:16px">Sign in to GitHub to access your repositories, issues, and more.</p>
+            <button class="btn-primary" id="gh-sign-in-btn">Sign in with GitHub</button>
+          </div>
+          <div id="gh-main-content" style="display:none;">
+            <div class="gh-tabs" style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:8px;">
+              <button class="btn-secondary small gh-tab active" data-gh-tab="repos">Repos</button>
+              <button class="btn-secondary small gh-tab" data-gh-tab="issues">Issues</button>
+              <button class="btn-secondary small gh-tab" data-gh-tab="prs">Pull Requests</button>
+              <button class="btn-secondary small gh-tab" data-gh-tab="clone">Clone / Push</button>
+              <button class="btn-secondary small gh-tab" data-gh-tab="copilot">Copilot</button>
+            </div>
+
+            <!-- Repos Tab -->
+            <div id="gh-tab-repos" class="gh-tab-content">
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button class="btn-primary small" id="gh-refresh-repos">↻ Refresh</button>
+                <button class="btn-secondary small" id="gh-create-repo">+ New Repo</button>
+              </div>
+              <div id="gh-repos-list" class="gh-list"></div>
+            </div>
+
+            <!-- Issues Tab -->
+            <div id="gh-tab-issues" class="gh-tab-content" style="display:none;">
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <div class="form-group" style="flex:1;">
+                  <label>Owner/Repo</label>
+                  <input type="text" id="gh-issues-repo" placeholder="owner/repo" class="text-input" />
+                </div>
+                <button class="btn-primary small" id="gh-load-issues" style="align-self:flex-end;">Load</button>
+                <button class="btn-secondary small" id="gh-create-issue" style="align-self:flex-end;">+ New Issue</button>
+              </div>
+              <div id="gh-issues-list" class="gh-list"></div>
+            </div>
+
+            <!-- Pull Requests Tab -->
+            <div id="gh-tab-prs" class="gh-tab-content" style="display:none;">
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <div class="form-group" style="flex:1;">
+                  <label>Owner/Repo</label>
+                  <input type="text" id="gh-prs-repo" placeholder="owner/repo" class="text-input" />
+                </div>
+                <button class="btn-primary small" id="gh-load-prs" style="align-self:flex-end;">Load</button>
+              </div>
+              <div id="gh-prs-list" class="gh-list"></div>
+            </div>
+
+            <!-- Clone / Push Tab -->
+            <div id="gh-tab-clone" class="gh-tab-content" style="display:none;">
+              <div class="form-group">
+                <label>Repository (owner/repo)</label>
+                <input type="text" id="gh-clone-repo" placeholder="owner/repo" class="text-input" />
+              </div>
+              <div class="form-group">
+                <label>Branch</label>
+                <input type="text" id="gh-clone-branch" value="main" class="text-input" />
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="btn-primary small" id="gh-clone-btn">📥 Clone to Project</button>
+                <button class="btn-secondary small" id="gh-push-btn">📤 Push Project</button>
+              </div>
+              <div id="gh-clone-status" style="margin-top:12px;color:var(--fg-dim);font-size:13px;"></div>
+            </div>
+
+            <!-- Copilot Tab -->
+            <div id="gh-tab-copilot" class="gh-tab-content" style="display:none;">
+              <div class="form-group">
+                <label>Prompt</label>
+                <textarea id="gh-copilot-prompt" class="text-input" rows="6" placeholder="Describe what you want to generate...&#10;&#10;Example: Create a method that drives forward at 0.5 power for 3 seconds"></textarea>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn-primary small" id="gh-copilot-generate">✨ Generate</button>
+                <button class="btn-secondary small" id="gh-copilot-insert">Insert into Editor</button>
+              </div>
+              <div class="form-group" style="margin-top:12px;">
+                <label>Result</label>
+                <pre id="gh-copilot-result" style="background:var(--bg-editor);border:1px solid var(--border);border-radius:6px;padding:12px;min-height:120px;white-space:pre-wrap;font-size:13px;color:var(--fg-main);overflow:auto;max-height:400px;"></pre>
+              </div>
             </div>
           </div>
         </div>
