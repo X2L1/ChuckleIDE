@@ -2,18 +2,16 @@
 
 const https = require('https');
 
-// ── GitHub OAuth App Client ID ────────────────────────────────────────────────
-// Register your own OAuth App at https://github.com/settings/applications/new
-// then enable "Device Authorization Flow" in the app settings and paste the
-// Client ID below.  A client secret is NOT required for the device flow.
-const DEFAULT_GITHUB_CLIENT_ID = 'Ov23liYVVBMH5fJxm0xc';
-
 // Scopes requested during authorization (read:user gives basic profile info).
 const SCOPES = 'read:user';
 
 class GitHubAuth {
   constructor(clientId) {
-    this._clientId = clientId || DEFAULT_GITHUB_CLIENT_ID;
+    const id = typeof clientId === 'string' ? clientId.trim() : '';
+    if (!id) {
+      throw new Error('GitHub OAuth Client ID is not configured.');
+    }
+    this._clientId = id;
     this._polling = false;
     this._aborted = false;
   }

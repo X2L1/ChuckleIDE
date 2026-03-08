@@ -43,6 +43,15 @@
         <button class="top-menu-item" data-menu-action="find">Find</button>
         <button class="top-menu-item" data-menu-action="replace">Replace</button>
         <button class="top-menu-item" data-menu-action="goto-line">Go to Line</button>
+        <button class="top-menu-item" data-menu-action="trigger-completion">Trigger Completion</button>
+      </div>
+    </details>
+    <details class="top-menu-group">
+      <summary>Git</summary>
+      <div class="top-menu-dropdown">
+        <button class="top-menu-item" data-menu-action="git-commit">Commit</button>
+        <button class="top-menu-item" data-menu-action="git-push">Push</button>
+        <button class="top-menu-item" data-menu-action="git-pull">Pull</button>
       </div>
     </details>
     <details class="top-menu-group">
@@ -215,7 +224,7 @@
           <div id="github-signed-out">
             <div class="setting-row">
               <label for="setting-github-client-id">OAuth Client ID</label>
-              <input type="text" id="setting-github-client-id" placeholder="Ov23li…" spellcheck="false" />
+              <input type="text" id="setting-github-client-id" placeholder="Enter your GitHub OAuth Client ID" spellcheck="false" />
             </div>
             <div class="setting-hint" style="font-size:0.82em;opacity:0.65;margin:-6px 0 8px 0;text-align:center">
               Register an OAuth App at <a href="https://github.com/settings/applications/new" style="color:var(--accent)">github.com/settings/applications/new</a> and enable Device Flow.
