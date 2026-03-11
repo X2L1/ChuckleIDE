@@ -9,19 +9,25 @@ const AdbManager = require('./src/main/adb-manager');
 const LspManager = require('./src/main/lsp-manager');
 const BuildManager = require('./src/main/build-manager');
 const ProjectManager = require('./src/main/project-manager');
-const Updater = require('./src/main/updater');
-const GitHubAPI = require('./src/main/github-api');
 const templates = require('./src/templates/index');
+const GitAPI = require('./src/main/git-api');
+const ScoutingManager = require('./src/main/scouting-manager');
+const ResourcesManager = require('./src/main/resources-manager');
+const MechanicsManager = require('./src/main/mechanics-manager');
+const ManagementManager = require('./src/main/management-manager');
 
 const store = new Store();
 
 let mainWindow;
 let adbManager;
-let updater;
 let lspManager;
 let buildManager;
 let projectManager;
-let githubApi;
+let gitApi;
+let scoutingManager;
+let resourcesManager;
+let mechanicsManager;
+let managementManager;
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
@@ -284,20 +290,28 @@ function buildApplicationMenu() {
       ]
     },
     {
+      label: 'Git',
+      submenu: [
+        {
+          label: 'Clone Repository...',
+          click: () => mainWindow.webContents.send('menu-action', 'git-clone')
+        },
+        {
+          label: 'Commit & Push...',
+          click: () => mainWindow.webContents.send('menu-action', 'git-commit')
+        },
+        {
+          label: 'Pull...',
+          click: () => mainWindow.webContents.send('menu-action', 'git-pull')
+        }
+      ]
+    },
+    {
       label: 'Help',
       submenu: [
         {
           label: 'About FTC IDE',
           click: () => mainWindow.webContents.send('menu-action', 'about')
-        },
-        {
-          label: 'Check for Updates…',
-          accelerator: 'CmdOrCtrl+Shift+U',
-          click: () => mainWindow.webContents.send('menu-action', 'check-updates')
-        },
-        {
-          label: 'FTC IDE Documentation',
-          click: () => shell.openExternal('https://github.com/ftc-ide/ftc-ide')
         },
         { type: 'separator' },
         {
@@ -372,6 +386,37 @@ ipcMain.handle('fs:openDialog', async (_, options) => {
 ipcMain.handle('fs:saveDialog', async (_, options) => {
   return dialog.showSaveDialog(mainWindow, options);
 });
+
+// ── Scouting ─────────────────────────────────────────────────────────────
+ipcMain.handle('scouting:setToken', (event, token) => scoutingManager.setToken(token));
+ipcMain.handle('scouting:getMatches', (event, season, eventCode) => scoutingManager.getMatches(season, eventCode));
+ipcMain.handle('scouting:getRankings', (event, season, eventCode) => scoutingManager.getRankings(season, eventCode));
+ipcMain.handle('scouting:predictMatch', (event, red, blue) => scoutingManager.predictMatch(red, blue));
+ipcMain.handle('scouting:calculateAdvancement', (event, rank, total, awards) => scoutingManager.calculateAdvancement(rank, total, awards));
+ipcMain.handle('scouting:getTeamEvents', (event, season, team) => scoutingManager.getTeamEvents(season, team));
+ipcMain.handle('scouting:getAutoData', (event, teamNumber) => scoutingManager.getAutoScoutingData(teamNumber));
+
+// ── Resources ────────────────────────────────────────────────────────────
+ipcMain.handle('resources:analyze', (event, query) => resourcesManager.analyzeManual(query));
+ipcMain.handle('resources:getQuiz', (event) => resourcesManager.getQuizQuestion());
+ipcMain.handle('resources:saveLink', (event, label, url) => resourcesManager.saveLink(label, url));
+ipcMain.handle('resources:getLinks', (event) => resourcesManager.getLinks());
+ipcMain.handle('resources:deleteLink', (event, id) => resourcesManager.deleteLink(id));
+
+// ── Mechanics ────────────────────────────────────────────────────────────
+ipcMain.handle('mechanics:calculateGear', (event, input) => mechanicsManager.calculateGear(input));
+ipcMain.handle('mechanics:calculateBeltChain', (event, input) => mechanicsManager.calculateBeltChain(input));
+ipcMain.handle('mechanics:analyzeDrivetrain', (event, rpm, wheelDiameter) => mechanicsManager.analyzeDrivetrain(rpm, wheelDiameter));
+ipcMain.handle('mechanics:analyzeCadWeakPoints', (event, fileName) => mechanicsManager.analyzeCadWeakPoints(fileName));
+
+// ── Management & Outreach ───────────────────────────────────────────────────
+ipcMain.handle('management:getTasks', () => managementManager.getTasks());
+ipcMain.handle('management:saveTask', (event, task) => managementManager.saveTask(task));
+ipcMain.handle('management:deleteTask', (event, id) => managementManager.deleteTask(id));
+ipcMain.handle('management:getTeam', () => managementManager.getTeam());
+ipcMain.handle('management:getAiSuggestion', (event, taskId) => managementManager.getAiAssignmentSuggestion(taskId));
+ipcMain.handle('outreach:getLog', () => managementManager.getOutreachLog());
+ipcMain.handle('outreach:addEntry', (event, entry) => managementManager.addOutreachEntry(entry));
 
 // ── IPC: ADB ──────────────────────────────────────────────────────────────────
 
@@ -491,190 +536,34 @@ ipcMain.handle('settings:delete', async (_, key) => {
   return true;
 });
 
-// ── IPC: GitHub REST API ──────────────────────────────────────────────────────
+// ── IPC: Git Operations ───────────────────────────────────────────────────────
 
-ipcMain.handle('auth:startDeviceFlow', async () => {
-  const configuredClientId = store.get('github.clientId');
-  // Always re-read from persisted settings so auth uses the latest value immediately.
-  githubApi.setClientId(configuredClientId);
-  const activeClientId = githubApi.getClientId();
-  console.info('[github-auth] startDeviceFlow clientId source=settings value=' + maskClientIdForLog(activeClientId));
-  const flowInfo = await githubApi.startDeviceFlow();
-  shell.openExternal(flowInfo.verificationUri);
-
-  githubApi.pollForToken(flowInfo.deviceCode, flowInfo.interval)
-    .then(async () => {
-      try { await githubApi.fetchAndStoreUser(); } catch { /* best-effort */ }
-      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowSuccess');
-    })
-    .catch((err) => {
-      if (mainWindow) mainWindow.webContents.send('auth:deviceFlowError', err.message);
-    });
-
-  return { userCode: flowInfo.userCode, verificationUri: flowInfo.verificationUri };
+ipcMain.handle('git:clone', async (_, url, localPath) => {
+  return gitApi.clone(url, localPath);
 });
 
-ipcMain.handle('auth:cancelDeviceFlow', async () => {
-  githubApi.cancelDeviceFlow();
-  return true;
+ipcMain.handle('git:status', async (_, repoPath) => {
+  return gitApi.status(repoPath);
 });
 
-ipcMain.handle('auth:getUser', async () => {
-  return githubApi.getUserProfile();
+ipcMain.handle('git:init', async (_, repoPath) => {
+  return gitApi.init(repoPath);
 });
 
-ipcMain.handle('auth:signOut', async () => {
-  githubApi.signOut();
-  return true;
+ipcMain.handle('git:add', async (_, repoPath, files) => {
+  return gitApi.add(repoPath, files);
 });
 
-ipcMain.handle('auth:setClientId', async (_, clientId) => {
-  githubApi.setClientId(clientId);
-  return true;
+ipcMain.handle('git:commit', async (_, repoPath, message) => {
+  return gitApi.commit(repoPath, message);
 });
 
-function maskClientIdForLog(clientId) {
-  if (!clientId || typeof clientId !== 'string') return '<missing>';
-  if (clientId.length <= 3) return '***';
-  if (clientId.length <= 8) return `${clientId[0]}***${clientId.slice(-1)}`;
-  return `${clientId.slice(0, 4)}***${clientId.slice(-4)}`;
-}
-
-// ── GitHub Repos ──────────────────────────────────────────────────────────────
-
-ipcMain.handle('github:listRepos', async (_, opts) => {
-  return githubApi.listRepos(opts);
+ipcMain.handle('git:push', async (_, repoPath, remote, branch) => {
+  return gitApi.push(repoPath, remote, branch);
 });
 
-ipcMain.handle('github:getRepo', async (_, owner, repo) => {
-  return githubApi.getRepo(owner, repo);
-});
-
-ipcMain.handle('github:createRepo', async (_, name, options) => {
-  return githubApi.createRepo(name, options);
-});
-
-ipcMain.handle('github:deleteRepo', async (_, owner, repo) => {
-  return githubApi.deleteRepo(owner, repo);
-});
-
-ipcMain.handle('github:forkRepo', async (_, owner, repo) => {
-  return githubApi.forkRepo(owner, repo);
-});
-
-ipcMain.handle('github:searchRepos', async (_, query) => {
-  return githubApi.searchRepos(query);
-});
-
-// ── GitHub Contents ───────────────────────────────────────────────────────────
-
-ipcMain.handle('github:getContents', async (_, owner, repo, path, ref) => {
-  return githubApi.getContents(owner, repo, path || '', ref);
-});
-
-ipcMain.handle('github:createOrUpdateFile', async (_, owner, repo, path, content, message, sha) => {
-  return githubApi.createOrUpdateFile(owner, repo, path, content, message, sha);
-});
-
-ipcMain.handle('github:deleteFile', async (_, owner, repo, path, sha, message) => {
-  return githubApi.deleteFile(owner, repo, path, sha, message);
-});
-
-// ── GitHub Branches ───────────────────────────────────────────────────────────
-
-ipcMain.handle('github:listBranches', async (_, owner, repo) => {
-  return githubApi.listBranches(owner, repo);
-});
-
-ipcMain.handle('github:createBranch', async (_, owner, repo, branchName, sha) => {
-  return githubApi.createBranch(owner, repo, branchName, sha);
-});
-
-// ── GitHub Commits ────────────────────────────────────────────────────────────
-
-ipcMain.handle('github:listCommits', async (_, owner, repo, opts) => {
-  return githubApi.listCommits(owner, repo, opts);
-});
-
-ipcMain.handle('github:getCommit', async (_, owner, repo, ref) => {
-  return githubApi.getCommit(owner, repo, ref);
-});
-
-// ── GitHub Issues ─────────────────────────────────────────────────────────────
-
-ipcMain.handle('github:listIssues', async (_, owner, repo, opts) => {
-  return githubApi.listIssues(owner, repo, opts);
-});
-
-ipcMain.handle('github:createIssue', async (_, owner, repo, title, body) => {
-  return githubApi.createIssue(owner, repo, title, body);
-});
-
-ipcMain.handle('github:updateIssue', async (_, owner, repo, issueNumber, data) => {
-  return githubApi.updateIssue(owner, repo, issueNumber, data);
-});
-
-// ── GitHub Pull Requests ──────────────────────────────────────────────────────
-
-ipcMain.handle('github:listPullRequests', async (_, owner, repo, opts) => {
-  return githubApi.listPullRequests(owner, repo, opts);
-});
-
-ipcMain.handle('github:createPullRequest', async (_, owner, repo, title, head, base, body) => {
-  return githubApi.createPullRequest(owner, repo, title, head, base, body);
-});
-
-// ── GitHub Releases ───────────────────────────────────────────────────────────
-
-ipcMain.handle('github:listReleases', async (_, owner, repo) => {
-  return githubApi.listReleases(owner, repo);
-});
-
-// ── GitHub Git operations (clone/push via REST) ───────────────────────────────
-
-ipcMain.handle('github:downloadRepo', async (_, owner, repo, branch, destPath) => {
-  const files = await githubApi.downloadRepo(owner, repo, branch);
-  // Write files to destPath
-  for (const file of files) {
-    const filePath = path.join(destPath, file.path);
-    await fs.ensureDir(path.dirname(filePath));
-    await fs.writeFile(filePath, file.content, 'utf-8');
-  }
-  return { filesWritten: files.length, destPath };
-});
-
-ipcMain.handle('github:pushProject', async (_, owner, repo, branch, projectPath) => {
-  // Read all project files and push them
-  const files = [];
-  async function walkDir(dir, base) {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = path.relative(base, fullPath).replace(/\\/g, '/');
-      // Skip common non-essential directories
-      const SKIP_DIRS = ['.git', 'node_modules', 'build', '.gradle', '.idea', '__pycache__'];
-      if (entry.isDirectory() && SKIP_DIRS.includes(entry.name)) continue;
-      if (entry.isDirectory()) {
-        await walkDir(fullPath, base);
-      } else {
-        try {
-          const content = await fs.readFile(fullPath, 'utf-8');
-          files.push({ path: relPath, content });
-        } catch {
-          // Skip binary files or files that can't be read as UTF-8
-        }
-      }
-    }
-  }
-  await walkDir(projectPath, projectPath);
-  const commit = await githubApi.pushFiles(owner, repo, branch || 'main', files, 'Push from ChuckleIDE');
-  return { sha: commit.sha, filesCount: files.length };
-});
-
-// ── GitHub Copilot ────────────────────────────────────────────────────────────
-
-ipcMain.handle('github:copilotSuggest', async (_, prompt, language, filename) => {
-  return githubApi.copilotSuggest(prompt, language, filename);
+ipcMain.handle('git:pull', async (_, repoPath, remote, branch) => {
+  return gitApi.pull(repoPath, remote, branch);
 });
 
 // ── IPC: LSP ──────────────────────────────────────────────────────────────────
@@ -717,43 +606,27 @@ ipcMain.handle('window:maximize', () => {
 ipcMain.handle('window:close', () => { if (mainWindow) mainWindow.close(); });
 ipcMain.handle('window:isMaximized', () => mainWindow ? mainWindow.isMaximized() : false);
 
-// ── IPC: Updater ──────────────────────────────────────────────────────────────
-
-ipcMain.handle('update:check', async () => {
-  return updater.checkForUpdates();
-});
-
-ipcMain.handle('update:install', async () => {
-  return updater.installUpdate((msg) => {
-    if (mainWindow) mainWindow.webContents.send('update:progress', msg);
-  });
-});
-
-ipcMain.handle('update:status', async () => {
-  return {
-    updateAvailable: updater.updateAvailable,
-    currentCommit: updater.currentCommit,
-    latestCommit: updater.latestCommit,
-    changelog: updater.changelog
-  };
-});
-
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
   adbManager = new AdbManager();
   lspManager = new LspManager(store);
+  lspManager.on('notification', (msg) => {
+    if (mainWindow) mainWindow.webContents.send('lsp:notification', msg);
+  });
   buildManager = new BuildManager();
   projectManager = new ProjectManager();
-  updater = new Updater(store);
-  githubApi = new GitHubAPI(store);
+  gitApi = new GitAPI();
+  scoutingManager = new ScoutingManager(store);
+  resourcesManager = new ResourcesManager(store);
+  mechanicsManager = new MechanicsManager(store);
+  managementManager = new ManagementManager(store);
+
+  // Set API token from settings
+  const apiToken = store.get('scouting.apiToken');
+  if (apiToken) scoutingManager.setToken(apiToken);
 
   createWindow();
-
-  // Start background update checks; notify the renderer when an update lands.
-  updater.startAutoCheck((updateInfo) => {
-    if (mainWindow) mainWindow.webContents.send('update:available', updateInfo);
-  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -763,12 +636,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   lspManager && lspManager.stop();
   adbManager && adbManager.cleanup();
-  updater && updater.stopAutoCheck();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
   lspManager && lspManager.stop();
   adbManager && adbManager.cleanup();
-  updater && updater.stopAutoCheck();
 });

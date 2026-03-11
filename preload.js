@@ -85,57 +85,54 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
   },
 
-  // ── Updater ──────────────────────────────────────────────────────────────────
-  update: {
-    check: () => ipcRenderer.invoke('update:check'),
-    install: () => ipcRenderer.invoke('update:install'),
-    status: () => ipcRenderer.invoke('update:status')
+  // ── Mechanics ────────────────────────────────────────────────────────────
+  mechanics: {
+    calculateGear: (input) => ipcRenderer.invoke('mechanics:calculateGear', input),
+    calculateBeltChain: (input) => ipcRenderer.invoke('mechanics:calculateBeltChain', input),
+    analyzeDrivetrain: (rpm, wheelDiameter) => ipcRenderer.invoke('mechanics:analyzeDrivetrain', rpm, wheelDiameter),
+    analyzeCadWeakPoints: (fileName) => ipcRenderer.invoke('mechanics:analyzeCadWeakPoints', fileName)
   },
 
-  // ── GitHub Auth ─────────────────────────────────────────────────────────────
-  auth: {
-    startDeviceFlow: () => ipcRenderer.invoke('auth:startDeviceFlow'),
-    cancelDeviceFlow: () => ipcRenderer.invoke('auth:cancelDeviceFlow'),
-    getUser: () => ipcRenderer.invoke('auth:getUser'),
-    signOut: () => ipcRenderer.invoke('auth:signOut'),
-    setClientId: (id) => ipcRenderer.invoke('auth:setClientId', id)
+  // ── Management & Outreach ─────────────────────────────────────────────────
+  management: {
+    getTasks: () => ipcRenderer.invoke('management:getTasks'),
+    saveTask: (task) => ipcRenderer.invoke('management:saveTask', task),
+    deleteTask: (id) => ipcRenderer.invoke('management:deleteTask', id),
+    getTeam: () => ipcRenderer.invoke('management:getTeam'),
+    getAiSuggestion: (taskId) => ipcRenderer.invoke('management:getAiSuggestion', taskId),
+    getOutreachLog: () => ipcRenderer.invoke('outreach:getLog'),
+    addOutreachEntry: (entry) => ipcRenderer.invoke('outreach:addEntry', entry)
   },
 
-  // ── GitHub REST API ─────────────────────────────────────────────────────────
-  github: {
-    // Repos
-    listRepos: (opts) => ipcRenderer.invoke('github:listRepos', opts),
-    getRepo: (owner, repo) => ipcRenderer.invoke('github:getRepo', owner, repo),
-    createRepo: (name, options) => ipcRenderer.invoke('github:createRepo', name, options),
-    deleteRepo: (owner, repo) => ipcRenderer.invoke('github:deleteRepo', owner, repo),
-    forkRepo: (owner, repo) => ipcRenderer.invoke('github:forkRepo', owner, repo),
-    searchRepos: (query) => ipcRenderer.invoke('github:searchRepos', query),
-    // Contents
-    getContents: (owner, repo, path, ref) => ipcRenderer.invoke('github:getContents', owner, repo, path, ref),
-    createOrUpdateFile: (owner, repo, path, content, message, sha) => ipcRenderer.invoke('github:createOrUpdateFile', owner, repo, path, content, message, sha),
-    deleteFile: (owner, repo, path, sha, message) => ipcRenderer.invoke('github:deleteFile', owner, repo, path, sha, message),
-    // Branches
-    listBranches: (owner, repo) => ipcRenderer.invoke('github:listBranches', owner, repo),
-    createBranch: (owner, repo, branchName, sha) => ipcRenderer.invoke('github:createBranch', owner, repo, branchName, sha),
-    // Commits
-    listCommits: (owner, repo, opts) => ipcRenderer.invoke('github:listCommits', owner, repo, opts),
-    getCommit: (owner, repo, ref) => ipcRenderer.invoke('github:getCommit', owner, repo, ref),
-    // Issues
-    listIssues: (owner, repo, opts) => ipcRenderer.invoke('github:listIssues', owner, repo, opts),
-    createIssue: (owner, repo, title, body) => ipcRenderer.invoke('github:createIssue', owner, repo, title, body),
-    updateIssue: (owner, repo, issueNumber, data) => ipcRenderer.invoke('github:updateIssue', owner, repo, issueNumber, data),
-    // Pull Requests
-    listPullRequests: (owner, repo, opts) => ipcRenderer.invoke('github:listPullRequests', owner, repo, opts),
-    createPullRequest: (owner, repo, title, head, base, body) => ipcRenderer.invoke('github:createPullRequest', owner, repo, title, head, base, body),
-    // Releases
-    listReleases: (owner, repo) => ipcRenderer.invoke('github:listReleases', owner, repo),
-    // Git operations
-    downloadRepo: (owner, repo, branch, destPath) => ipcRenderer.invoke('github:downloadRepo', owner, repo, branch, destPath),
-    pushProject: (owner, repo, branch, projectPath) => ipcRenderer.invoke('github:pushProject', owner, repo, branch, projectPath),
-    // Copilot
-    copilotSuggest: (prompt, language, filename) => ipcRenderer.invoke('github:copilotSuggest', prompt, language, filename)
+  // ── Resources ────────────────────────────────────────────────────────────
+  resources: {
+    analyze: (query) => ipcRenderer.invoke('resources:analyze', query),
+    getQuiz: () => ipcRenderer.invoke('resources:getQuiz'),
+    saveLink: (label, url) => ipcRenderer.invoke('resources:saveLink', label, url),
+    getLinks: () => ipcRenderer.invoke('resources:getLinks'),
+    deleteLink: (id) => ipcRenderer.invoke('resources:deleteLink', id)
   },
 
+  scouting: {
+    setToken: (token) => ipcRenderer.invoke('scouting:setToken', token),
+    getMatches: (season, eventCode) => ipcRenderer.invoke('scouting:getMatches', season, eventCode),
+    getRankings: (season, eventCode) => ipcRenderer.invoke('scouting:getRankings', season, eventCode),
+    predictMatch: (red, blue) => ipcRenderer.invoke('scouting:predictMatch', red, blue),
+    calculateAdvancement: (rank, total, awards) => ipcRenderer.invoke('scouting:calculateAdvancement', rank, total, awards),
+    getTeamEvents: (season, team) => ipcRenderer.invoke('scouting:getTeamEvents', season, team),
+    getAutoData: (teamNumber) => ipcRenderer.invoke('scouting:getAutoData', teamNumber)
+  },
+
+  // ── Git ─────────────────────────────────────────────────────────────────────
+  git: {
+    clone: (url, localPath) => ipcRenderer.invoke('git:clone', url, localPath),
+    status: (repoPath) => ipcRenderer.invoke('git:status', repoPath),
+    init: (repoPath) => ipcRenderer.invoke('git:init', repoPath),
+    add: (repoPath, files) => ipcRenderer.invoke('git:add', repoPath, files),
+    commit: (repoPath, message) => ipcRenderer.invoke('git:commit', repoPath, message),
+    push: (repoPath, remote, branch) => ipcRenderer.invoke('git:push', repoPath, remote, branch),
+    pull: (repoPath, remote, branch) => ipcRenderer.invoke('git:pull', repoPath, remote, branch)
+  },
   // ── Event Listeners ──────────────────────────────────────────────────────────
   on: (channel, callback) => {
     const allowedChannels = [
@@ -145,11 +142,7 @@ contextBridge.exposeInMainWorld('ftcIDE', {
       'build:output',
       'project:progress',
       'adb:deviceChanged',
-      'lsp:notification',
-      'update:available',
-      'update:progress',
-      'auth:deviceFlowSuccess',
-      'auth:deviceFlowError'
+      'lsp:notification'
     ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));

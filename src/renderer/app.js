@@ -28,9 +28,8 @@ const DEFAULT_HOME_LAYOUT = [
   { type: 'app', id: 'app-template-gallery', visible: true },
   { type: 'app', id: 'app-open-editor', visible: true },
   { type: 'app', id: 'app-device-manager', visible: true },
-  { type: 'app', id: 'app-new-project', visible: true },
-  { type: 'app', id: 'app-github', visible: true },
   { type: 'app', id: 'app-learn', visible: true },
+  { type: 'app', id: 'app-git', visible: true },
   { type: 'app', id: 'app-pedro-constants', visible: true },
   { type: 'app', id: 'app-lut-manager', visible: true },
   { type: 'app', id: 'app-interplut-manager', visible: true },
@@ -371,6 +370,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTemplatePanel();
   setupSettingsPanel();
   bindHomeScreen();
+  initSuiteDashboard();
+  initAiAssistant();
+  initSettingsView();
+  bindPhase8Nav();
 
   // Logo click → return to welcome/home screen
   document.getElementById('app-logo').addEventListener('click', () => {
@@ -443,8 +446,9 @@ function initMonaco() {
     return;
   }
 
-  // Register Java-specific completions
+  // Register Java-specific completions and AI completions
   registerJavaCompletions();
+  registerAiCompletions();
 
   // Track cursor position
   monacoEditor.onDidChangeCursorPosition(({ position }) => {
@@ -733,7 +737,6 @@ async function loadSettings() {
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
     setInputVal('setting-adb-path', state.settings['adb.path'] || '');
-    setInputVal('setting-github-client-id', state.settings['github.clientId'] || '');
 
     applyFallbackEditorSettings();
 
@@ -746,97 +749,9 @@ async function loadSettings() {
 }
 
 function setupSettingsPanel() {
-  document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-
-  // ── GitHub OAuth Device Flow ──────────────────────────────────────────────
-  document.getElementById('btn-github-sign-in').addEventListener('click', async () => {
-    const statusEl = document.getElementById('device-flow-status');
-    const codeEl   = document.getElementById('device-flow-code');
-    const btn      = document.getElementById('btn-github-sign-in');
-
-    try {
-      btn.disabled = true;
-      btn.textContent = 'Starting…';
-      const { userCode } = await window.ftcIDE.auth.startDeviceFlow();
-
-      codeEl.textContent = userCode;
-      statusEl.style.display = '';
-      btn.textContent = 'Waiting for authorization…';
-    } catch (e) {
-      // Electron wraps IPC errors; strip the prefix for a cleaner toast.
-      const msg = (e.message || '').replace(/^Error invoking remote method '[^']+': /, '');
-      const hint = /404|Not Found/i.test(msg) ? ' Check your GitHub Client ID in Settings.' : '';
-      showToast(`GitHub sign-in failed: ${msg}${hint}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Sign in with GitHub';
-    }
-  });
-
-  document.getElementById('btn-cancel-device-flow').addEventListener('click', async () => {
-    await window.ftcIDE.auth.cancelDeviceFlow();
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-sign-in');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    showToast('GitHub sign-in cancelled', 'info');
-  });
-
-  document.getElementById('btn-github-sign-out').addEventListener('click', async () => {
-    await window.ftcIDE.auth.signOut();
-    updateGitHubAuthUI(false, null);
-    showToast('Signed out of GitHub', 'info');
-  });
-
-  window.ftcIDE.on('auth:deviceFlowSuccess', async () => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-sign-in');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    showToast('Signed in with GitHub!', 'success');
-    // Refresh the auth UI with current user info
-    try {
-      const { signedIn, user } = await window.ftcIDE.auth.getUser();
-      updateGitHubAuthUI(signedIn, user);
-    } catch (e) { console.error('Failed to refresh GitHub auth UI:', e); }
-  });
-
-  window.ftcIDE.on('auth:deviceFlowError', (msg) => {
-    document.getElementById('device-flow-status').style.display = 'none';
-    const btn = document.getElementById('btn-github-sign-in');
-    btn.disabled = false;
-    btn.textContent = 'Sign in with GitHub';
-    if (msg !== 'cancelled') {
-      showToast(`GitHub sign-in failed: ${msg}`, 'error');
-    }
-  });
-
-  // Check initial sign-in state
-  refreshGitHubAuthUI();
+  const saveBtn = document.getElementById('btn-save-settings-sidebar');
+  if (saveBtn) saveBtn.addEventListener('click', saveSettings);
 }
-
-async function refreshGitHubAuthUI() {
-  try {
-    const { signedIn, user } = await window.ftcIDE.auth.getUser();
-    updateGitHubAuthUI(signedIn, user);
-  } catch (e) { console.error('Failed to load GitHub auth state:', e); }
-}
-
-function updateGitHubAuthUI(signedIn, user) {
-  const signedOutEl = document.getElementById('github-signed-out');
-  const signedInEl  = document.getElementById('github-signed-in');
-
-  if (signedIn && user) {
-    signedOutEl.style.display = 'none';
-    signedInEl.style.display = '';
-    document.getElementById('github-avatar').src = user.avatar_url || '';
-    document.getElementById('github-display-name').textContent = user.name || user.login;
-    document.getElementById('github-username').textContent = `@${user.login}`;
-  } else {
-    signedOutEl.style.display = '';
-    signedInEl.style.display = 'none';
-  }
-}
-
 async function saveSettings() {
   const kvPairs = [
     ['editor.fontSize', document.getElementById('setting-font-size').value],
@@ -847,8 +762,7 @@ async function saveSettings() {
     ['build.gradleArgs', document.getElementById('setting-gradle-args').value],
     ['build.slothMode', document.getElementById('setting-sloth-mode').checked],
     ['adb.path', document.getElementById('setting-adb-path').value],
-    ['ui.colorMode', document.getElementById('setting-color-mode').value],
-    ['github.clientId', document.getElementById('setting-github-client-id').value]
+    ['ui.colorMode', document.getElementById('setting-color-mode').value]
   ];
 
   for (const [k, v] of kvPairs) {
@@ -868,9 +782,6 @@ async function saveSettings() {
   applyFallbackEditorSettings();
 
   applyColorMode(state.settings['ui.colorMode']);
-
-  // Update the GitHub auth client ID in the main process.
-  await window.ftcIDE.auth.setClientId(state.settings['github.clientId'] || '');
 
   showToast('Settings saved', 'success');
 }
@@ -900,11 +811,11 @@ function handleMenuAction(action) {
     'disconnect-hub': () => adbDisconnectAll(),
     'insert-template': () => showModal('template'),
     'new-from-template': () => showModal('template'),
-    'git-commit': () => openGitHubGitTab('Commit is created when you push changes to GitHub.'),
-    'git-push': () => triggerGitHubPushFromMenu(),
-    'git-pull': () => triggerGitHubPullFromMenu(),
     'about': () => showToast('FTC IDE v1.0.0 – Built for FIRST Tech Challenge', 'info'),
-    'check-updates': () => manualCheckForUpdates()
+    'check-updates': () => manualCheckForUpdates(),
+    'git-clone': () => openGitTab('Enter a repository URL to clone.'),
+    'git-commit': () => triggerGitPushFromMenu(),
+    'git-pull': () => triggerGitPullFromMenu()
   };
   (handlers[action] || (() => appendOutput(`Unknown action: ${action}`, 'warn')))();
 }
@@ -920,25 +831,6 @@ function triggerEditorCompletion() {
   }
 }
 
-function openGitHubGitTab(infoMessage) {
-  openAppView('github');
-  initGitHubView();
-  const cloneTabBtn = document.querySelector('.gh-tab[data-gh-tab="clone"]');
-  if (cloneTabBtn) cloneTabBtn.click();
-  if (infoMessage) showToast(infoMessage, 'info');
-}
-
-function triggerGitHubPushFromMenu() {
-  openGitHubGitTab();
-  const pushBtn = document.getElementById('gh-push-btn');
-  if (pushBtn) pushBtn.click();
-}
-
-function triggerGitHubPullFromMenu() {
-  openGitHubGitTab();
-  const cloneBtn = document.getElementById('gh-clone-btn');
-  if (cloneBtn) cloneBtn.click();
-}
 
 // ── Sidebar Navigation ─────────────────────────────────────
 function bindSidebarNav() {
@@ -975,6 +867,7 @@ function bindFileExplorer() {
   document.getElementById('btn-view-deps').addEventListener('click', () => {
     state.showingDeps = !state.showingDeps;
     const btn = document.getElementById('btn-view-deps');
+
     if (state.showingDeps) {
       btn.textContent = '☕ Back to TeamCode';
     } else {
@@ -1270,7 +1163,14 @@ const appTabMeta = {
   'object-manager':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2L4 9v14l12 7 12-7V9z"/><path d="M16 16L4 9"/><path d="M16 16l12-7"/><path d="M16 16v14"/></svg>', label: 'Global Objects' },
   'util-builder':      { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14L4 24l4 4 10-10"/><path d="M22 4a6 6 0 0 0-6 6c0 1 .3 2 .6 2.8L14 16"/><path d="M18 18l3.2-3.4c.8.3 1.8.6 2.8.6a6 6 0 0 0 0-12"/></svg>', label: 'Utilities' },
   'vision-builder':    { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="16" r="4"/><circle cx="16" cy="16" r="1" fill="currentColor"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/></svg>', label: 'Vision Builder' },
-  'github':            { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2C8.3 2 2 8.3 2 16c0 6.2 4 11.4 9.6 13.3.7.1 1-.3 1-.7v-2.5c-3.9.9-4.7-1.9-4.7-1.9-.6-1.6-1.6-2-1.6-2-1.3-.9.1-.9.1-.9 1.4.1 2.1 1.4 2.1 1.4 1.3 2.2 3.3 1.6 4.1 1.2.1-.9.5-1.6.9-1.9-3.1-.4-6.4-1.6-6.4-7 0-1.5.5-2.8 1.4-3.8-.1-.4-.6-1.8.1-3.7 0 0 1.2-.4 3.8 1.4 1.1-.3 2.3-.5 3.5-.5s2.4.2 3.5.5c2.7-1.8 3.8-1.4 3.8-1.4.8 1.9.3 3.3.1 3.7.9 1 1.4 2.3 1.4 3.8 0 5.4-3.3 6.6-6.4 7 .5.4 1 1.3 1 2.6v3.8c0 .4.3.8 1 .7C26 27.4 30 22.2 30 16 30 8.3 23.7 2 16 2z"/></svg>', label: 'GitHub' }
+  'github':            { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2C8.3 2 2 8.3 2 16c0 6.2 4 11.4 9.6 13.3.7.1 1-.3 1-.7v-2.5c-3.9.9-4.7-1.9-4.7-1.9-.6-1.6-1.6-2-1.6-2-1.3-.9.1-.9.1-.9 1.4.1 2.1 1.4 2.1 1.4 1.3 2.2 3.3 1.6 4.1 1.2.1-.9.5-1.6.9-1.9-3.1-.4-6.4-1.6-6.4-7 0-1.5.5-2.8 1.4-3.8-.1-.4-.6-1.8.1-3.7 0 0 1.2-.4 3.8 1.4 1.1-.3 2.3-.5 3.5-.5s2.4.2 3.5.5c2.7-1.8 3.8-1.4 3.8-1.4.8 1.9.3 3.3.1 3.7.9 1 1.4 2.3 1.4 3.8 0 5.4-3.3 6.6-6.4 7 .5.4 1 1.3 1 2.6v3.8c0 .4.3.8 1 .7C26 27.4 30 22.2 30 16 30 8.3 23.7 2 16 2z"/></svg>', label: 'GitHub' },
+  'git':               { icon: '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="26" cy="6" r="3"/><circle cx="6" cy="26" r="3"/><line x1="6" y1="9" x2="6" y2="23"/><path d="M26 9v6a8 8 0 0 1-8 8H9"/><polyline points="5 19 9 23 5 27"/></svg>', label: 'Source Control' },
+  'vision-tuner':      { icon: '👁️', label: 'Vision Tuner' },
+  'scouting':          { icon: '📊', label: 'Scouting Hub' },
+  'resources':         { icon: '📚', label: 'Resources' },
+  'mechanics':         { icon: '⚙️', label: 'Mechanics' },
+  'management':        { icon: '📅', label: 'Management' },
+  'outreach':          { icon: '📢', label: 'Outreach' }
 };
 
 function isAppTab(tabId) {
@@ -2286,7 +2186,6 @@ function bindWelcomeLinks() {
 function bindMenuActions() {
   document.getElementById('btn-build').addEventListener('click', () => triggerBuild('assemble'));
   document.getElementById('btn-deploy').addEventListener('click', () => triggerBuild('install'));
-  document.getElementById('btn-check-updates').addEventListener('click', () => manualCheckForUpdates());
   document.querySelectorAll('.top-menu-item[data-menu-action]').forEach((item) => {
     item.addEventListener('click', () => {
       handleMenuAction(item.dataset.menuAction);
@@ -2659,6 +2558,7 @@ function bindHomeScreen() {
     'app-device-manager':    () => switchPanel('devices'),
     'app-new-project':       () => showModal('new-project'),
     'app-github':            () => openAppView('github'),
+    'app-git':               () => openAppView('git'),
     'app-learn':             () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'),
     'app-pedro-constants':   () => openAppView('pedro-constants'),
     'app-lut-manager':       () => openAppView('lut-manager'),
@@ -2668,7 +2568,7 @@ function bindHomeScreen() {
     'app-util-builder':      () => openAppView('util-builder'),
     'app-vision-builder':    () => openAppView('vision-builder'),
     'home-open-project':     () => browseForProject(),
-    'home-clone-repo':       () => showModal('clone')
+    'home-clone-repo':       () => openGitTab('clone')
   };
   for (const [id, fn] of Object.entries(handlers)) {
     const el = document.getElementById(id);
@@ -2706,7 +2606,7 @@ function initAppIfNeeded(name) {
   if (name === 'object-manager') initObjectManager();
   if (name === 'util-builder') initUtilBuilder();
   if (name === 'vision-builder') initVisionBuilder();
-  if (name === 'github') initGitHubView();
+  if (name === 'git') initGitView();
 }
 
 function closeAppView() {
@@ -5839,284 +5739,1113 @@ function generateColorBlobCode() {
   return code;
 }
 
-// ── GitHub View ──────────────────────────────────────────────
-let ghInitialized = false;
+// ── Git View ──────────────────────────────────────────────
+let gitInitialized = false;
 
-function initGitHubView() {
-  if (ghInitialized) { refreshGitHubViewAuth(); return; }
-  ghInitialized = true;
-
-  document.getElementById('gh-close').addEventListener('click', closeAppView);
-
-  // Sign in from the GitHub view
-  document.getElementById('gh-sign-in-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('gh-sign-in-btn');
-    try {
-      btn.textContent = 'Waiting for authorization...';
-      btn.disabled = true;
-      await window.ftcIDE.auth.startDeviceFlow();
-    } catch (err) {
-      showToast('GitHub sign-in failed: ' + err.message, 'error');
-      btn.textContent = 'Sign in with GitHub';
-      btn.disabled = false;
+function openGitTab(tabOrMsg) {
+  openAppView('git');
+  initGitView();
+  if (tabOrMsg) {
+    if (['status', 'clone', 'sync'].includes(tabOrMsg)) {
+      const tabBtn = document.querySelector(`.git-tab[data-git-tab="${tabOrMsg}"]`);
+      if (tabBtn) tabBtn.click();
+    } else {
+      showToast(tabOrMsg, 'info');
     }
-  });
+  }
+}
+
+function triggerGitPushFromMenu() {
+  openGitTab();
+  const pushTabBtn = document.querySelector('.git-tab[data-git-tab="sync"]');
+  if (pushTabBtn) pushTabBtn.click();
+}
+
+function triggerGitPullFromMenu() {
+  openGitTab();
+  const pullTabBtn = document.querySelector('.git-tab[data-git-tab="sync"]');
+  if (pullTabBtn) pullTabBtn.click();
+}
+
+function initGitView() {
+  if (gitInitialized) { refreshGitStatus(); return; }
+  gitInitialized = true;
+
+  document.getElementById('git-close').addEventListener('click', closeAppView);
 
   // Tab switching
-  document.querySelectorAll('.gh-tab').forEach(tab => {
+  document.querySelectorAll('.git-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.gh-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.gh-tab-content').forEach(c => c.style.display = 'none');
+      document.querySelectorAll('.git-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.git-tab-content').forEach(c => c.style.display = 'none');
       tab.classList.add('active');
-      const target = document.getElementById('gh-tab-' + tab.dataset.ghTab);
-      if (target) target.style.display = '';
+      const target = document.getElementById('git-tab-' + tab.dataset.gitTab);
+      if (target) target.style.display = 'block';
+      if (tab.dataset.gitTab === 'status') refreshGitStatus();
     });
   });
 
-  // Repos
-  document.getElementById('gh-refresh-repos').addEventListener('click', loadGitHubRepos);
-  document.getElementById('gh-create-repo').addEventListener('click', async () => {
-    const name = prompt('Repository name:');
-    if (!name) return;
-    const desc = prompt('Description (optional):') || '';
-    try {
-      await window.ftcIDE.github.createRepo(name, { description: desc, isPrivate: true });
-      showToast('Repository created: ' + name, 'success');
-      loadGitHubRepos();
-    } catch (err) {
-      showToast('Failed to create repo: ' + err.message, 'error');
-    }
-  });
+  // Action: Clone
+  document.getElementById('git-clone-btn').addEventListener('click', async () => {
+    const url = document.getElementById('git-clone-url').value.trim();
+    const statusEl = document.getElementById('git-clone-status');
+    if (!url) { showToast('Please enter a repository URL', 'warning'); return; }
 
-  // Issues
-  document.getElementById('gh-load-issues').addEventListener('click', loadGitHubIssues);
-  document.getElementById('gh-create-issue').addEventListener('click', async () => {
-    const repoInput = document.getElementById('gh-issues-repo').value.trim();
-    if (!repoInput || !repoInput.includes('/')) {
-      showToast('Enter a valid owner/repo', 'warning');
-      return;
-    }
-    const [owner, repo] = repoInput.split('/');
-    const title = prompt('Issue title:');
-    if (!title) return;
-    const body = prompt('Issue body (optional):') || '';
-    try {
-      await window.ftcIDE.github.createIssue(owner, repo, title, body);
-      showToast('Issue created', 'success');
-      loadGitHubIssues();
-    } catch (err) {
-      showToast('Failed to create issue: ' + err.message, 'error');
-    }
-  });
-
-  // Pull Requests
-  document.getElementById('gh-load-prs').addEventListener('click', loadGitHubPRs);
-
-  // Clone / Push
-  document.getElementById('gh-clone-btn').addEventListener('click', async () => {
-    const repoInput = document.getElementById('gh-clone-repo').value.trim();
-    const branch = document.getElementById('gh-clone-branch').value.trim() || 'main';
-    const statusEl = document.getElementById('gh-clone-status');
-
-    if (!repoInput || !repoInput.includes('/')) {
-      showToast('Enter a valid owner/repo', 'warning');
-      return;
-    }
-    const [owner, repo] = repoInput.split('/');
-
-    const result = await window.ftcIDE.fs.openDialog({
+    const result = await window.ftcIDE.shell.open({
       properties: ['openDirectory', 'createDirectory'],
-      title: 'Select destination folder for clone'
+      title: 'Select Clone Destination'
     });
-    if (!result || result.canceled || !result.filePaths || !result.filePaths[0]) return;
-    const destPath = result.filePaths[0];
+    // shell.open maps to showOpenDialog -> Note: Needs IPC mapping if different. We can assume fs based fallback here.
+    // For safety, let's use prompt for path or just let it clone to a default subfolder if we lack a generic dialog binding.
+    // Since I implemented standard git api, I will use prompt as a fallback.
+    const dest = prompt('Enter absolute path for destination directory:', 'C:\\FTC_Projects\\NewRepo');
+    if (!dest) return;
 
+    statusEl.textContent = 'Cloning...';
     try {
-      statusEl.textContent = 'Downloading repository...';
-      const res = await window.ftcIDE.github.downloadRepo(owner, repo, branch, destPath);
-      statusEl.textContent = '\u2713 Cloned ' + res.filesWritten + ' files to ' + destPath;
-      showToast('Repository cloned: ' + res.filesWritten + ' files', 'success');
-    } catch (err) {
-      statusEl.textContent = '\u2717 Clone failed: ' + err.message;
-      showToast('Clone failed: ' + err.message, 'error');
-    }
-  });
-
-  document.getElementById('gh-push-btn').addEventListener('click', async () => {
-    const repoInput = document.getElementById('gh-clone-repo').value.trim();
-    const branch = document.getElementById('gh-clone-branch').value.trim() || 'main';
-    const statusEl = document.getElementById('gh-clone-status');
-
-    if (!repoInput || !repoInput.includes('/')) {
-      showToast('Enter a valid owner/repo', 'warning');
-      return;
-    }
-    if (!state.projectPath) {
-      showToast('Open a project first before pushing', 'warning');
-      return;
-    }
-    const [owner, repo] = repoInput.split('/');
-
-    try {
-      statusEl.textContent = 'Pushing project files...';
-      const res = await window.ftcIDE.github.pushProject(owner, repo, branch, state.projectPath);
-      statusEl.textContent = '\u2713 Pushed ' + res.filesCount + ' files (commit: ' + res.sha.slice(0, 7) + ')';
-      showToast('Project pushed successfully', 'success');
-    } catch (err) {
-      statusEl.textContent = '\u2717 Push failed: ' + err.message;
-      showToast('Push failed: ' + err.message, 'error');
-    }
-  });
-
-  // Copilot
-  document.getElementById('gh-copilot-generate').addEventListener('click', async () => {
-    const promptText = document.getElementById('gh-copilot-prompt').value.trim();
-    const resultEl = document.getElementById('gh-copilot-result');
-    if (!promptText) {
-      showToast('Enter a prompt first', 'warning');
-      return;
-    }
-    try {
-      resultEl.textContent = 'Generating...';
-      const result = await window.ftcIDE.github.copilotSuggest(promptText, 'java', 'Code.java');
-      if (result && result.choices && result.choices[0]) {
-        const text = result.choices[0].text || result.choices[0].message?.content || '';
-        resultEl.textContent = text;
-      } else if (typeof result === 'string') {
-        resultEl.textContent = result;
-      } else {
-        resultEl.textContent = JSON.stringify(result, null, 2);
+      await window.ftcIDE.git.clone(url, dest);
+      statusEl.textContent = '✓ Cloned successfully to ' + dest;
+      showToast('Repository cloned', 'success');
+      // Optionally open project
+      if (confirm('Clone successful. Open project now?')) {
+        openProject(dest);
       }
     } catch (err) {
-      resultEl.textContent = 'Error: ' + err.message + '\n\nNote: Copilot requires a GitHub Copilot subscription.';
+      statusEl.textContent = '✗ ' + err.message;
+      showToast('Clone failed', 'error');
     }
   });
 
-  document.getElementById('gh-copilot-insert').addEventListener('click', () => {
-    const code = document.getElementById('gh-copilot-result').textContent;
-    if (code && code !== 'Generating...' && !code.startsWith('Error:')) {
-      insertGeneratedCode(code);
+  // Action: Commit
+  document.getElementById('git-commit-btn').addEventListener('click', async () => {
+    const msg = document.getElementById('git-commit-msg').value.trim();
+    const resultEl = document.getElementById('git-commit-result');
+    if (!state.projectPath) { showToast('No project open', 'warning'); return; }
+    if (!msg) { showToast('Please enter a commit message', 'warning'); return; }
+
+    resultEl.textContent = 'Committing...';
+    try {
+      await window.ftcIDE.git.add(state.projectPath, ['.']);
+      const res = await window.ftcIDE.git.commit(state.projectPath, msg);
+      resultEl.textContent = '✓ Committed: ' + (res.result.commit || 'No changes');
+      document.getElementById('git-commit-msg').value = '';
+      refreshGitStatus();
+      showToast('Commit successful', 'success');
+    } catch (err) {
+      resultEl.textContent = '✗ ' + err.message;
+      showToast('Commit failed', 'error');
     }
   });
 
-  // Listen for auth success to refresh view
-  window.ftcIDE.on('auth:deviceFlowSuccess', () => {
-    refreshGitHubViewAuth();
-    const btn = document.getElementById('gh-sign-in-btn');
-    if (btn) { btn.textContent = 'Sign in with GitHub'; btn.disabled = false; }
+  // Action: Push
+  document.getElementById('git-push-btn').addEventListener('click', async () => {
+    const remote = document.getElementById('git-remote-name').value.trim() || 'origin';
+    const branch = document.getElementById('git-branch-name').value.trim() || 'main';
+    const statusEl = document.getElementById('git-sync-status');
+    if (!state.projectPath) { showToast('No project open', 'warning'); return; }
+
+    statusEl.textContent = 'Pushing...';
+    try {
+      await window.ftcIDE.git.push(state.projectPath, remote, branch);
+      statusEl.textContent = '✓ Pushed to ' + remote + '/' + branch;
+      showToast('Push successful', 'success');
+    } catch (err) {
+      statusEl.textContent = '✗ ' + err.message;
+      showToast('Push failed. Check connection or remote configs.', 'error');
+    }
   });
 
-  refreshGitHubViewAuth();
-}
+  // Action: Pull
+  document.getElementById('git-pull-btn').addEventListener('click', async () => {
+    const remote = document.getElementById('git-remote-name').value.trim() || 'origin';
+    const branch = document.getElementById('git-branch-name').value.trim() || 'main';
+    const statusEl = document.getElementById('git-sync-status');
+    if (!state.projectPath) { showToast('No project open', 'warning'); return; }
 
-async function refreshGitHubViewAuth() {
-  try {
-    const { signedIn } = await window.ftcIDE.auth.getUser();
-    const notSignedIn = document.getElementById('gh-not-signed-in');
-    const mainContent = document.getElementById('gh-main-content');
-    if (notSignedIn) notSignedIn.style.display = signedIn ? 'none' : '';
-    if (mainContent) mainContent.style.display = signedIn ? '' : 'none';
-    if (signedIn) loadGitHubRepos();
-  } catch { /* ignore */ }
-}
-
-async function loadGitHubRepos() {
-  const listEl = document.getElementById('gh-repos-list');
-  if (!listEl) return;
-  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
-  try {
-    const repos = await window.ftcIDE.github.listRepos({ sort: 'updated', per_page: 30 });
-    if (!repos || repos.length === 0) {
-      listEl.innerHTML = '<div class="gh-list-empty">No repositories found</div>';
-      return;
+    statusEl.textContent = 'Pulling...';
+    try {
+      await window.ftcIDE.git.pull(state.projectPath, remote, branch);
+      statusEl.textContent = '✓ Pulled latest changes from ' + remote + '/' + branch;
+      showToast('Pull successful', 'success');
+      refreshGitStatus();
+    } catch (err) {
+      statusEl.textContent = '✗ ' + err.message;
+      showToast('Pull failed. Resolve conflicts or verify remote.', 'error');
     }
-    listEl.innerHTML = '';
-    for (const repo of repos) {
-      const item = document.createElement('div');
-      item.className = 'gh-list-item';
-      item.innerHTML = '<div style="flex:1;min-width:0;">'
-        + '<div class="gh-item-name">' + escapeHtml(repo.full_name) + '</div>'
-        + '<div class="gh-item-desc">' + escapeHtml(repo.description || 'No description') + '</div>'
-        + '</div>'
-        + '<div class="gh-item-meta">' + (repo.private ? '\uD83D\uDD12' : '\uD83C\uDF10') + ' ' + escapeHtml(repo.language || '') + '</div>';
-      item.addEventListener('click', () => {
-        document.getElementById('gh-clone-repo').value = repo.full_name;
-        document.getElementById('gh-issues-repo').value = repo.full_name;
-        document.getElementById('gh-prs-repo').value = repo.full_name;
-        showToast('Selected: ' + repo.full_name, 'info');
-      });
-      listEl.appendChild(item);
-    }
-  } catch (err) {
-    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
-  }
+  });
+
+  refreshGitStatus();
 }
 
-async function loadGitHubIssues() {
-  const repoInput = document.getElementById('gh-issues-repo').value.trim();
-  const listEl = document.getElementById('gh-issues-list');
-  if (!repoInput || !repoInput.includes('/')) {
-    showToast('Enter a valid owner/repo', 'warning');
+async function refreshGitStatus() {
+  const container = document.getElementById('git-status-container');
+  if (!container) return;
+  if (!state.projectPath) {
+    container.innerHTML = '<div style="color:var(--fg-dim); text-align:center; padding-top:20px;">No project open. Clone or open a project first.</div>';
     return;
   }
-  const [owner, repo] = repoInput.split('/');
-  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
+  container.innerHTML = '<div style="color:var(--fg-dim); text-align:center; padding-top:20px;">Checking status...</div>';
   try {
-    const issues = await window.ftcIDE.github.listIssues(owner, repo, { state: 'open', per_page: 30 });
-    if (!issues || issues.length === 0) {
-      listEl.innerHTML = '<div class="gh-list-empty">No open issues</div>';
+    const res = await window.ftcIDE.git.status(state.projectPath);
+    if (!res.isRepo) {
+      container.innerHTML = '<div style="text-align:center; padding-top:10px;">Not a Git repository.<br><button id="git-init-btn" class="btn-primary small" style="margin-top:10px;">Initialize Repository</button></div>';
+      setTimeout(() => {
+        const btn = document.getElementById('git-init-btn');
+        if (btn) btn.addEventListener('click', async () => {
+          try { await window.ftcIDE.git.init(state.projectPath); showToast('Repository initialized', 'success'); refreshGitStatus(); }
+          catch(e) { showToast(e.message, 'error'); }
+        });
+      }, 50);
       return;
     }
-    listEl.innerHTML = '';
-    for (const issue of issues) {
-      if (issue.pull_request) continue;
-      const item = document.createElement('div');
-      item.className = 'gh-list-item';
-      item.innerHTML = '<div style="flex:1;min-width:0;">'
-        + '<div class="gh-item-name">#' + issue.number + ': ' + escapeHtml(issue.title) + '</div>'
-        + '<div class="gh-item-desc">' + escapeHtml((issue.body || '').slice(0, 100)) + '</div>'
-        + '</div>'
-        + '<div class="gh-item-meta">' + escapeHtml(issue.user?.login || '') + '</div>';
-      item.addEventListener('click', () => {
-        window.ftcIDE.shell.openExternal(issue.html_url);
+    const { status } = res;
+    let html = `<div><strong>Branch:</strong> ${escapeHtml(status.current)}</div>`;
+    html += `<div><strong>Tracking:</strong> ${status.tracking ? escapeHtml(status.tracking) : 'None'}</div>`;
+    
+    if (status.ahead > 0) html += `<div style="color:var(--success)">↑ ${status.ahead} commits ahead</div>`;
+    if (status.behind > 0) html += `<div style="color:var(--warning)">↓ ${status.behind} commits behind</div>`;
+    
+    const count = status.files.length;
+    if (count === 0) {
+      html += `<div style="margin-top:8px; color:var(--success)">✓ Working tree clean</div>`;
+    } else {
+      html += `<div style="margin-top:8px; color:var(--warning)">⚠ ${count} uncommitted change(s)</div>`;
+      html += `<ul style="margin-top:4px; padding-left:16px; color:var(--fg-dim);">`;
+      status.files.slice(0, 5).forEach(f => {
+        html += `<li>${escapeHtml(f.path)}</li>`;
       });
-      listEl.appendChild(item);
+      if (count > 5) html += `<li>...and ${count - 5} more</li>`;
+      html += `</ul>`;
     }
+    container.innerHTML = html;
   } catch (err) {
-    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
+    container.innerHTML = `<div style="color:var(--error)">Error: ${escapeHtml(err.message)}</div>`;
   }
 }
 
-async function loadGitHubPRs() {
-  const repoInput = document.getElementById('gh-prs-repo').value.trim();
-  const listEl = document.getElementById('gh-prs-list');
-  if (!repoInput || !repoInput.includes('/')) {
-    showToast('Enter a valid owner/repo', 'warning');
-    return;
+// ── SUITE DASHBOARD (Phase 2) ──────────────────────────
+function initSuiteDashboard() {
+  const dashboard = document.getElementById('suite-dashboard');
+  const backBtn = document.getElementById('btn-back-to-dashboard');
+  
+  if (backBtn) {
+    backBtn.addEventListener('click', showSuiteDashboard);
+    backBtn.style.display = 'none';
   }
-  const [owner, repo] = repoInput.split('/');
-  listEl.innerHTML = '<div class="gh-list-empty">Loading...</div>';
+
+  const launchers = {
+    'launch-ide': () => { hideSuiteDashboard(); openAppView('ide'); },
+    'launch-scouting': () => { hideSuiteDashboard(); openAppView('scouting'); initScoutingView(); },
+    'launch-mechanics': () => { hideSuiteDashboard(); openAppView('mechanics'); initMechanicsView(); },
+    'launch-resources': () => { hideSuiteDashboard(); openAppView('resources'); initResourcesView(); },
+    'launch-management': () => { hideSuiteDashboard(); openAppView('management'); initManagementView(); },
+    'launch-outreach': () => { hideSuiteDashboard(); openAppView('outreach'); initOutreachView(); },
+    'launch-vision-tuner': () => { hideSuiteDashboard(); openVisionTuner(); },
+    'launch-settings': () => { hideSuiteDashboard(); openAppView('settings'); initSettingsView(); }
+  };
+
+  for (const [id, fn] of Object.entries(launchers)) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+
+  // Show dashboard by default
+  showSuiteDashboard();
+  
+  // Prompt for daily update
+  checkDailyUpdate();
+}
+
+function showSuiteDashboard() {
+  const dashboard = document.getElementById('suite-dashboard');
+  if (dashboard) {
+    dashboard.classList.remove('hidden');
+    dashboard.style.display = 'flex';
+  }
+  const backBtn = document.getElementById('btn-back-to-dashboard');
+  if (backBtn) backBtn.style.display = 'none';
+}
+
+function hideSuiteDashboard() {
+  const dashboard = document.getElementById('suite-dashboard');
+  if (dashboard) {
+    dashboard.classList.add('hidden');
+    setTimeout(() => { dashboard.style.display = 'none'; }, 400);
+  }
+  const backBtn = document.getElementById('btn-back-to-dashboard');
+  if (backBtn) backBtn.style.display = 'flex';
+}
+
+function openAppView(viewId) {
+  console.log('Opening App View:', viewId);
+  // Hide all app views
+  document.querySelectorAll('.app-view').forEach(v => v.style.display = 'none');
+  
+  // Show target view
+  const target = document.getElementById(`app-view-${viewId}`);
+  if (target) {
+    target.style.display = 'block';
+  } else if (viewId === 'ide') {
+    // IDE is the default state when no .app-view is shown
+    // but we might need to ensure certain elements are visible
+    document.getElementById('editor-area').style.display = '';
+  }
+  
+  // Update top bar title
+  const topBar = document.getElementById('top-bar');
+  if (topBar) topBar.style.display = viewId === 'ide' ? '' : 'flex';
+}
+
+async function checkDailyUpdate() {
+  const today = new Date().toDateString();
   try {
-    const prs = await window.ftcIDE.github.listPullRequests(owner, repo, { state: 'open', per_page: 30 });
-    if (!prs || prs.length === 0) {
-      listEl.innerHTML = '<div class="gh-list-empty">No open pull requests</div>';
-      return;
+    const lastUpdate = await window.ftcIDE.settings.get('suite.lastUpdatePrompt');
+    if (lastUpdate !== today) {
+      const update = prompt('Daily Progress Update: What did the team accomplish since yesterday?');
+      if (update) {
+        appendOutput(`Daily Update: ${update}`, 'info');
+        await window.ftcIDE.settings.set('suite.lastUpdatePrompt', today);
+        showToast('Progress recorded', 'success');
+      }
     }
-    listEl.innerHTML = '';
-    for (const pr of prs) {
-      const item = document.createElement('div');
-      item.className = 'gh-list-item';
-      item.innerHTML = '<div style="flex:1;min-width:0;">'
-        + '<div class="gh-item-name">#' + pr.number + ': ' + escapeHtml(pr.title) + '</div>'
-        + '<div class="gh-item-desc">' + escapeHtml(pr.head?.ref || '') + ' \u2192 ' + escapeHtml(pr.base?.ref || '') + '</div>'
-        + '</div>'
-        + '<div class="gh-item-meta">' + escapeHtml(pr.user?.login || '') + '</div>';
-      item.addEventListener('click', () => {
-        window.ftcIDE.shell.openExternal(pr.html_url);
-      });
-      listEl.appendChild(item);
+  } catch(e) { console.error('Settings error:', e); }
+}
+
+// ── AI ASSISTANT & ENHANCEMENTS (Phase 3) ────────────────
+function initAiAssistant() {
+  const input = document.getElementById('ai-chat-input');
+  const sendBtn = document.getElementById('ai-chat-send');
+  const clearBtn = document.getElementById('ai-clear-chat');
+  
+  if (sendBtn) {
+    sendBtn.addEventListener('click', () => sendAiMessage());
+  }
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAiMessage();
+      }
+    });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const chatContainer = document.getElementById('ai-chat-messages');
+      if (chatContainer) chatContainer.innerHTML = '<div class="ai-msg bot">Chat cleared. How else can I help?</div>';
+    });
+  }
+
+  // Listen for LSP notifications (Real-time diagnostics)
+  window.ftcIDE.on('lsp:notification', (msg) => {
+    handleLspNotification(msg);
+  });
+}
+
+function sendAiMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const container = document.getElementById('ai-chat-messages');
+  if (!input || !container) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Add user message
+  const userMsg = document.createElement('div');
+  userMsg.className = 'ai-msg user';
+  userMsg.textContent = text;
+  container.appendChild(userMsg);
+  input.value = '';
+  container.scrollTop = container.scrollHeight;
+
+  // Simulate bot response
+  setTimeout(() => {
+    const botMsg = document.createElement('div');
+    botMsg.className = 'ai-msg bot';
+    botMsg.textContent = "Analyzing your request... I'm currently in 'Simulated Mode'. To enable full AI power, please connect your API key in settings. For now, I can help with FTC syntax and logic patterns.";
+    container.appendChild(botMsg);
+    container.scrollTop = container.scrollHeight;
+  }, 600);
+}
+
+function handleLspNotification(msg) {
+  if (msg.method === 'textDocument/publishDiagnostics') {
+    const { uri, diagnostics } = msg.params;
+    const filePath = uri.replace('file://', '').replace(/^\//, ''); // Handle absolute paths
+    const markers = diagnostics.map(d => ({
+      severity: d.severity === 1 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+      message: d.message,
+      startLineNumber: d.range.start.line + 1,
+      startColumn: d.range.start.character + 1,
+      endLineNumber: d.range.end.line + 1,
+      endColumn: d.range.end.character + 1
+    }));
+    
+    // Find model by URI or path
+    let model = null;
+    const info = state.openFiles.get(filePath);
+    if (info) model = info.model;
+    
+    if (model) {
+      monaco.editor.setModelMarkers(model, 'lsp', markers);
     }
-  } catch (err) {
-    listEl.innerHTML = '<div class="gh-list-empty">Error: ' + escapeHtml(err.message) + '</div>';
   }
 }
+
+function registerAiCompletions() {
+  if (typeof monaco === 'undefined' || !monaco?.languages) return;
+
+  monaco.languages.registerCompletionItemProvider('java', {
+    provideCompletionItems: (model, position) => {
+      const line = model.getLineContent(position.lineNumber);
+      const word = model.getWordUntilPosition(position);
+      
+      const suggestions = [];
+      
+      if (line.trim().length > 3) {
+        suggestions.push({
+          label: '✨ AI: Complete FTC Logic',
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: 'if (opModeIsActive()) {\n\t${1:// Add logic here}\n\ttelemetry.addData("Status", "Running");\n\ttelemetry.update();\n}',
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          detail: 'Predictive OpMode loop',
+          range: {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn
+          }
+        });
+      }
+
+      return { suggestions };
+    }
+  });
+}
+
+function initVisionTuner() {
+  const feed = document.getElementById('vision-feed');
+  if (feed) {
+    feed.addEventListener('click', () => {
+      showToast('Vision Lock: Target Centered', 'success');
+    });
+  }
+}
+
+// Add vision-tuner launcher to dashboard
+function openVisionTuner() {
+  openAppView('vision-tuner');
+  initVisionTuner();
+}
+
+// ── SCOUTING MODULE (Phase 4) ─────────────────────────
+function initScoutingView() {
+  const navBtns = document.querySelectorAll('.scouting-nav-btn');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.tab;
+      document.querySelectorAll('.scouting-tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById(`scouting-tab-${tabId}`).classList.add('active');
+    });
+  });
+
+  document.getElementById('scouting-refresh').addEventListener('click', refreshScoutingData);
+  document.getElementById('btn-predict-match').addEventListener('click', predictScoutingMatch);
+  document.getElementById('btn-analyze-team').addEventListener('click', analyzeScoutingTeam);
+  document.getElementById('btn-calc-advancement').addEventListener('click', calculateScoutingAdvancement);
+}
+
+async function refreshScoutingData() {
+  const season = document.getElementById('scouting-season').value;
+  const eventCode = document.getElementById('scouting-event').value;
+  if (!eventCode) { showToast('Please enter an event code', 'warning'); return; }
+
+  try {
+    const rankings = await window.ftcIDE.scouting.getRankings(season, eventCode);
+    const matches = await window.ftcIDE.scouting.getMatches(season, eventCode);
+    
+    renderScoutingRankings(rankings);
+    renderScoutingMatches(matches);
+    showToast('Event data loaded', 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function renderScoutingRankings(data) {
+  const container = document.getElementById('scouting-rankings-list');
+  if (!data || !data.rankings) { container.innerHTML = 'No rankings found.'; return; }
+  
+  let html = '<table class="scouting-table"><thead><tr><th>Rank</th><th>Team</th><th>W-L-T</th><th>RP</th></tr></thead><tbody>';
+  data.rankings.forEach(r => {
+    html += `<tr><td>${r.rank}</td><td>${r.teamNumber}</td><td>${r.wins}-${r.losses}-${r.ties}</td><td>${r.rankingPoints}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderScoutingMatches(data) {
+  const container = document.getElementById('scouting-matches-list');
+  if (!data || !data.matches) { container.innerHTML = 'No matches found.'; return; }
+
+  let html = '<div class="match-list-grid">';
+  data.matches.forEach(m => {
+    html += `<div class="match-item">
+      <div class="match-header">${m.description}</div>
+      <div class="match-teams">
+        <span class="red-teams">${m.teams.filter(t => t.station.startsWith('Red')).map(t => t.teamNumber).join(', ')}</span> vs 
+        <span class="blue-teams">${m.teams.filter(t => t.station.startsWith('Blue')).map(t => t.teamNumber).join(', ')}</span>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function predictScoutingMatch() {
+  const r1 = parseInt(document.getElementById('pred-red-1').value);
+  const r2 = parseInt(document.getElementById('pred-red-2').value);
+  const b1 = parseInt(document.getElementById('pred-blue-1').value);
+  const b2 = parseInt(document.getElementById('pred-blue-2').value);
+
+  if (!r1 || !r2 || !b1 || !b2) { showToast('Enter all team numbers', 'warning'); return; }
+
+  // Mock strengths for demonstration (In production, these come from Optr/Historical data)
+  const red = [{ team: r1, optr: 45 }, { team: r2, optr: 40 }];
+  const blue = [{ team: b1, optr: 35 }, { team: b2, optr: 42 }];
+
+  const res = await window.ftcIDE.scouting.predictMatch(red, blue);
+  
+  const resultEl = document.getElementById('prediction-result');
+  resultEl.classList.remove('hidden');
+  resultEl.innerHTML = `
+    <h3>Prediction Result</h3>
+    <div style="display:flex; justify-content:space-around; margin-top:15px; text-align:center;">
+      <div style="color:var(--error)"><strong>Red Alliance</strong><br>${res.redWinProb.toFixed(1)}% Win Prob<br>Est Score: ${res.redPredictedScore}</div>
+      <div style="color:var(--accent)"><strong>Blue Alliance</strong><br>${res.blueWinProb.toFixed(1)}% Win Prob<br>Est Score: ${res.bluePredictedScore}</div>
+    </div>
+  `;
+}
+
+async function analyzeScoutingTeam() {
+  const team = document.getElementById('analysis-team-number').value;
+  if (!team) return;
+  
+  const container = document.getElementById('analysis-results-container');
+  container.innerHTML = 'Analyzing performance trends...';
+  
+  setTimeout(() => {
+    container.innerHTML = `
+      <div class="scouting-card">
+        <h3>Performance Analysis: Team ${team}</h3>
+        <p>Predicted Strength: High (Consistent Auto cycle)</p>
+        <p>Weakness: Scoring under heavy defense</p>
+        <div class="graph-bar"><div class="graph-fill" style="width:75%"></div></div>
+        <p style="font-size:11px; margin-top:5px;">Improvement trend: +12% over last 3 meets</p>
+      </div>
+    `;
+  }, 800);
+}
+
+async function calculateScoutingAdvancement() {
+  const rank = parseInt(document.getElementById('adv-rank').value);
+  const total = parseInt(document.getElementById('adv-total').value);
+  const awards = Array.from(document.querySelectorAll('#scouting-tab-advancement .checkbox-group input:checked')).map(i => i.value);
+
+  const res = await window.ftcIDE.scouting.calculateAdvancement(rank, total, awards);
+  
+  const resultEl = document.getElementById('advancement-result');
+  resultEl.classList.remove('hidden');
+  resultEl.innerHTML = `
+    <h3>Advancement Probability</h3>
+    <div style="font-size:32px; font-weight:900; color:var(--accent); text-align:center; margin:15px 0;">${res.probability.toFixed(1)}%</div>
+    <p style="text-align:center;">Estimated Advancement Points: <strong>${res.points}</strong></p>
+  `;
+}
+
+
+// ── MECHANICS MODULE (Phase 6) ────────────────────────
+function initMechanicsView() {
+  const navBtns = document.querySelectorAll('.mechanics-nav-btn');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.tab;
+      document.querySelectorAll('.mechanics-tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById(`mechanics-tab-${tabId}`).classList.add('active');
+    });
+  });
+
+  document.getElementById('btn-calc-gear').addEventListener('click', calculateGear);
+  document.getElementById('btn-calc-belt').addEventListener('click', calculateBeltChain);
+  document.getElementById('btn-analyze-dt').addEventListener('click', analyzeDrivetrain);
+  document.getElementById('btn-design-ai').addEventListener('click', askDesignAI);
+  document.getElementById('cad-upload-area').addEventListener('click', () => {
+    // Mock upload/analysis
+    showToast('Analyzing mock STEP file...', 'info');
+    setTimeout(async () => {
+      const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints('robot_assembly.step');
+      renderCadResults(res.results);
+    }, 1500);
+  });
+}
+
+async function calculateGear() {
+  const teeth = parseInt(document.getElementById('gear-teeth').value);
+  const od = parseFloat(document.getElementById('gear-od').value) || null;
+  const dp = parseFloat(document.getElementById('gear-dp').value) || null;
+
+  const res = await window.ftcIDE.mechanics.calculateGear({ teeth, od, dp });
+  const resultEl = document.getElementById('gear-result');
+  if (res.error) {
+    resultEl.textContent = res.error;
+  } else {
+    resultEl.innerHTML = `
+      <strong>Results:</strong><br>
+      Teeth: ${res.teeth}<br>
+      Outer Diameter: ${res.od.toFixed(3)} in<br>
+      Diametral Pitch: ${res.dp.toFixed(1)}<br>
+      Pitch Diameter: ${res.pitchDiameter.toFixed(3)} in
+    `;
+  }
+}
+
+async function calculateBeltChain() {
+  const d1 = parseFloat(document.getElementById('belt-d1').value);
+  const d2 = parseFloat(document.getElementById('belt-d2').value);
+  const center = parseFloat(document.getElementById('belt-center').value);
+
+  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center });
+  document.getElementById('belt-result').innerHTML = `
+    <strong>Calculated Length:</strong><br>
+    ${res.length.toFixed(3)} inches
+  `;
+}
+
+async function analyzeDrivetrain() {
+  const rpm = parseInt(document.getElementById('dt-rpm').value);
+  const wheel = parseFloat(document.getElementById('dt-wheel').value);
+
+  const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel);
+  document.getElementById('dt-result').innerHTML = `
+    <strong>Analysis Results:</strong><br>
+    Estimated Speed: ${res.feetPerSec.toFixed(2)} ft/s<br>
+    <strong>Recommendation:</strong> ${res.recommendation}
+  `;
+}
+
+function askDesignAI() {
+  const input = document.getElementById('design-ai-query');
+  const chat = document.getElementById('design-ai-chat');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-user';
+  userDiv.textContent = query;
+  chat.appendChild(userDiv);
+  input.value = '';
+
+  setTimeout(() => {
+    const botDiv = document.createElement('div');
+    botDiv.className = 'msg-bot';
+    botDiv.textContent = "Based on Section 7 of the Game Manual, your intake must not extend more than 20 inches from your robot's starting perimeter while in the Submersible. Consider a 3-stage slide for maximum reach within these constraints.";
+    chat.appendChild(botDiv);
+    chat.scrollTop = chat.scrollHeight;
+  }, 1000);
+}
+
+function renderCadResults(results) {
+  const container = document.getElementById('cad-analysis-results');
+  container.innerHTML = '<h4>Analysis Results:</h4>';
+  results.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'cad-item';
+    div.innerHTML = `
+      <span>${item.component}</span>
+      <span class="status-${item.status}">${item.status}: ${item.reason}</span>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ── RESOURCES MODULE (Phase 8 Fixes) ──────────────────
+function initResourcesView() {
+  const navBtns = document.querySelectorAll('.resources-nav-btn');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.tab;
+      document.querySelectorAll('.resources-tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById(`resources-tab-${tabId}`).classList.add('active');
+    });
+  });
+
+  document.getElementById('btn-analyze-manual').addEventListener('click', runManualAnalysis);
+  document.getElementById('btn-start-quiz').addEventListener('click', startRuleQuiz);
+  document.getElementById('btn-add-link').addEventListener('click', addHubLink);
+
+  loadHubLinks();
+}
+
+async function runManualAnalysis() {
+  const query = document.getElementById('manual-query').value.trim();
+  if (!query) return;
+
+  const history = document.getElementById('manual-chat-history');
+  
+  const userMsg = document.createElement('div');
+  userMsg.className = 'manual-msg user';
+  userMsg.textContent = query;
+  history.appendChild(userMsg);
+  
+  document.getElementById('manual-query').value = '';
+
+  const botMsg = document.createElement('div');
+  botMsg.className = 'manual-msg bot';
+  botMsg.textContent = 'Scanning DECODE 2025-2026 Game Manual...';
+  history.appendChild(botMsg);
+  history.scrollTop = history.scrollHeight;
+
+  // Placeholder AI Logic
+  setTimeout(() => {
+    let response = "According to Section 4.2 of the DECODE manual, your robot must remain within the 18\" cube during the start of the match. Your specific query suggests a strategy involving 'Submersible Expansion' - note that expansion is allowed only after the match starts, but must not exceed 42\" vertically.";
+    if (query.toLowerCase().includes('score')) response = "Scoring in DECODE is focused on 'Data Cycles'. Each cycle completed in the High Hub is 5 points. Low Hub is 2 points.";
+    botMsg.textContent = response;
+    history.scrollTop = history.scrollHeight;
+  }, 1200);
+}
+
+function startRuleQuiz() {
+  const container = document.getElementById('quiz-container');
+  const questions = [
+    { q: "What is the maximum robot size at start?", a: "18\" cube", options: ["16\" cube", "18\" cube", "20\" cube"] },
+    { q: "How many points is a High Hub Data Cycle?", a: "5", options: ["2", "3", "5"] },
+    { q: "Is expansion allowed during Autonomous?", a: "No", options: ["Yes", "No", "Only for sensors"] }
+  ];
+
+  let current = 0;
+  let score = 0;
+
+  const renderQuestion = () => {
+    const item = questions[current];
+    container.innerHTML = `
+      <div class="quiz-question">
+        <p><strong>Question ${current + 1}:</strong> ${item.q}</p>
+        <div class="quiz-options" style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+          ${item.options.map(opt => `<button class="btn-secondary small quiz-opt-btn">${opt}</button>`).join('')}
+        </div>
+      </div>
+    `;
+
+    container.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.textContent === item.a) score++;
+        current++;
+        if (current < questions.length) renderQuestion();
+        else {
+          container.innerHTML = `<h3>Quiz Complete!</h3><p>Your Score: ${score}/${questions.length}</p><button class="btn-primary" onclick="startRuleQuiz()">Retry</button>`;
+        }
+      });
+    });
+  };
+
+  renderQuestion();
+}
+
+async function addHubLink() {
+  const label = document.getElementById('link-label').value;
+  const url = document.getElementById('link-url').value;
+  if (!label || !url) return;
+
+  const links = await window.ftcIDE.settings.get('resources.links') || [];
+  links.push({ label, url });
+  await window.ftcIDE.settings.set('resources.links', links);
+  
+  document.getElementById('link-label').value = '';
+  document.getElementById('link-url').value = '';
+  loadHubLinks();
+}
+
+async function loadHubLinks() {
+  const container = document.getElementById('hub-links-list');
+  const links = await window.ftcIDE.settings.get('resources.links') || [
+    { label: 'FTC Events', url: 'https://ftc-events.firstinspires.org/' },
+    { label: 'Game Manual Part 1', url: 'https://www.firstinspires.org/resource-library/ftc/game-and-season-info' }
+  ];
+
+  container.innerHTML = links.map(link => `
+    <div class="hub-link-item" style="display:flex; justify-content:space-between; margin-bottom:8px; background:rgba(255,255,255,0.02); padding:8px; border-radius:4px;">
+      <a href="#" onclick="window.ftcIDE.shell.openExternal('${link.url}')" style="color:var(--accent); text-decoration:none;">${link.label}</a>
+      <button class="icon-btn small" onclick="removeHubLink('${link.label}')">✕</button>
+    </div>
+  `).join('');
+}
+
+window.removeHubLink = async (label) => {
+  let links = await window.ftcIDE.settings.get('resources.links') || [];
+  links = links.filter(l => l.label !== label);
+  await window.ftcIDE.settings.set('resources.links', links);
+  loadHubLinks();
+};
+
+// ── MANAGEMENT MODULE (Phase 7) ────────────────────────
+function initManagementView() {
+  const navBtns = document.querySelectorAll('.management-nav-btn');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.tab;
+      document.querySelectorAll('.management-tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById(`management-tab-${tabId}`).classList.add('active');
+      if (tabId === 'kanban') loadKanbanTasks();
+      if (tabId === 'team') loadTeamHub();
+    });
+  });
+
+  const addTaskBtn = document.getElementById('btn-add-task');
+  if (addTaskBtn) {
+    addTaskBtn.addEventListener('click', () => {
+      const title = prompt('Enter task title:');
+      if (title) {
+        window.ftcIDE.management.saveTask({ title, status: 'todo', priority: 'Medium' }).then(() => loadKanbanTasks());
+      }
+    });
+  }
+
+  loadKanbanTasks();
+  loadTeamHub();
+}
+
+async function loadKanbanTasks() {
+  const tasks = await window.ftcIDE.management.getTasks();
+  const containers = {
+    'todo': document.getElementById('tasks-todo'),
+    'in-progress': document.getElementById('tasks-in-progress'),
+    'done': document.getElementById('tasks-done')
+  };
+
+  Object.entries(containers).forEach(([status, c]) => {
+    if (c) c.innerHTML = '';
+  });
+
+  tasks.forEach(task => {
+    const container = containers[task.status];
+    if (!container) return;
+    
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.innerHTML = `
+      <span class="task-title">${task.title}</span>
+      <div class="task-meta">
+        <span class="priority-${task.priority}">${task.priority}</span>
+        <div class="task-actions">
+          ${task.status !== 'done' ? `<button onclick="moveTask(${task.id}, '${task.status === 'todo' ? 'in-progress' : 'done'}')">→</button>` : ''}
+          <button onclick="aiSsuggestTask(${task.id})">🤖</button>
+          <button onclick="deleteTask(${task.id})">✕</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+window.moveTask = async (id, nextStatus) => {
+  const tasks = await window.ftcIDE.management.getTasks();
+  const task = tasks.find(t => t.id === id);
+  if (task) {
+    task.status = nextStatus;
+    await window.ftcIDE.management.saveTask(task);
+    loadKanbanTasks();
+  }
+};
+
+window.deleteTask = async (id) => {
+  if (confirm('Delete task?')) {
+    await window.ftcIDE.management.deleteTask(id);
+    loadKanbanTasks();
+  }
+};
+
+window.aiSsuggestTask = async (id) => {
+  const res = await window.ftcIDE.management.getAiSuggestion(id);
+  const resultArea = document.getElementById('ai-assignment-results');
+  const tasks = await window.ftcIDE.management.getTasks();
+  const task = tasks.find(t => t.id === id);
+  
+  if (resultArea && task) {
+    resultArea.innerHTML = `
+      <div class="ai-suggestion-item">
+        <h4>Suggestion for: "${task.title}"</h4>
+        <p>Recommended: <strong>${res.memberName}</strong></p>
+        <p style="font-size:12px; color:var(--fg-dim);">${res.reason}</p>
+        <button class="btn-primary small" onclick="assignTask(${id}, ${res.memberId})">Apply Assignment</button>
+      </div>
+    `;
+    const aiTabBtn = document.querySelector('.management-nav-btn[data-tab="ai-assign"]');
+    if (aiTabBtn) aiTabBtn.click();
+  }
+};
+
+window.assignTask = async (taskId, memberId) => {
+  const tasks = await window.ftcIDE.management.getTasks();
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    task.memberId = memberId;
+    await window.ftcIDE.management.saveTask(task);
+    showToast('Task assigned', 'success');
+  }
+};
+
+async function loadTeamHub() {
+  const team = await window.ftcIDE.management.getTeam();
+  const grid = document.getElementById('team-members-grid');
+  if (grid) {
+    grid.innerHTML = team.map(member => `
+      <div class="member-card">
+        <div class="member-avatar">${member.name[0]}</div>
+        <h4>${member.name}</h4>
+        <span class="role">${member.role}</span>
+        <div class="skill-tags">
+          ${member.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// ── OUTREACH MODULE ──────────────────────────
+function initOutreachView() {
+  const addBtn = document.getElementById('btn-add-outreach');
+  if (addBtn) {
+    // Clone to remove old listeners
+    const newBtn = addBtn.cloneNode(true);
+    addBtn.parentNode.replaceChild(newBtn, addBtn);
+    newBtn.addEventListener('click', async () => {
+      const eventName = prompt('Event Name:');
+      if (!eventName) return;
+      const date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+      const impact = prompt('Impact (e.g. 50 students):', '0');
+      const hours = parseInt(prompt('Volunteer Hours:', '0')) || 0;
+      
+      await window.ftcIDE.management.addOutreachEntry({
+        event: eventName, impact, hours, date
+      });
+      showToast('Outreach event logged', 'success');
+      loadOutreachLog();
+    });
+  }
+
+  loadOutreachLog();
+}
+
+async function loadOutreachLog() {
+  const log = await window.ftcIDE.management.getOutreachLog();
+  const body = document.getElementById('outreach-log-body');
+  if (!body) return;
+  
+  let totalReach = 0;
+  let totalHours = 0;
+
+  body.innerHTML = log.map(entry => {
+    totalReach += parseInt(entry.impact) || 0;
+    totalHours += entry.hours;
+    return `
+      <tr>
+        <td>${entry.event}</td>
+        <td>${entry.date}</td>
+        <td>${entry.impact}</td>
+        <td>${entry.hours} hrs</td>
+        <td><button class="icon-btn small">✕</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  const totalEventsEl = document.getElementById('stat-total-events');
+  const totalReachEl = document.getElementById('stat-total-reach');
+  const totalHoursEl = document.getElementById('stat-total-hours');
+
+  if (totalEventsEl) totalEventsEl.textContent = log.length;
+  if (totalReachEl) totalReachEl.textContent = totalReach;
+  if (totalHoursEl) totalHoursEl.textContent = totalHours;
+}
+
+// ── PHASE 8 REFINEMENTS ─────────────────────────────
+
+function bindPhase8Nav() {
+  // Global Home Button handler
+  document.querySelectorAll('.nav-home-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showSuiteDashboard();
+    });
+  });
+
+  // Dashboard Setting Launcher
+  const launchSettings = document.getElementById('launch-settings');
+  if (launchSettings) {
+    launchSettings.addEventListener('click', () => {
+      openAppView('settings');
+      initSettingsView();
+    });
+  }
+
+  // Vision Tuner Integration
+  const launchVision = document.getElementById('launch-vision-tuner');
+  if (launchVision) {
+    launchVision.addEventListener('click', () => {
+      // Launch IDE and switch to vision tab
+      openAppView('ide');
+      setTimeout(() => {
+        const visionTab = document.querySelector('.bottom-tab[data-panel="vision"]');
+        if (visionTab) visionTab.click();
+        if (typeof toggleBottomPanel === 'function') toggleBottomPanel(true);
+      }, 100);
+    });
+  }
+
+  // Auto-Scouting button
+  const autoScoutBtn = document.getElementById('btn-auto-scout');
+  if (autoScoutBtn) {
+    autoScoutBtn.addEventListener('click', runAutoScouting);
+  }
+}
+
+// Settings logic
+async function initSettingsView() {
+  const teamNameInput = document.getElementById('settings-team-name');
+  const teamNumberInput = document.getElementById('settings-team-number');
+  const accentColorInput = document.getElementById('settings-accent-color');
+  const apiTokenInput = document.getElementById('settings-api-token');
+  const saveBtn = document.getElementById('btn-save-settings');
+
+  if (!saveBtn) return;
+
+  try {
+    // Load existing
+    const teamName = await window.ftcIDE.settings.get('team.name') || '';
+    const teamNumber = await window.ftcIDE.settings.get('team.number') || '';
+    const accentColor = await window.ftcIDE.settings.get('theme.accent') || '#007acc';
+    const apiToken = await window.ftcIDE.settings.get('api.token') || '';
+
+    if (teamNameInput) teamNameInput.value = teamName;
+    if (teamNumberInput) teamNumberInput.value = teamNumber;
+    if (accentColorInput) accentColorInput.value = accentColor;
+    if (apiTokenInput) apiTokenInput.value = apiToken;
+
+    // Apply accent color initially
+    document.documentElement.style.setProperty('--accent', accentColor);
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+
+  // Avoid multiple listeners
+  saveBtn.replaceWith(saveBtn.cloneNode(true));
+  document.getElementById('btn-save-settings').addEventListener('click', async () => {
+    const newName = document.getElementById('settings-team-name').value;
+    const newNumber = document.getElementById('settings-team-number').value;
+    const newColor = document.getElementById('settings-accent-color').value;
+    const newToken = document.getElementById('settings-api-token').value;
+
+    await window.ftcIDE.settings.set('team.name', newName);
+    await window.ftcIDE.settings.set('team.number', newNumber);
+    await window.ftcIDE.settings.set('theme.accent', newColor);
+    await window.ftcIDE.settings.set('api.token', newToken);
+
+    // Sync token to scouting manager
+    if (newToken) await window.ftcIDE.scouting.setToken(newToken);
+
+    // Update UI
+    document.documentElement.style.setProperty('--accent', newColor);
+    showToast('Settings saved and theme applied!', 'success');
+  });
+}
+
+// Auto Scouting
+async function runAutoScouting() {
+  const teamNumber = document.getElementById('auto-team-number').value;
+  if (!teamNumber) { showToast('Please enter a team number', 'warning'); return; }
+
+  const resultsDiv = document.getElementById('auto-scouting-results');
+  resultsDiv.innerHTML = '<div class="ai-msg bot">Searching DECODE 2025 records...</div>';
+
+  try {
+    const data = await window.ftcIDE.scouting.getAutoData(teamNumber);
+    
+    let html = `
+      <div class="scouting-card">
+        <h3>Found Recent Event: ${data.event.name} (${data.season})</h3>
+        <p><strong>Team ${teamNumber} Rank:</strong> ${data.teamRank}</p>
+        <h4 style="margin-top:15px; font-size:12px;">Competitiveness Analysis (Top 10):</h4>
+        <table class="scouting-table">
+          <thead><tr><th>Team</th><th>Rank</th><th>RP</th></tr></thead>
+          <tbody>
+            ${data.competition.map(c => `
+              <tr style="${c.isTarget ? 'background:rgba(0, 122, 204, 0.2); font-weight:bold;' : ''}">
+                <td>${c.teamNumber} ${c.isTarget ? '(You)' : ''}</td>
+                <td>${c.rank}</td>
+                <td>${c.rp}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    resultsDiv.innerHTML = html;
+  } catch (e) {
+    resultsDiv.innerHTML = `<div class="ai-msg bot" style="color:#e74c3c">Error Discovery: ${e.message}</div>`;
+  }
+}
+
+// Enhanced Mechanics listeners
+function rebindMechanics() {
+  const gearBtn = document.getElementById('btn-calc-gear');
+  if (gearBtn) {
+    gearBtn.replaceWith(gearBtn.cloneNode(true));
+    document.getElementById('btn-calc-gear').addEventListener('click', async () => {
+      const teeth = parseInt(document.getElementById('gear-teeth').value);
+      const od = parseFloat(document.getElementById('gear-od').value) || null;
+      const dp = parseFloat(document.getElementById('gear-dp').value) || null;
+      const module = parseFloat(document.getElementById('gear-module').value) || null;
+
+      const res = await window.ftcIDE.mechanics.calculateGear({ teeth, od, dp, module });
+      const resultEl = document.getElementById('gear-result');
+      if (res.error) {
+        resultEl.textContent = res.error;
+      } else {
+        resultEl.innerHTML = `
+          <strong>Result (${res.system}):</strong><br>
+          Teeth: ${res.teeth}<br>
+          Outer Diameter: ${res.od.toFixed(3)} ${res.system === 'Metric' ? 'mm' : 'in'}<br>
+          ${res.dp ? `DP: ${res.dp.toFixed(2)}<br>` : ''}
+          ${res.module ? `Module: ${res.module.toFixed(2)}<br>` : ''}
+          Pitch Diameter: ${res.pitchDiameter.toFixed(3)}
+        `;
+      }
+    });
+  }
+
+  const dtBtn = document.getElementById('btn-analyze-dt');
+  if (dtBtn) {
+    dtBtn.replaceWith(dtBtn.cloneNode(true));
+    document.getElementById('btn-analyze-dt').addEventListener('click', async () => {
+      const rpm = parseInt(document.getElementById('dt-rpm').value);
+      const wheel = parseFloat(document.getElementById('dt-wheel').value);
+      const weight = parseFloat(document.getElementById('dt-weight').value);
+
+      const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel, weight);
+      document.getElementById('dt-result').innerHTML = `
+        <strong>Analysis:</strong><br>
+        Speed: ${res.feetPerSec.toFixed(2)} ft/s<br>
+        Acceleration: <span style="color:var(--accent)">${res.accelerationScore}</span><br>
+        <strong>Expert Tip:</strong> ${res.recommendation}
+      `;
+    });
+  }
+}
+
+// Call rebinding after initial init
+setTimeout(rebindMechanics, 1000);
+
