@@ -1624,159 +1624,6 @@
   </div>
 </div>
 
-<!-- ── GIT VIEW ─────────────────────────────────────────── -->
-<div class="app-view" id="app-view-git">
-  <div class="app-view-header">
-    <div class="app-view-title"><svg width="18" height="18" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v24M4 16h24M8 8l8-8 8 8M8 24l8 8 8-8"/></svg> Source Control (Git)</div>
-    <button class="icon-btn" id="git-close" title="Close">✕</button>
-  </div>
-  <div class="app-view-body" style="padding:16px; display:flex; flex-direction:column;">
-    <div class="git-tabs" style="display:flex; border-bottom:1px solid var(--border); margin-bottom:16px;">
-      <div class="git-tab active" data-git-tab="status" style="padding:8px 16px; cursor:pointer; font-weight:600;">Status & Commit</div>
-      <div class="git-tab" data-git-tab="clone" style="padding:8px 16px; cursor:pointer; font-weight:600;">Clone</div>
-      <div class="git-tab" data-git-tab="sync" style="padding:8px 16px; cursor:pointer; font-weight:600;">Push / Pull</div>
-    </div>
-
-    <div id="git-tab-status" class="git-tab-content" style="display:block;">
-      <h2 style="font-size:14px; margin-bottom:12px; font-weight:600; color:var(--fg-bright)">Project Status</h2>
-      <div id="git-status-container" style="margin-bottom:16px; min-height:80px; background:var(--bg-editor); border:1px solid var(--border); padding:8px; border-radius:4px; font-size:12px; font-family:var(--font-mono); white-space:pre-wrap;">
-        <div style="color:var(--fg-dim); text-align:center; padding-top:20px;">Loading status...</div>
-      </div>
-      <h2 style="font-size:14px; margin-bottom:12px; font-weight:600; color:var(--fg-bright)">Commit Changes</h2>
-      <div style="display:flex; gap:8px;">
-        <textarea id="git-commit-msg" class="text-input" placeholder="Commit message (e.g. Fixed bug with telemetry)" style="flex:1; height:60px; resize:vertical; font-family:var(--font-ui)"></textarea>
-        <button class="btn-primary" id="git-commit-btn" style="height:fit-content; align-self:flex-end;">Commit All</button>
-      </div>
-      <div id="git-commit-result" style="margin-top:8px; font-size:12px; color:var(--fg-dim);"></div>
-    </div>
-
-    <div id="git-tab-clone" class="git-tab-content" style="display:none;">
-      <h2 style="font-size:14px; margin-bottom:12px; font-weight:600; color:var(--fg-bright)">Clone Repository</h2>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="git-clone-url" class="text-input" placeholder="https://github.com/FTC/Project.git" style="flex:1" />
-        <button class="btn-primary" id="git-clone-btn">Clone Target</button>
-      </div>
-      <div id="git-clone-status" style="margin-top:12px; font-size:12px; color:var(--fg-dim);"></div>
-    </div>
-
-    <div id="git-tab-sync" class="git-tab-content" style="display:none;">
-      <h2 style="font-size:14px; margin-bottom:12px; font-weight:600; color:var(--fg-bright)">Sync Remote</h2>
-      <div style="display:flex; gap:8px; margin-bottom:16px;">
-        <input type="text" id="git-remote-name" class="text-input" value="origin" placeholder="Remote (e.g. origin)" style="width:150px" />
-        <input type="text" id="git-branch-name" class="text-input" value="main" placeholder="Branch (e.g. main)" style="width:150px" />
-      </div>
-      <div style="display:flex; gap:12px;">
-        <button class="btn-primary" id="git-push-btn">Push to Remote ↑</button>
-        <button class="btn-secondary" id="git-pull-btn">Pull from Remote ↓</button>
-      </div>
-      <div id="git-sync-status" style="margin-top:12px; font-size:12px; color:var(--fg-dim); font-family:var(--font-mono); white-space:pre-wrap;"></div>
-    </div>
-  </div>
-</div>
-
-<!-- MANAGEMENT APP VIEW -->
-<div id="app-view-management" class="app-view">
-  <button class="nav-home-btn">🏠 Home</button>
-  <div class="management-container">
-    <div class="management-sidebar">
-      <div class="management-nav">
-        <button class="management-nav-btn active" data-tab="kanban">Kanban Board</button>
-        <button class="management-nav-btn" data-tab="team">Team Hub</button>
-        <button class="management-nav-btn" data-tab="ai-assign">AI Assigner</button>
-      </div>
-    </div>
-    <div class="management-main-content">
-      <!-- Kanban Tab -->
-      <div class="management-tab-content active" id="management-tab-kanban">
-        <div class="management-header-bar">
-          <h2>Team Kanban Board</h2>
-          <button class="btn-primary small" id="btn-add-task">+ New Task</button>
-        </div>
-        <div class="kanban-board">
-          <div class="kanban-column" data-status="todo">
-            <h3>To Do</h3>
-            <div class="kanban-tasks" id="tasks-todo"></div>
-          </div>
-          <div class="kanban-column" data-status="in-progress">
-            <h3>In Progress</h3>
-            <div class="kanban-tasks" id="tasks-in-progress"></div>
-          </div>
-          <div class="kanban-column" data-status="done">
-            <h3>Done</h3>
-            <div class="kanban-tasks" id="tasks-done"></div>
-          </div>
-        </div>
-      </div>
-      <!-- Team Tab -->
-      <div class="management-tab-content" id="management-tab-team">
-        <div class="management-header-bar">
-          <h2>Team Members</h2>
-        </div>
-        <div class="team-grid" id="team-members-grid"></div>
-      </div>
-      <!-- AI Assign Tab -->
-      <div class="management-tab-content" id="management-tab-ai-assign">
-        <div class="management-header-bar">
-          <h2>AI Task Allocation</h2>
-          <p>Optimize your team's efficiency based on skills and workload.</p>
-        </div>
-        <div class="ai-assign-area">
-          <div class="mechanics-card">
-            <h3>Smart Assignment Suggestions</h3>
-            <div id="ai-assignment-results" class="ai-results-list">
-              <p class="dim-text">Select a task to see AI assignment recommendations.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- OUTREACH APP VIEW -->
-<div id="app-view-outreach" class="app-view">
-  <button class="nav-home-btn">🏠 Home</button>
-  <div class="outreach-container">
-    <div class="outreach-header">
-      <h1>Outreach Portal</h1>
-      <button class="btn-primary" id="btn-add-outreach">+ Log Event</button>
-    </div>
-    <div class="outreach-stats-row">
-      <div class="stat-card">
-        <span class="label">Total Events</span>
-        <span class="value" id="stat-total-events">0</span>
-      </div>
-      <div class="stat-card">
-        <span class="label">Reach (Students)</span>
-        <span class="value" id="stat-total-reach">0</span>
-      </div>
-      <div class="stat-card">
-        <span class="label">Volunteer Hours</span>
-        <span class="value" id="stat-total-hours">0</span>
-      </div>
-    </div>
-    <div class="outreach-main">
-      <div class="mechanics-card">
-        <h3>Event Log</h3>
-        <table class="outreach-table">
-          <thead>
-            <tr>
-              <th>Event Name</th>
-              <th>Date</th>
-              <th>Impact</th>
-              <th>Hours</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="outreach-log-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Scripts -->
-<script src="app.js"></script>
 <!-- MECHANICS APP VIEW -->
 <div id="app-view-mechanics" class="app-view">
   <button class="nav-home-btn">🏠 Home</button>
@@ -1847,17 +1694,38 @@
             <div id="gear-result" class="calc-result"></div>
           </div>
           <div class="mechanics-card">
-            <h3>Belt & Chain Length</h3>
+            <h3>Belt Calculator</h3>
             <div class="calc-form">
-              <label>Sprocket 1 D [in]</label>
+              <label>Pulley 1 Diameter [in]</label>
               <input type="number" id="belt-d1" step="0.1" value="1.5" />
-              <label>Sprocket 2 D [in]</label>
+              <label>Pulley 2 Diameter [in]</label>
               <input type="number" id="belt-d2" step="0.1" value="1.5" />
-              <label>Center Distance [in]</label>
+              <label>C2C Distance [in]</label>
               <input type="number" id="belt-center" step="0.1" value="10" />
+              <label>Belt Type</label>
+              <select id="belt-type">
+                <option value="HTD 5mm">HTD 5mm</option>
+                <option value="GT2 3mm">GT2 3mm</option>
+                <option value="Round Belt">Round Belt</option>
+              </select>
               <button class="btn-primary" id="btn-calc-belt">Calculate</button>
             </div>
             <div id="belt-result" class="calc-result"></div>
+          </div>
+          <div class="mechanics-card">
+            <h3>Chain Calculator</h3>
+            <div class="calc-form">
+              <label>Sprocket 1 Diameter [in]</label>
+              <input type="number" id="chain-d1" step="0.1" value="1.5" />
+              <label>Sprocket 2 Diameter [in]</label>
+              <input type="number" id="chain-d2" step="0.1" value="1.5" />
+              <label>C2C Distance [in]</label>
+              <input type="number" id="chain-center" step="0.1" value="10" />
+              <label>Chain Pitch [in/link]</label>
+              <input type="number" id="chain-pitch" step="0.001" value="0.25" />
+              <button class="btn-primary" id="btn-calc-chain">Calculate</button>
+            </div>
+            <div id="chain-result" class="calc-result"></div>
           </div>
         </div>
       </div>
@@ -1896,13 +1764,13 @@
             <div class="tutorial-thumb">⚙️</div>
             <h4>Swyft Drive V2 Assembly</h4>
             <p>Step-by-step guide on assembling the compact swerve module.</p>
-            <button class="btn-secondary small" onclick="window.ftcIDE.shell.openExternal('https://docs.revrobotics.com/')">View Guide</button>
+            <button class="btn-secondary small" id="btn-guide-rev">View Guide</button>
           </div>
           <div class="tutorial-card">
             <div class="tutorial-thumb">↔️</div>
             <h4>Belting Linear Slides</h4>
             <p>Best practices for high-speed cascading slide systems.</p>
-            <button class="btn-secondary small" onclick="window.ftcIDE.shell.openExternal('https://docs.gofilda.com/')">View Guide</button>
+            <button class="btn-secondary small" id="btn-guide-gobilda">View Guide</button>
           </div>
         </div>
       </div>
@@ -2218,17 +2086,22 @@
         <label>Accent Color</label>
         <input type="color" id="settings-accent-color" value="#007acc">
       </div>
+      <div class="input-group">
+        <label>Color Mode</label>
+        <select id="settings-color-mode">
+          <option value="dark">Dark (Pink + Dark Gray)</option>
+          <option value="light">Light (Sakura + Yellow)</option>
+        </select>
+      </div>
     </div>
     <div class="mechanics-card">
-      <h3>API Keys</h3>
-      <div class="input-group">
-        <label>FTC API Token</label>
-        <input type="password" id="settings-api-token" placeholder="Base64 Token">
-      </div>
+      <h3>Updates</h3>
+      <button class="btn-secondary" id="btn-check-updates">Check for Updates</button>
     </div>
     <button class="btn-primary" id="btn-save-settings">Save Settings</button>
   </div>
 </div>
+<script src="app.js"></script>
 </body>
 
 </html>

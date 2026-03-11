@@ -6279,16 +6279,28 @@ function initMechanicsView() {
 
   document.getElementById('btn-calc-gear').addEventListener('click', calculateGear);
   document.getElementById('btn-calc-belt').addEventListener('click', calculateBeltChain);
+  document.getElementById('btn-calc-chain').addEventListener('click', calculateChainLength);
   document.getElementById('btn-analyze-dt').addEventListener('click', analyzeDrivetrain);
   document.getElementById('btn-design-ai').addEventListener('click', askDesignAI);
-  document.getElementById('cad-upload-area').addEventListener('click', () => {
-    // Mock upload/analysis
-    showToast('Analyzing mock STEP file...', 'info');
-    setTimeout(async () => {
-      const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints('robot_assembly.step');
-      renderCadResults(res.results);
-    }, 1500);
+  document.getElementById('cad-upload-area').addEventListener('click', async () => {
+    const result = await window.ftcIDE.fs.openDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'CAD Files', extensions: ['step', 'stp', 'stl'] }]
+    });
+    if (result.canceled || !result.filePaths || !result.filePaths.length) return;
+    showToast('Analyzing CAD file...', 'info');
+    const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints(result.filePaths[0]);
+    if (res.error) {
+      showToast(res.error, 'error');
+      return;
+    }
+    renderCadResults(res.results);
   });
+
+  const revGuideBtn = document.getElementById('btn-guide-rev');
+  if (revGuideBtn) revGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://docs.revrobotics.com/'));
+  const gobildaGuideBtn = document.getElementById('btn-guide-gobilda');
+  if (gobildaGuideBtn) gobildaGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://docs.gofilda.com/'));
 }
 
 async function calculateGear() {
@@ -6315,22 +6327,48 @@ async function calculateBeltChain() {
   const d1 = parseFloat(document.getElementById('belt-d1').value);
   const d2 = parseFloat(document.getElementById('belt-d2').value);
   const center = parseFloat(document.getElementById('belt-center').value);
+  const beltType = document.getElementById('belt-type').value;
 
-  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center });
+  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center, type: 'belt', beltType });
+  if (res.error) {
+    document.getElementById('belt-result').textContent = res.error;
+    return;
+  }
   document.getElementById('belt-result').innerHTML = `
-    <strong>Calculated Length:</strong><br>
+    <strong>${escapeHtml(beltType)} Length:</strong><br>
     ${res.length.toFixed(3)} inches
+  `;
+}
+
+async function calculateChainLength() {
+  const d1 = parseFloat(document.getElementById('chain-d1').value);
+  const d2 = parseFloat(document.getElementById('chain-d2').value);
+  const center = parseFloat(document.getElementById('chain-center').value);
+  const pitch = parseFloat(document.getElementById('chain-pitch').value);
+
+  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center, pitch, type: 'chain' });
+  if (res.error) {
+    document.getElementById('chain-result').textContent = res.error;
+    return;
+  }
+
+  document.getElementById('chain-result').innerHTML = `
+    <strong>Chain Length:</strong><br>
+    ${res.length.toFixed(3)} inches<br>
+    <strong>Approx. Links:</strong> ${res.links}
   `;
 }
 
 async function analyzeDrivetrain() {
   const rpm = parseInt(document.getElementById('dt-rpm').value);
   const wheel = parseFloat(document.getElementById('dt-wheel').value);
+  const weight = parseFloat(document.getElementById('dt-weight').value);
 
-  const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel);
+  const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel, weight);
   document.getElementById('dt-result').innerHTML = `
     <strong>Analysis Results:</strong><br>
     Estimated Speed: ${res.feetPerSec.toFixed(2)} ft/s<br>
+    Effectiveness: ${res.effectiveness}%<br>
     <strong>Recommendation:</strong> ${res.recommendation}
   `;
 }
@@ -6718,7 +6756,8 @@ async function initSettingsView() {
   const teamNameInput = document.getElementById('settings-team-name');
   const teamNumberInput = document.getElementById('settings-team-number');
   const accentColorInput = document.getElementById('settings-accent-color');
-  const apiTokenInput = document.getElementById('settings-api-token');
+  const colorModeInput = document.getElementById('settings-color-mode');
+  const checkUpdatesBtn = document.getElementById('btn-check-updates');
   const saveBtn = document.getElementById('btn-save-settings');
 
   if (!saveBtn) return;
@@ -6727,16 +6766,17 @@ async function initSettingsView() {
     // Load existing
     const teamName = await window.ftcIDE.settings.get('team.name') || '';
     const teamNumber = await window.ftcIDE.settings.get('team.number') || '';
-    const accentColor = await window.ftcIDE.settings.get('theme.accent') || '#007acc';
-    const apiToken = await window.ftcIDE.settings.get('api.token') || '';
+    const accentColor = await window.ftcIDE.settings.get('theme.accent') || '#ff69b4';
+    const colorMode = await window.ftcIDE.settings.get('ui.colorMode') || 'dark';
 
     if (teamNameInput) teamNameInput.value = teamName;
     if (teamNumberInput) teamNumberInput.value = teamNumber;
     if (accentColorInput) accentColorInput.value = accentColor;
-    if (apiTokenInput) apiTokenInput.value = apiToken;
+    if (colorModeInput) colorModeInput.value = colorMode;
 
     // Apply accent color initially
     document.documentElement.style.setProperty('--accent', accentColor);
+    applyColorMode(colorMode);
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
@@ -6747,20 +6787,22 @@ async function initSettingsView() {
     const newName = document.getElementById('settings-team-name').value;
     const newNumber = document.getElementById('settings-team-number').value;
     const newColor = document.getElementById('settings-accent-color').value;
-    const newToken = document.getElementById('settings-api-token').value;
+    const newColorMode = document.getElementById('settings-color-mode').value;
 
     await window.ftcIDE.settings.set('team.name', newName);
     await window.ftcIDE.settings.set('team.number', newNumber);
     await window.ftcIDE.settings.set('theme.accent', newColor);
-    await window.ftcIDE.settings.set('api.token', newToken);
-
-    // Sync token to scouting manager
-    if (newToken) await window.ftcIDE.scouting.setToken(newToken);
+    await window.ftcIDE.settings.set('ui.colorMode', newColorMode);
 
     // Update UI
     document.documentElement.style.setProperty('--accent', newColor);
+    applyColorMode(newColorMode);
     showToast('Settings saved and theme applied!', 'success');
   });
+
+  if (checkUpdatesBtn) {
+    checkUpdatesBtn.addEventListener('click', () => manualCheckForUpdates());
+  }
 }
 
 // Auto Scouting
@@ -6848,4 +6890,4 @@ function rebindMechanics() {
 
 // Call rebinding after initial init
 setTimeout(rebindMechanics, 1000);
-
+

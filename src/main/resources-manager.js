@@ -16,15 +16,20 @@ class ResourcesManager extends EventEmitter {
    * Mock AI analysis of game manual for loopholes and strategy.
    */
   async analyzeManual(query) {
-    // In a real implementation, this would use an LLM with RAG on the Game Manual PDF.
+    const normalizedQuery = String(query || '').toLowerCase();
+    const blockedSeasons = ['into the deep', 'centerstage', 'powerplay', 'freight frenzy', '2023', '2024'];
+    if (blockedSeasons.some(term => normalizedQuery.includes(term))) {
+      return 'I can only answer from the DECODE 2025-2026 manual. Please ask a DECODE-specific question.';
+    }
+
     const responses = {
-      'loophole': "AI Analysis: The scoring transition between the Submersible and the Observation Zone has a 2-second grace period for valid Sample placement. Teams can exploit this by 'flicking' Samples just before the End Game buzzer.",
-      'strategy': "Initial Strategy: Prioritize high-basket scoring in Auto. Reliable 4-sample Auto routines currently yield higher point-per-second ratios than trying to hang early.",
-      'difference': "Key Difference from CENTERSTAGE: The 'specimen' scoring mechanic replaces the pixel stacking. Precision in attachment is now more valuable than bulk volume."
+      'loophole': 'DECODE manual insight: focus on legal pre-load and cycle timing windows in Section 4 to maximize scoring without incurring possession penalties.',
+      'strategy': 'DECODE strategy baseline: prioritize reliable autonomous cycles, then preserve endgame consistency over risky late-match routes.',
+      'difference': 'I only compare rule interpretations within DECODE 2025-2026. Ask about autonomous, teleop, penalties, or endgame details.'
     };
 
-    const key = Object.keys(responses).find(k => query.toLowerCase().includes(k)) || 'general';
-    return responses[key] || "I've analyzed the current game manual. Focus on Section 4.5 for specific scoring constraints on vertical expansion.";
+    const key = Object.keys(responses).find(k => normalizedQuery.includes(k)) || 'general';
+    return responses[key] || 'Based on DECODE 2025-2026, review scoring and robot constraints in Section 4 before finalizing your design.';
   }
 
   /**

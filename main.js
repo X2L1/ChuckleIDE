@@ -313,6 +313,11 @@ function buildApplicationMenu() {
           label: 'About FTC IDE',
           click: () => mainWindow.webContents.send('menu-action', 'about')
         },
+        {
+          label: 'Check for Updates',
+          accelerator: 'CmdOrCtrl+Shift+U',
+          click: () => mainWindow.webContents.send('menu-action', 'check-updates')
+        },
         { type: 'separator' },
         {
           label: 'PedroPathing Docs',
@@ -406,7 +411,7 @@ ipcMain.handle('resources:deleteLink', (event, id) => resourcesManager.deleteLin
 // ── Mechanics ────────────────────────────────────────────────────────────
 ipcMain.handle('mechanics:calculateGear', (event, input) => mechanicsManager.calculateGear(input));
 ipcMain.handle('mechanics:calculateBeltChain', (event, input) => mechanicsManager.calculateBeltChain(input));
-ipcMain.handle('mechanics:analyzeDrivetrain', (event, rpm, wheelDiameter) => mechanicsManager.analyzeDrivetrain(rpm, wheelDiameter));
+ipcMain.handle('mechanics:analyzeDrivetrain', (event, rpm, wheelDiameter, weight) => mechanicsManager.analyzeDrivetrain(rpm, wheelDiameter, weight));
 ipcMain.handle('mechanics:analyzeCadWeakPoints', (event, fileName) => mechanicsManager.analyzeCadWeakPoints(fileName));
 
 // ── Management & Outreach ───────────────────────────────────────────────────

@@ -1,6 +1,8 @@
 'use strict';
 
 const { EventEmitter } = require('events');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * MechanicsManager handles mechanical calculations, drivetrain analysis,
@@ -60,9 +62,14 @@ class MechanicsManager extends EventEmitter {
    * Belt/Chain length calculation.
    */
   calculateBeltChain(input) {
-    const { d1, d2, center } = input;
+    const { d1, d2, center, type = 'belt', pitch = 0.2 } = input;
+    if (!d1 || !d2 || !center) return { error: 'All pulley/sprocket and C2C values are required.' };
     // Approx length L = 2C + 1.57(D+d) + (D-d)^2 / 4C
     const length = (2 * center) + (1.57 * (d1 + d2)) + (Math.pow(d1 - d2, 2) / (4 * center));
+    if (type === 'chain') {
+      const links = Math.max(1, Math.round(length / pitch));
+      return { length, links };
+    }
     return { length };
   }
 
@@ -71,6 +78,7 @@ class MechanicsManager extends EventEmitter {
    * Considers RPM, wheel diameter, and robot weight.
    */
   analyzeDrivetrain(rpm, wheelDiameter, weight) {
+    const robotWeight = Number.isFinite(weight) ? weight : 20;
     const circum = wheelDiameter * Math.PI;
     const feetPerSec = (rpm * circum) / (60 * 12); // Theoretical top speed ft/s
     
@@ -79,7 +87,7 @@ class MechanicsManager extends EventEmitter {
 
     // Simulated "Pushing power" and "Acceleration" based on weight
     // A heavier robot on the same gear ratio will accelerate slower.
-    if (weight > 35) {
+    if (robotWeight > 35) {
       if (feetPerSec > 16) {
         recommendation = '⚠️ Dangerously geared for this weight. High risk of motor stall or breaker trip.';
         accelerationScore = 'Poor';
@@ -100,20 +108,30 @@ class MechanicsManager extends EventEmitter {
       }
     }
 
-    return { feetPerSec, recommendation, accelerationScore };
+    // Center effectiveness around a balanced FTC drivetrain target (~12 ft/s),
+    // then scale to 0-100 so large deviations from that target score lower.
+    const effectiveness = Math.max(0, Math.min(100, Math.round((16 - Math.abs(feetPerSec - 12)) * 6)));
+    return { feetPerSec, recommendation, accelerationScore, effectiveness };
   }
 
   /**
    * Simulated CAD Weak Point Analysis.
    */
-  analyzeCadWeakPoints(fileName) {
-    // In a real system, this would parse STEP/STL files
+  analyzeCadWeakPoints(filePath) {
+    const ext = path.extname(String(filePath || '')).toLowerCase();
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { error: 'No CAD file selected.' };
+    }
+    if (!['.step', '.stp', '.stl'].includes(ext)) {
+      return { error: 'Unsupported CAD file type. Use STEP/STP/STL.' };
+    }
+
     const results = [
       { component: 'C-Channel Brace', status: 'Warning', reason: 'Stress concentration at corner' },
       { component: 'Motor Mount', status: 'Critical', reason: 'Insufficient material thickness for torque load' },
       { component: 'Axle Hub', status: 'Good', reason: 'Sufficient factor of safety' }
     ];
-    return { fileName, results };
+    return { fileName: path.basename(filePath), results };
   }
 }
 
