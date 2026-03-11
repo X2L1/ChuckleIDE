@@ -89,7 +89,7 @@ contextBridge.exposeInMainWorld('ftcIDE', {
   mechanics: {
     calculateGear: (input) => ipcRenderer.invoke('mechanics:calculateGear', input),
     calculateBeltChain: (input) => ipcRenderer.invoke('mechanics:calculateBeltChain', input),
-    analyzeDrivetrain: (rpm, wheelDiameter) => ipcRenderer.invoke('mechanics:analyzeDrivetrain', rpm, wheelDiameter),
+    analyzeDrivetrain: (rpm, wheelDiameter, weight) => ipcRenderer.invoke('mechanics:analyzeDrivetrain', rpm, wheelDiameter, weight),
     analyzeCadWeakPoints: (fileName) => ipcRenderer.invoke('mechanics:analyzeCadWeakPoints', fileName)
   },
 
@@ -138,12 +138,14 @@ contextBridge.exposeInMainWorld('ftcIDE', {
     const allowedChannels = [
       'menu-action',
       'open-project',
-      'open-file',
-      'build:output',
-      'project:progress',
-      'adb:deviceChanged',
-      'lsp:notification'
-    ];
+        'open-file',
+        'build:output',
+        'project:progress',
+        'adb:deviceChanged',
+        'lsp:notification',
+        'update:available',
+        'update:progress'
+      ];
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_, ...args) => callback(...args));
     }
