@@ -2037,6 +2037,11 @@ body.bottom-panel-hidden #main-layout {
   margin-bottom: 12px;
   letter-spacing: -1px;
 }
+[data-theme="light"] .dashboard-header h1 {
+  background: linear-gradient(135deg, #d44080, #c08020);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
 
 .dashboard-header p {
   font-size: 18px;

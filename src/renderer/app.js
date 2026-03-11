@@ -6333,7 +6333,7 @@ function initMechanicsView() {
         showToast(res.error, 'error');
         return;
       }
-      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + result.filePaths[0].split(/[\\/]/).pop() + '</p>';
+      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + escapeHtml(result.filePaths[0].split(/[\\/]/).pop()) + '</p>';
       renderCadResults(res.results);
     } catch (err) {
       showToast('Failed to open file dialog: ' + err.message, 'error');
@@ -6368,7 +6368,7 @@ function initMechanicsView() {
         showToast(res.error, 'error');
         return;
       }
-      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + filePath.split(/[\\/]/).pop() + '</p>';
+      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + escapeHtml(filePath.split(/[\\/]/).pop()) + '</p>';
       renderCadResults(res.results);
     } catch (err) {
       showToast('Analysis failed: ' + err.message, 'error');
@@ -6719,7 +6719,7 @@ async function loadKanbanTasks() {
         <span class="priority-${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span>
         <div class="task-actions">
           ${task.status !== 'done' ? `<button onclick="moveTask(${task.id}, '${task.status === 'todo' ? 'in-progress' : 'done'}')">→</button>` : ''}
-          <button onclick="aiSsuggestTask(${task.id})">🤖</button>
+          <button onclick="aiSuggestTask(${task.id})">🤖</button>
           <button onclick="deleteTask(${task.id})">✕</button>
         </div>
       </div>
@@ -6745,7 +6745,7 @@ window.deleteTask = async (id) => {
   }
 };
 
-window.aiSsuggestTask = async (id) => {
+window.aiSuggestTask = async (id) => {
   const res = await window.ftcIDE.management.getAiSuggestion(id);
   const resultArea = document.getElementById('ai-assignment-results');
   const tasks = await window.ftcIDE.management.getTasks();
