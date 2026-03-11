@@ -108,6 +108,8 @@ class MechanicsManager extends EventEmitter {
       }
     }
 
+    // Center effectiveness around a balanced FTC drivetrain target (~12 ft/s),
+    // then scale to 0-100 so large deviations from that target score lower.
     const effectiveness = Math.max(0, Math.min(100, Math.round((16 - Math.abs(feetPerSec - 12)) * 6)));
     return { feetPerSec, recommendation, accelerationScore, effectiveness };
   }

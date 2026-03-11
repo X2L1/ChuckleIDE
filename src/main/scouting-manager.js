@@ -21,6 +21,8 @@ class ScoutingManager extends EventEmitter {
 
   async fetchFromApi(endpoint) {
     if (!this.apiToken) {
+      // Intentional fallback: keep scouting views usable without API credentials
+      // by returning deterministic DECODE-season sample data.
       return this.getMockApiData(endpoint);
     }
 
