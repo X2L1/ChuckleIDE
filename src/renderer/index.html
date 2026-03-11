@@ -85,7 +85,7 @@
       <defs>
         <linearGradient id="chuckle-logo-gradient" x1="10" y1="8" x2="90" y2="94" gradientUnits="userSpaceOnUse">
           <stop offset="0" stop-color="#ff6ad5" />
-          <stop offset="1" stop-color="#7a5cff" />
+          <stop offset="1" stop-color="#ffd95e" />
         </linearGradient>
       </defs>
       <rect width="100" height="100" rx="20" fill="url(#chuckle-logo-gradient)" />
@@ -1734,20 +1734,53 @@
         <div class="mechanics-header-bar">
           <h2>Drivetrain Effectiveness Analyzer</h2>
         </div>
-        <div class="mechanics-card" style="max-width: 600px;">
+        <div class="mechanics-card" style="max-width: 700px;">
           <div class="mechanics-card">
             <h3>Drivetrain Effectiveness</h3>
-            <div class="input-group">
-              <label>Motor RPM (at wheel)</label>
-              <input type="number" id="dt-rpm" placeholder="e.g. 312">
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Motor RPM (free speed)</label>
+                <input type="number" id="dt-rpm" placeholder="e.g. 312">
+              </div>
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Wheel Diameter (inches)</label>
+                <input type="number" id="dt-wheel" placeholder="e.g. 3.78" step="0.01">
+              </div>
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Robot Weight (lbs)</label>
+                <input type="number" id="dt-weight" placeholder="e.g. 35">
+              </div>
             </div>
-            <div class="input-group">
-              <label>Wheel Diameter (inches)</label>
-              <input type="number" id="dt-wheel" placeholder="e.g. 3.78">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:8px;">
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>External Gear Ratio</label>
+                <input type="number" id="dt-gear-ratio" placeholder="e.g. 1" step="0.1" value="1">
+              </div>
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Number of Drive Motors</label>
+                <select id="dt-num-motors">
+                  <option value="2">2 Motors</option>
+                  <option value="4" selected>4 Motors</option>
+                </select>
+              </div>
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Drivetrain Type</label>
+                <select id="dt-drive-type">
+                  <option value="mecanum">Mecanum</option>
+                  <option value="tank">Tank / Differential</option>
+                  <option value="swerve">Swerve</option>
+                </select>
+              </div>
             </div>
-            <div class="input-group">
-              <label>Robot Weight (lbs)</label>
-              <input type="number" id="dt-weight" placeholder="e.g. 35">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:8px;">
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Motor Stall Torque (N·m)</label>
+                <input type="number" id="dt-stall-torque" placeholder="e.g. 3.2" step="0.1" value="3.2">
+              </div>
+              <div class="input-group" style="flex:1; min-width:140px;">
+                <label>Motor Stall Current (A)</label>
+                <input type="number" id="dt-stall-current" placeholder="e.g. 9.8" step="0.1" value="9.8">
+              </div>
             </div>
             <button class="btn-primary" id="btn-analyze-dt">Run Analysis</button>
             <div id="dt-result" class="calc-result"></div>
@@ -1786,7 +1819,7 @@
       <div class="scouting-nav">
         <button class="scouting-nav-btn active" data-tab="auto">Auto Discovery</button>
         <button class="scouting-nav-btn" data-tab="events">Event Hub</button>
-        <button class="scouting-nav-btn" data-tab="predict">Match Predictor</button>
+        <button class="scouting-nav-btn" data-tab="predictor">Match Predictor</button>
         <button class="scouting-nav-btn" data-tab="advancement">Advancement</button>
       </div>
       <div class="scouting-settings">
@@ -2084,7 +2117,7 @@
       <h3>Theme Customization</h3>
       <div class="input-group">
         <label>Accent Color</label>
-        <input type="color" id="settings-accent-color" value="#007acc">
+        <input type="color" id="settings-accent-color" value="#ff69b4">
       </div>
       <div class="input-group">
         <label>Color Mode</label>

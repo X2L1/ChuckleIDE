@@ -1,6 +1,5 @@
 'use strict';
 
-const https = require('https');
 const { EventEmitter } = require('events');
 
 /**
@@ -11,42 +10,11 @@ class ScoutingManager extends EventEmitter {
   constructor(store) {
     super();
     this.store = store;
-    this.baseUrl = 'https://ftc-api.firstinspires.org/v2.0';
-    this.apiToken = '';
-  }
-
-  setToken(token) {
-    this.apiToken = token;
   }
 
   async fetchFromApi(endpoint) {
-    if (!this.apiToken) {
-      // Intentional fallback: keep scouting views usable without API credentials
-      // by returning deterministic DECODE-season sample data.
-      return this.getMockApiData(endpoint);
-    }
-
-    return new Promise((resolve, reject) => {
-      const options = {
-        headers: {
-          'Authorization': `Basic ${this.apiToken}`,
-          'Accept': 'application/json'
-        }
-      };
-
-      https.get(`${this.baseUrl}${endpoint}`, options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            try { resolve(JSON.parse(data)); }
-            catch (e) { reject(new Error('Failed to parse API response')); }
-          } else {
-            reject(new Error(`API Error: ${res.statusCode} ${res.statusMessage}`));
-          }
-        });
-      }).on('error', reject);
-    });
+    // Always use built-in sample data - no API token required
+    return this.getMockApiData(endpoint);
   }
 
   getMockApiData(endpoint) {

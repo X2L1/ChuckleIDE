@@ -59,59 +59,162 @@ class MechanicsManager extends EventEmitter {
   }
 
   /**
-   * Belt/Chain length calculation.
+   * Belt length calculation using C2C distance, pulley sizes, and belt type.
    */
-  calculateBeltChain(input) {
-    const { d1, d2, center, type = 'belt', pitch = 0.2 } = input;
-    if (!d1 || !d2 || !center) return { error: 'All pulley/sprocket and C2C values are required.' };
-    // Approx length L = 2C + 1.57(D+d) + (D-d)^2 / 4C
-    const length = (2 * center) + (1.57 * (d1 + d2)) + (Math.pow(d1 - d2, 2) / (4 * center));
-    if (type === 'chain') {
-      const links = Math.max(1, Math.round(length / pitch));
-      return { length, links };
+  calculateBelt(input) {
+    const { d1, d2, center, beltType = 'HTD 5mm' } = input;
+    if (!d1 || !d2 || !center) return { error: 'All pulley diameters and C2C distance are required.' };
+
+    // Belt pitch lookup (for tooth count estimation)
+    const pitchMap = {
+      'HTD 5mm': 5,      // 5mm pitch
+      'GT2 3mm': 3,      // 3mm pitch
+      'Round Belt': 0     // No teeth
+    };
+    const pitchMm = pitchMap[beltType] || 5;
+
+    // Standard belt length formula: L = 2C + π/2(D+d) + (D-d)²/(4C)
+    const length = (2 * center) + (Math.PI / 2 * (d1 + d2)) + (Math.pow(d1 - d2, 2) / (4 * center));
+
+    const result = {
+      length: length,
+      beltType: beltType
+    };
+
+    // For toothed belts, calculate approximate tooth count
+    if (pitchMm > 0) {
+      const lengthMm = length * 25.4; // Convert inches to mm
+      result.teeth = Math.round(lengthMm / pitchMm);
+      result.pitchMm = pitchMm;
     }
-    return { length };
+
+    // Speed ratio
+    if (d1 > 0 && d2 > 0) {
+      result.speedRatio = (d1 / d2).toFixed(3);
+    }
+
+    return result;
+  }
+
+  /**
+   * Chain length calculation.
+   */
+  calculateChain(input) {
+    const { d1, d2, center, pitch = 0.25 } = input;
+    if (!d1 || !d2 || !center) return { error: 'All sprocket diameters and C2C distance are required.' };
+
+    // Standard chain length formula: L = 2C + π/2(D+d) + (D-d)²/(4C)
+    const length = (2 * center) + (Math.PI / 2 * (d1 + d2)) + (Math.pow(d1 - d2, 2) / (4 * center));
+    const links = Math.max(1, Math.round(length / pitch));
+
+    // Speed ratio
+    const speedRatio = d1 > 0 && d2 > 0 ? (d1 / d2).toFixed(3) : null;
+
+    return { length, links, pitch, speedRatio };
   }
 
   /**
    * Drivetrain effectiveness analyzer.
-   * Considers RPM, wheel diameter, and robot weight.
+   * Considers RPM, wheel diameter, robot weight, gear ratio, motor stall torque,
+   * number of motors, and drivetrain type.
    */
-  analyzeDrivetrain(rpm, wheelDiameter, weight) {
+  analyzeDrivetrain(rpm, wheelDiameter, weight, options = {}) {
     const robotWeight = Number.isFinite(weight) ? weight : 20;
-    const circum = wheelDiameter * Math.PI;
-    const feetPerSec = (rpm * circum) / (60 * 12); // Theoretical top speed ft/s
+    const gearRatio = options.gearRatio || 1;
+    const motorStallTorque = options.motorStallTorque || 3.2; // N·m default (goBILDA 5202/3)
+    const numMotors = options.numMotors || 4;
+    const driveType = options.driveType || 'mecanum';
+
+    // Drivetrain type efficiency factor
+    const efficiencyMap = { mecanum: 0.80, tank: 0.90, swerve: 0.85 };
+    const driveEfficiency = efficiencyMap[driveType] || 0.85;
+
+    // Effective RPM at the wheel after gear ratio
+    const effectiveRPM = rpm / gearRatio;
+    const circum = wheelDiameter * Math.PI; // inches
+    const feetPerSec = (effectiveRPM * circum) / (60 * 12); // ft/s theoretical
+    const adjustedSpeed = feetPerSec * driveEfficiency;
+
+    // Pushing force calculation (lbs)
+    // Torque at wheel = motor stall torque * gear ratio * num_motors * efficiency
+    // Force = torque / wheel radius
+    const wheelRadiusMeters = (wheelDiameter / 2) * 0.0254; // inches to meters
+    const totalTorqueNm = motorStallTorque * gearRatio * numMotors * driveEfficiency;
+    const pushForceNewtons = totalTorqueNm / wheelRadiusMeters;
+    const pushForceLbs = pushForceNewtons * 0.2248;
+
+    // Acceleration estimate (F = ma)
+    const robotMassKg = robotWeight * 0.4536;
+    const accelerationMps2 = (pushForceNewtons * 0.5) / robotMassKg; // 50% stall torque as working point
+    const accelerationFtps2 = accelerationMps2 * 3.281;
+
+    // Current draw estimate per motor under load (approximation)
+    const stallCurrentPerMotor = options.stallCurrent || 9.8; // Amps (goBILDA 5202/3)
+    const runningCurrentPerMotor = stallCurrentPerMotor * 0.4; // ~40% of stall under normal driving
+    const totalCurrentDraw = runningCurrentPerMotor * numMotors;
+
+    // Effectiveness scoring (0-100)
+    // Balanced FTC drivetrain targets: ~4-6 ft/s adjusted speed, good pushing force, manageable current
+    let effectiveness = 100;
     
+    // Speed scoring: optimal range is 3-6 ft/s for FTC
+    if (adjustedSpeed < 2) effectiveness -= 30;
+    else if (adjustedSpeed < 3) effectiveness -= 15;
+    else if (adjustedSpeed > 8) effectiveness -= 25;
+    else if (adjustedSpeed > 6) effectiveness -= 10;
+
+    // Push force scoring: higher is better, but diminishing returns
+    const pushToWeight = pushForceLbs / robotWeight;
+    if (pushToWeight < 0.5) effectiveness -= 20;
+    else if (pushToWeight < 1.0) effectiveness -= 10;
+    else if (pushToWeight > 3.0) effectiveness += 5;
+
+    // Current draw scoring: over 20A total is risky
+    if (totalCurrentDraw > 30) effectiveness -= 20;
+    else if (totalCurrentDraw > 20) effectiveness -= 10;
+
+    // Acceleration scoring
+    if (accelerationFtps2 < 3) effectiveness -= 15;
+    else if (accelerationFtps2 > 8) effectiveness += 5;
+
+    effectiveness = Math.max(0, Math.min(100, Math.round(effectiveness)));
+
+    // Recommendation
     let recommendation = '';
     let accelerationScore = 'Good';
 
-    // Simulated "Pushing power" and "Acceleration" based on weight
-    // A heavier robot on the same gear ratio will accelerate slower.
-    if (robotWeight > 35) {
-      if (feetPerSec > 16) {
-        recommendation = '⚠️ Dangerously geared for this weight. High risk of motor stall or breaker trip.';
-        accelerationScore = 'Poor';
-      } else if (feetPerSec > 13) {
-        recommendation = 'Aggressive for a heavy robot. Ensure you have high-torque motors (e.g., 19.2:1).';
-        accelerationScore = 'Fair';
-      } else {
-        recommendation = 'Solid heavy-duty build. Great for pushing and defense.';
-        accelerationScore = 'Excellent';
-      }
+    if (effectiveness >= 80) {
+      recommendation = '✅ Excellent drivetrain configuration. Well-balanced speed, pushing power, and efficiency.';
+      accelerationScore = 'Excellent';
+    } else if (effectiveness >= 60) {
+      recommendation = '⚡ Good configuration with room for improvement.';
+      if (adjustedSpeed > 6) recommendation += ' Consider a higher gear ratio to trade speed for torque.';
+      if (pushToWeight < 1.0) recommendation += ' Pushing power is low - consider more motors or higher gear ratio.';
+      accelerationScore = 'Good';
+    } else if (effectiveness >= 40) {
+      recommendation = '⚠️ Marginal configuration.';
+      if (adjustedSpeed > 8) recommendation += ' Dangerously fast - high risk of motor stall and breaker trips.';
+      if (adjustedSpeed < 2) recommendation += ' Too slow for competitive play. Lower your gear ratio.';
+      if (totalCurrentDraw > 20) recommendation += ' High current draw - risk of brownout under load.';
+      accelerationScore = 'Fair';
     } else {
-      if (feetPerSec > 16) {
-        recommendation = 'Speed demon! Extreme mobility, but watch for wheel slippage.';
-        accelerationScore = 'Excellent (Traction Limited)';
-      } else {
-        recommendation = 'Very balanced performance for a standard weight robot.';
-        accelerationScore = 'Good';
-      }
+      recommendation = '🚫 Poor configuration. Major changes recommended.';
+      if (robotWeight > 35 && adjustedSpeed > 6) recommendation += ' This robot is too heavy for this gearing.';
+      accelerationScore = 'Poor';
     }
 
-    // Center effectiveness around a balanced FTC drivetrain target (~12 ft/s),
-    // then scale to 0-100 so large deviations from that target score lower.
-    const effectiveness = Math.max(0, Math.min(100, Math.round((16 - Math.abs(feetPerSec - 12)) * 6)));
-    return { feetPerSec, recommendation, accelerationScore, effectiveness };
+    return {
+      feetPerSec: adjustedSpeed,
+      theoreticalSpeed: feetPerSec,
+      pushForceLbs: Math.round(pushForceLbs * 10) / 10,
+      accelerationFtps2: Math.round(accelerationFtps2 * 10) / 10,
+      totalCurrentDraw: Math.round(totalCurrentDraw * 10) / 10,
+      effectiveness,
+      recommendation,
+      accelerationScore,
+      driveType,
+      driveEfficiency: Math.round(driveEfficiency * 100)
+    };
   }
 
   /**
