@@ -88,8 +88,9 @@ contextBridge.exposeInMainWorld('ftcIDE', {
   // ── Mechanics ────────────────────────────────────────────────────────────
   mechanics: {
     calculateGear: (input) => ipcRenderer.invoke('mechanics:calculateGear', input),
-    calculateBeltChain: (input) => ipcRenderer.invoke('mechanics:calculateBeltChain', input),
-    analyzeDrivetrain: (rpm, wheelDiameter, weight) => ipcRenderer.invoke('mechanics:analyzeDrivetrain', rpm, wheelDiameter, weight),
+    calculateBelt: (input) => ipcRenderer.invoke('mechanics:calculateBelt', input),
+    calculateChain: (input) => ipcRenderer.invoke('mechanics:calculateChain', input),
+    analyzeDrivetrain: (rpm, wheelDiameter, weight, options) => ipcRenderer.invoke('mechanics:analyzeDrivetrain', rpm, wheelDiameter, weight, options),
     analyzeCadWeakPoints: (fileName) => ipcRenderer.invoke('mechanics:analyzeCadWeakPoints', fileName)
   },
 
@@ -114,13 +115,19 @@ contextBridge.exposeInMainWorld('ftcIDE', {
   },
 
   scouting: {
-    setToken: (token) => ipcRenderer.invoke('scouting:setToken', token),
     getMatches: (season, eventCode) => ipcRenderer.invoke('scouting:getMatches', season, eventCode),
     getRankings: (season, eventCode) => ipcRenderer.invoke('scouting:getRankings', season, eventCode),
     predictMatch: (red, blue) => ipcRenderer.invoke('scouting:predictMatch', red, blue),
     calculateAdvancement: (rank, total, awards) => ipcRenderer.invoke('scouting:calculateAdvancement', rank, total, awards),
     getTeamEvents: (season, team) => ipcRenderer.invoke('scouting:getTeamEvents', season, team),
     getAutoData: (teamNumber) => ipcRenderer.invoke('scouting:getAutoData', teamNumber)
+  },
+
+  // ── Update ───────────────────────────────────────────────────────────────────
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.invoke('update:install'),
+    status: () => ipcRenderer.invoke('update:status')
   },
 
   // ── Git ─────────────────────────────────────────────────────────────────────

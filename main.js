@@ -393,7 +393,6 @@ ipcMain.handle('fs:saveDialog', async (_, options) => {
 });
 
 // ── Scouting ─────────────────────────────────────────────────────────────
-ipcMain.handle('scouting:setToken', (event, token) => scoutingManager.setToken(token));
 ipcMain.handle('scouting:getMatches', (event, season, eventCode) => scoutingManager.getMatches(season, eventCode));
 ipcMain.handle('scouting:getRankings', (event, season, eventCode) => scoutingManager.getRankings(season, eventCode));
 ipcMain.handle('scouting:predictMatch', (event, red, blue) => scoutingManager.predictMatch(red, blue));
@@ -410,8 +409,9 @@ ipcMain.handle('resources:deleteLink', (event, id) => resourcesManager.deleteLin
 
 // ── Mechanics ────────────────────────────────────────────────────────────
 ipcMain.handle('mechanics:calculateGear', (event, input) => mechanicsManager.calculateGear(input));
-ipcMain.handle('mechanics:calculateBeltChain', (event, input) => mechanicsManager.calculateBeltChain(input));
-ipcMain.handle('mechanics:analyzeDrivetrain', (event, rpm, wheelDiameter, weight) => mechanicsManager.analyzeDrivetrain(rpm, wheelDiameter, weight));
+ipcMain.handle('mechanics:calculateBelt', (event, input) => mechanicsManager.calculateBelt(input));
+ipcMain.handle('mechanics:calculateChain', (event, input) => mechanicsManager.calculateChain(input));
+ipcMain.handle('mechanics:analyzeDrivetrain', (event, rpm, wheelDiameter, weight, options) => mechanicsManager.analyzeDrivetrain(rpm, wheelDiameter, weight, options));
 ipcMain.handle('mechanics:analyzeCadWeakPoints', (event, fileName) => mechanicsManager.analyzeCadWeakPoints(fileName));
 
 // ── Management & Outreach ───────────────────────────────────────────────────
@@ -601,6 +601,74 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
   return true;
 });
 
+// ── IPC: Update ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('update:check', async () => {
+  try {
+    // Attempt git-based update check if simple-git is available
+    const simpleGit = require('simple-git');
+    const git = simpleGit(__dirname);
+    await git.fetch('origin');
+    const log = await git.log({ from: 'HEAD', to: 'origin/main', symmetric: false });
+    if (log.total > 0) {
+      const currentCommit = (await git.revparse(['--short', 'HEAD'])).trim();
+      const latestCommit = (await git.revparse(['--short', 'origin/main'])).trim();
+      return {
+        hasUpdate: true,
+        currentCommit,
+        latestCommit,
+        changelog: log.all.map(c => ({
+          hash: c.hash.substring(0, 7),
+          subject: c.message,
+          author: c.author_name,
+          date: c.date
+        }))
+      };
+    }
+    return { hasUpdate: false };
+  } catch (e) {
+    return { hasUpdate: false, error: e.message };
+  }
+});
+
+ipcMain.handle('update:install', async () => {
+  try {
+    const simpleGit = require('simple-git');
+    const git = simpleGit(__dirname);
+    await git.pull('origin', 'main');
+    app.relaunch();
+    app.exit(0);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('update:status', async () => {
+  try {
+    const simpleGit = require('simple-git');
+    const git = simpleGit(__dirname);
+    await git.fetch('origin');
+    const log = await git.log({ from: 'HEAD', to: 'origin/main', symmetric: false });
+    if (log.total > 0) {
+      return {
+        updateAvailable: true,
+        currentCommit: (await git.revparse(['--short', 'HEAD'])).trim(),
+        latestCommit: (await git.revparse(['--short', 'origin/main'])).trim(),
+        changelog: log.all.map(c => ({
+          hash: c.hash.substring(0, 7),
+          subject: c.message,
+          author: c.author_name,
+          date: c.date
+        }))
+      };
+    }
+    return { updateAvailable: false };
+  } catch (e) {
+    return { updateAvailable: false };
+  }
+});
+
 // ── IPC: Window Controls ──────────────────────────────────────────────────────
 
 ipcMain.handle('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
@@ -626,10 +694,6 @@ app.whenReady().then(async () => {
   resourcesManager = new ResourcesManager(store);
   mechanicsManager = new MechanicsManager(store);
   managementManager = new ManagementManager(store);
-
-  // Set API token from settings
-  const apiToken = store.get('scouting.apiToken');
-  if (apiToken) scoutingManager.setToken(apiToken);
 
   createWindow();
 

@@ -733,6 +733,7 @@ async function loadSettings() {
     setInputVal('setting-theme', state.settings['editor.theme'] || 'vs-dark');
     setInputVal('setting-color-mode', state.settings['ui.colorMode'] || 'dark');
     applyColorMode(state.settings['ui.colorMode'] || 'dark');
+    applyAccentColor(state.settings['theme.accent'] || '#ff69b4');
     setInputVal('setting-java-home', state.settings['build.javaHome'] || '');
     setInputVal('setting-gradle-args', state.settings['build.gradleArgs'] || '');
     setInputVal('setting-sloth-mode', state.settings['build.slothMode'] === true || state.settings['build.slothMode'] === 'true');
@@ -2278,6 +2279,18 @@ function applyColorMode(mode) {
   } else {
     document.documentElement.removeAttribute('data-theme');
   }
+}
+
+function applyAccentColor(color) {
+  if (!color) return;
+  document.documentElement.style.setProperty('--accent', color);
+  document.documentElement.style.setProperty('--bg-button', color);
+  document.documentElement.style.setProperty('--border-focus', color);
+  document.documentElement.style.setProperty('--fg-link', color);
+  // Derive a lighter hover variant
+  const r = parseInt(color.slice(1,3), 16), g = parseInt(color.slice(3,5), 16), b = parseInt(color.slice(5,7), 16);
+  const lighter = '#' + [r,g,b].map(c => Math.min(255, c + 30).toString(16).padStart(2, '0')).join('');
+  document.documentElement.style.setProperty('--bg-button-hover', lighter);
 }
 
 // ── File Operations Helpers ───────────────────────────────
@@ -6056,11 +6069,32 @@ function sendAiMessage() {
   input.value = '';
   container.scrollTop = container.scrollHeight;
 
-  // Simulate bot response
+  // Context-aware FTC DECODE 2025-2026 response
   setTimeout(() => {
     const botMsg = document.createElement('div');
     botMsg.className = 'ai-msg bot';
-    botMsg.textContent = "Analyzing your request... I'm currently in 'Simulated Mode'. To enable full AI power, please connect your API key in settings. For now, I can help with FTC syntax and logic patterns.";
+    const lowerText = text.toLowerCase();
+    let response;
+
+    if (lowerText.includes('motor') || lowerText.includes('dcmotor')) {
+      response = "For DECODE 2025-2026, the common FTC motor setup uses DcMotorEx with RUN_USING_ENCODER mode. Example:\n\nDcMotorEx motor = hardwareMap.get(DcMotorEx.class, \"motor\");\nmotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);\nmotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);";
+    } else if (lowerText.includes('servo')) {
+      response = "Servos in FTC use the Servo interface. For continuous rotation servos, use CRServo. Example:\n\nServo claw = hardwareMap.get(Servo.class, \"claw\");\nclaw.setPosition(0.5); // 0.0 to 1.0 range";
+    } else if (lowerText.includes('autonomous') || lowerText.includes('auto')) {
+      response = "For DECODE autonomous, focus on reliable Sample/Specimen scoring cycles. Use encoders or PedroPathing for consistent movement. Keep your auto under 30 seconds and prioritize parking if cycles are unreliable.";
+    } else if (lowerText.includes('pid') || lowerText.includes('control')) {
+      response = "A basic PID controller for FTC:\n\ndouble error = target - current;\nintegral += error * dt;\ndouble derivative = (error - lastError) / dt;\ndouble output = kP * error + kI * integral + kD * derivative;\nlastError = error;\n\nTune kP first, then kD, then kI. Start with kP = 0.01 for most mechanisms.";
+    } else if (lowerText.includes('intake') || lowerText.includes('sample')) {
+      response = "For DECODE Sample intake, consider a roller or compliant wheel design. Active intakes with surgical tubing or flex wheels work well. Keep your intake within the 18\" starting cube and design for quick deployment after match start.";
+    } else if (lowerText.includes('telemetry')) {
+      response = "Telemetry is essential for debugging. Use:\n\ntelemetry.addData(\"Key\", value);\ntelemetry.update(); // Must call update() to display\n\nFor FTC Dashboard, use FtcDashboard.getInstance().getTelemetry() for real-time graphing.";
+    } else if (lowerText.includes('gamepad') || lowerText.includes('button')) {
+      response = "Gamepad controls for DECODE TeleOp:\n\ngamepad1.left_stick_y  // Drive\ngamepad1.right_stick_x // Turn\ngamepad2.a // Toggle claw\ngamepad2.left_trigger // Slide power\n\nUse edge detection for toggles: if (gamepad1.a && !prevA) { toggle = !toggle; }";
+    } else {
+      response = "I can help with FTC Java programming for the DECODE (2025-2026) season. Try asking about: motors, servos, autonomous routines, PID control, intake design, telemetry, gamepad controls, or any FTC-specific coding patterns.";
+    }
+
+    botMsg.textContent = response;
     container.appendChild(botMsg);
     container.scrollTop = container.scrollHeight;
   }, 600);
@@ -6282,25 +6316,69 @@ function initMechanicsView() {
   document.getElementById('btn-calc-chain').addEventListener('click', calculateChainLength);
   document.getElementById('btn-analyze-dt').addEventListener('click', analyzeDrivetrain);
   document.getElementById('btn-design-ai').addEventListener('click', askDesignAI);
-  document.getElementById('cad-upload-area').addEventListener('click', async () => {
-    const result = await window.ftcIDE.fs.openDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'CAD Files', extensions: ['step', 'stp', 'stl'] }]
-    });
-    if (result.canceled || !result.filePaths || !result.filePaths.length) return;
-    showToast('Analyzing CAD file...', 'info');
-    const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints(result.filePaths[0]);
-    if (res.error) {
-      showToast(res.error, 'error');
+
+  const cadUploadArea = document.getElementById('cad-upload-area');
+
+  // Click to open file dialog
+  cadUploadArea.addEventListener('click', async () => {
+    try {
+      const result = await window.ftcIDE.fs.openDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'CAD Files', extensions: ['step', 'stp', 'stl'] }]
+      });
+      if (result.canceled || !result.filePaths || !result.filePaths.length) return;
+      showToast('Analyzing CAD file...', 'info');
+      const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints(result.filePaths[0]);
+      if (res.error) {
+        showToast(res.error, 'error');
+        return;
+      }
+      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + result.filePaths[0].split(/[\\/]/).pop() + '</p>';
+      renderCadResults(res.results);
+    } catch (err) {
+      showToast('Failed to open file dialog: ' + err.message, 'error');
+    }
+  });
+
+  // Drag and drop support
+  cadUploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    cadUploadArea.style.borderColor = 'var(--accent)';
+  });
+  cadUploadArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    cadUploadArea.style.borderColor = '';
+  });
+  cadUploadArea.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    cadUploadArea.style.borderColor = '';
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    const filePath = files[0].path;
+    if (!filePath) {
+      showToast('Could not read file path from drop', 'error');
       return;
     }
-    renderCadResults(res.results);
+    showToast('Analyzing CAD file...', 'info');
+    try {
+      const res = await window.ftcIDE.mechanics.analyzeCadWeakPoints(filePath);
+      if (res.error) {
+        showToast(res.error, 'error');
+        return;
+      }
+      cadUploadArea.innerHTML = '<span class="icon">✅</span><p>File loaded: ' + filePath.split(/[\\/]/).pop() + '</p>';
+      renderCadResults(res.results);
+    } catch (err) {
+      showToast('Analysis failed: ' + err.message, 'error');
+    }
   });
 
   const revGuideBtn = document.getElementById('btn-guide-rev');
   if (revGuideBtn) revGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://docs.revrobotics.com/'));
   const gobildaGuideBtn = document.getElementById('btn-guide-gobilda');
-  if (gobildaGuideBtn) gobildaGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://docs.gofilda.com/'));
+  if (gobildaGuideBtn) gobildaGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://www.gobilda.com/'));
 }
 
 async function calculateGear() {
@@ -6329,15 +6407,24 @@ async function calculateBeltChain() {
   const center = parseFloat(document.getElementById('belt-center').value);
   const beltType = document.getElementById('belt-type').value;
 
-  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center, type: 'belt', beltType });
+  if (!d1 || !d2 || !center) {
+    document.getElementById('belt-result').textContent = 'All pulley diameters and C2C distance are required.';
+    return;
+  }
+
+  const res = await window.ftcIDE.mechanics.calculateBelt({ d1, d2, center, beltType });
   if (res.error) {
     document.getElementById('belt-result').textContent = res.error;
     return;
   }
-  document.getElementById('belt-result').innerHTML = `
-    <strong>${escapeHtml(beltType)} Length:</strong><br>
-    ${res.length.toFixed(3)} inches
-  `;
+  let html = `<strong>${escapeHtml(beltType)} Belt Length:</strong><br>${res.length.toFixed(3)} inches`;
+  if (res.teeth) {
+    html += `<br><strong>Approx. Teeth:</strong> ${res.teeth} (${res.pitchMm}mm pitch)`;
+  }
+  if (res.speedRatio) {
+    html += `<br><strong>Speed Ratio:</strong> ${res.speedRatio}`;
+  }
+  document.getElementById('belt-result').innerHTML = html;
 }
 
 async function calculateChainLength() {
@@ -6346,29 +6433,62 @@ async function calculateChainLength() {
   const center = parseFloat(document.getElementById('chain-center').value);
   const pitch = parseFloat(document.getElementById('chain-pitch').value);
 
-  const res = await window.ftcIDE.mechanics.calculateBeltChain({ d1, d2, center, pitch, type: 'chain' });
+  if (!d1 || !d2 || !center) {
+    document.getElementById('chain-result').textContent = 'All sprocket diameters and C2C distance are required.';
+    return;
+  }
+
+  const res = await window.ftcIDE.mechanics.calculateChain({ d1, d2, center, pitch });
   if (res.error) {
     document.getElementById('chain-result').textContent = res.error;
     return;
   }
 
-  document.getElementById('chain-result').innerHTML = `
-    <strong>Chain Length:</strong><br>
-    ${res.length.toFixed(3)} inches<br>
-    <strong>Approx. Links:</strong> ${res.links}
-  `;
+  let html = `<strong>Chain Length:</strong><br>${res.length.toFixed(3)} inches<br><strong>Approx. Links:</strong> ${res.links}`;
+  if (res.speedRatio) {
+    html += `<br><strong>Speed Ratio:</strong> ${res.speedRatio}`;
+  }
+  document.getElementById('chain-result').innerHTML = html;
 }
 
 async function analyzeDrivetrain() {
   const rpm = parseInt(document.getElementById('dt-rpm').value);
   const wheel = parseFloat(document.getElementById('dt-wheel').value);
   const weight = parseFloat(document.getElementById('dt-weight').value);
+  const gearRatio = parseFloat(document.getElementById('dt-gear-ratio').value) || 1;
+  const numMotors = parseInt(document.getElementById('dt-num-motors').value) || 4;
+  const driveType = document.getElementById('dt-drive-type').value || 'mecanum';
+  const stallTorque = parseFloat(document.getElementById('dt-stall-torque').value) || 3.2;
+  const stallCurrent = parseFloat(document.getElementById('dt-stall-current').value) || 9.8;
 
-  const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel, weight);
+  if (!rpm || !wheel) {
+    showToast('Enter at least Motor RPM and Wheel Diameter', 'warning');
+    return;
+  }
+
+  const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel, weight, {
+    gearRatio, numMotors, driveType,
+    motorStallTorque: stallTorque,
+    stallCurrent
+  });
+
   document.getElementById('dt-result').innerHTML = `
     <strong>Analysis Results:</strong><br>
-    Estimated Speed: ${res.feetPerSec.toFixed(2)} ft/s<br>
-    Effectiveness: ${res.effectiveness}%<br>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0;">
+      <div>Adjusted Speed: <strong>${res.feetPerSec.toFixed(2)} ft/s</strong></div>
+      <div>Theoretical Speed: ${res.theoreticalSpeed.toFixed(2)} ft/s</div>
+      <div>Pushing Force: <strong>${res.pushForceLbs} lbs</strong></div>
+      <div>Acceleration: <strong>${res.accelerationFtps2} ft/s²</strong></div>
+      <div>Current Draw: ${res.totalCurrentDraw}A (${numMotors} motors)</div>
+      <div>Drive Efficiency: ${res.driveEfficiency}% (${res.driveType})</div>
+    </div>
+    <div style="margin:10px 0; padding:10px; background:rgba(255,255,255,0.05); border-radius:4px;">
+      <strong>Effectiveness: ${res.effectiveness}%</strong>
+      <div style="background:var(--bg-input); border-radius:4px; height:8px; margin:6px 0;">
+        <div style="background:${res.effectiveness >= 70 ? 'var(--accent-green)' : res.effectiveness >= 40 ? 'var(--accent-yellow)' : 'var(--accent-red)'}; width:${res.effectiveness}%; height:100%; border-radius:4px;"></div>
+      </div>
+      <span>Acceleration: <strong>${res.accelerationScore}</strong></span>
+    </div>
     <strong>Recommendation:</strong> ${res.recommendation}
   `;
 }
@@ -6388,7 +6508,24 @@ function askDesignAI() {
   setTimeout(() => {
     const botDiv = document.createElement('div');
     botDiv.className = 'msg-bot';
-    botDiv.textContent = "Based on Section 7 of the Game Manual, your intake must not extend more than 20 inches from your robot's starting perimeter while in the Submersible. Consider a 3-stage slide for maximum reach within these constraints.";
+    const lowerQuery = query.toLowerCase();
+    let response;
+
+    if (lowerQuery.includes('intake') || lowerQuery.includes('sample')) {
+      response = "For DECODE Sample intake, consider using compliant wheels or surgical tubing rollers. A top-roller design allows quick collection. Keep the intake profile low for Submersible access and ensure it retracts within the 18\" starting cube.";
+    } else if (lowerQuery.includes('slide') || lowerQuery.includes('linear')) {
+      response = "For DECODE linear slides, a cascading 2-stage or 3-stage Misumi/goBILDA slide works well. Use GT2 belts or string for actuation. Add a soft-stop at max extension to prevent damage. Max vertical extension allowed is 42\" from the ground after match start.";
+    } else if (lowerQuery.includes('claw') || lowerQuery.includes('gripper') || lowerQuery.includes('specimen')) {
+      response = "For Specimen handling in DECODE, a parallel-bar gripper or servo-actuated claw works best. Use a compliant grip surface to avoid dropping. Consider a wrist rotation servo for orientation alignment before scoring on the Chamber.";
+    } else if (lowerQuery.includes('drivetrain') || lowerQuery.includes('drive')) {
+      response = "For DECODE drivetrains, mecanum wheels provide the best maneuverability for navigating the Submersible area. Use 4 motors with 19.2:1 or 13.7:1 gearing. A lower center of gravity improves stability during fast movements.";
+    } else if (lowerQuery.includes('hang') || lowerQuery.includes('endgame') || lowerQuery.includes('ascent')) {
+      response = "For DECODE Endgame Ascent, a hook-based pull-up mechanism is reliable. Use high-torque motors (60:1) for lifting. Ensure your mechanism can support the full robot weight with a safety factor of at least 2x. Practice the timing - you only have the last 30 seconds.";
+    } else {
+      response = "For DECODE 2025-2026, focus on these key mechanisms: Sample intake (compliant wheels), Specimen scoring (reliable gripper), linear extension (within 42\" vertical limit), and Endgame Ascent. What specific mechanism would you like help designing?";
+    }
+
+    botDiv.textContent = response;
     chat.appendChild(botDiv);
     chat.scrollTop = chat.scrollHeight;
   }, 1000);
@@ -6577,9 +6714,9 @@ async function loadKanbanTasks() {
     const card = document.createElement('div');
     card.className = 'task-card';
     card.innerHTML = `
-      <span class="task-title">${task.title}</span>
+      <span class="task-title">${escapeHtml(task.title)}</span>
       <div class="task-meta">
-        <span class="priority-${task.priority}">${task.priority}</span>
+        <span class="priority-${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span>
         <div class="task-actions">
           ${task.status !== 'done' ? `<button onclick="moveTask(${task.id}, '${task.status === 'todo' ? 'in-progress' : 'done'}')">→</button>` : ''}
           <button onclick="aiSsuggestTask(${task.id})">🤖</button>
@@ -6690,17 +6827,30 @@ async function loadOutreachLog() {
 
   body.innerHTML = log.map(entry => {
     totalReach += parseInt(entry.impact) || 0;
-    totalHours += entry.hours;
+    totalHours += entry.hours || 0;
     return `
       <tr>
-        <td>${entry.event}</td>
-        <td>${entry.date}</td>
-        <td>${entry.impact}</td>
-        <td>${entry.hours} hrs</td>
-        <td><button class="icon-btn small">✕</button></td>
+        <td>${escapeHtml(String(entry.event || ''))}</td>
+        <td>${escapeHtml(String(entry.date || ''))}</td>
+        <td>${escapeHtml(String(entry.impact || ''))}</td>
+        <td>${entry.hours || 0} hrs</td>
+        <td><button class="icon-btn small outreach-delete-btn" data-id="${entry.id}">✕</button></td>
       </tr>
     `;
   }).join('');
+
+  // Bind delete buttons
+  body.querySelectorAll('.outreach-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.id);
+      if (confirm('Delete this outreach entry?')) {
+        const updatedLog = log.filter(e => e.id !== id);
+        await window.ftcIDE.settings.set('outreach.log', updatedLog);
+        showToast('Entry deleted', 'success');
+        loadOutreachLog();
+      }
+    });
+  });
 
   const totalEventsEl = document.getElementById('stat-total-events');
   const totalReachEl = document.getElementById('stat-total-reach');
@@ -6775,7 +6925,7 @@ async function initSettingsView() {
     if (colorModeInput) colorModeInput.value = colorMode;
 
     // Apply accent color initially
-    document.documentElement.style.setProperty('--accent', accentColor);
+    applyAccentColor(accentColor);
     applyColorMode(colorMode);
   } catch (e) {
     console.error('Failed to load settings:', e);
@@ -6795,7 +6945,7 @@ async function initSettingsView() {
     await window.ftcIDE.settings.set('ui.colorMode', newColorMode);
 
     // Update UI
-    document.documentElement.style.setProperty('--accent', newColor);
+    applyAccentColor(newColor);
     applyColorMode(newColorMode);
     showToast('Settings saved and theme applied!', 'success');
   });
@@ -6872,19 +7022,7 @@ function rebindMechanics() {
   const dtBtn = document.getElementById('btn-analyze-dt');
   if (dtBtn) {
     dtBtn.replaceWith(dtBtn.cloneNode(true));
-    document.getElementById('btn-analyze-dt').addEventListener('click', async () => {
-      const rpm = parseInt(document.getElementById('dt-rpm').value);
-      const wheel = parseFloat(document.getElementById('dt-wheel').value);
-      const weight = parseFloat(document.getElementById('dt-weight').value);
-
-      const res = await window.ftcIDE.mechanics.analyzeDrivetrain(rpm, wheel, weight);
-      document.getElementById('dt-result').innerHTML = `
-        <strong>Analysis:</strong><br>
-        Speed: ${res.feetPerSec.toFixed(2)} ft/s<br>
-        Acceleration: <span style="color:var(--accent)">${res.accelerationScore}</span><br>
-        <strong>Expert Tip:</strong> ${res.recommendation}
-      `;
-    });
+    document.getElementById('btn-analyze-dt').addEventListener('click', () => analyzeDrivetrain());
   }
 }
 
