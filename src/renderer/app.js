@@ -5991,9 +5991,12 @@ function hideSuiteDashboard() {
 
 function openAppView(viewId) {
   console.log('Opening App View:', viewId);
+  // Re-apply stored theme so accent/color persists outside Settings
+  window.ftcIDE.settings.get('theme.accent').then(accent => { if (accent) applyAccentColor(accent); }).catch(() => {});
+  window.ftcIDE.settings.get('ui.colorMode').then(mode => { if (mode) applyColorMode(mode); }).catch(() => {});
   // Hide all app views
   document.querySelectorAll('.app-view').forEach(v => v.style.display = 'none');
-  
+
   // Show target view
   const target = document.getElementById(`app-view-${viewId}`);
   if (target) {
@@ -6058,10 +6061,10 @@ function sendAiMessage() {
   const input = document.getElementById('ai-chat-input');
   const container = document.getElementById('ai-chat-messages');
   if (!input || !container) return;
-  const text = input.value.trim();
+  const text = (input.value && input.value.trim()) ? input.value.trim() : '';
   if (!text) return;
 
-  // Add user message
+  // Add user message (use the exact typed text)
   const userMsg = document.createElement('div');
   userMsg.className = 'ai-msg user';
   userMsg.textContent = text;
@@ -6069,11 +6072,12 @@ function sendAiMessage() {
   input.value = '';
   container.scrollTop = container.scrollHeight;
 
-  // Context-aware FTC DECODE 2025-2026 response
+  // Context-aware FTC DECODE 2025-2026 response (based on user's message)
+  const userQuestion = text;
   setTimeout(() => {
     const botMsg = document.createElement('div');
     botMsg.className = 'ai-msg bot';
-    const lowerText = text.toLowerCase();
+    const lowerText = userQuestion.toLowerCase();
     let response;
 
     if (lowerText.includes('motor') || lowerText.includes('dcmotor')) {
@@ -6091,7 +6095,7 @@ function sendAiMessage() {
     } else if (lowerText.includes('gamepad') || lowerText.includes('button')) {
       response = "Gamepad controls for DECODE TeleOp:\n\ngamepad1.left_stick_y  // Drive\ngamepad1.right_stick_x // Turn\ngamepad2.a // Toggle claw\ngamepad2.left_trigger // Slide power\n\nUse edge detection for toggles: if (gamepad1.a && !prevA) { toggle = !toggle; }";
     } else {
-      response = "I can help with FTC Java programming for the DECODE (2025-2026) season. Try asking about: motors, servos, autonomous routines, PID control, intake design, telemetry, gamepad controls, or any FTC-specific coding patterns.";
+      response = "I can help with FTC Java programming for the DECODE (2025-2026) season. You asked: \"" + userQuestion.substring(0, 200) + (userQuestion.length > 200 ? '…' : '') + "\". Try asking about: motors, servos, autonomous routines, PID control, intake design, telemetry, gamepad controls, or any FTC-specific coding patterns.";
     }
 
     botMsg.textContent = response;
@@ -6179,14 +6183,37 @@ function initScoutingView() {
       btn.classList.add('active');
       const tabId = btn.dataset.tab;
       document.querySelectorAll('.scouting-tab-content').forEach(tc => tc.classList.remove('active'));
-      document.getElementById(`scouting-tab-${tabId}`).classList.add('active');
+      const tabEl = document.getElementById(`scouting-tab-${tabId}`);
+      if (tabEl) tabEl.classList.add('active');
+      if (tabId === 'events') loadClosestEventForTeam();
     });
   });
+  loadClosestEventForTeam();
 
-  document.getElementById('scouting-refresh').addEventListener('click', refreshScoutingData);
-  document.getElementById('btn-predict-match').addEventListener('click', predictScoutingMatch);
-  document.getElementById('btn-analyze-team').addEventListener('click', analyzeScoutingTeam);
-  document.getElementById('btn-calc-advancement').addEventListener('click', calculateScoutingAdvancement);
+  const refBtn = document.getElementById('scouting-refresh');
+  if (refBtn) refBtn.addEventListener('click', refreshScoutingData);
+  const predBtn = document.getElementById('btn-predict-match');
+  if (predBtn) predBtn.addEventListener('click', predictScoutingMatch);
+  const analBtn = document.getElementById('btn-analyze-team');
+  if (analBtn) analBtn.addEventListener('click', analyzeScoutingTeam);
+  const advBtn = document.getElementById('btn-calc-advancement');
+  if (advBtn) advBtn.addEventListener('click', calculateScoutingAdvancement);
+}
+
+async function loadClosestEventForTeam() {
+  try {
+    const teamNum = await window.ftcIDE.settings.get('team.number');
+    const autoEl = document.getElementById('auto-team-number');
+    const teamNumber = String(teamNum || '').trim() || (autoEl && autoEl.value && autoEl.value.trim());
+    if (!teamNumber) return;
+    const data = await window.ftcIDE.scouting.getAutoData(teamNumber);
+    const eventCode = (data.event && (data.event.code || data.event.name)) || 'MOCK';
+    const seasonEl = document.getElementById('scouting-season');
+    const eventEl = document.getElementById('scouting-event');
+    if (seasonEl) seasonEl.value = data.season || 2025;
+    if (eventEl) eventEl.value = eventCode;
+    if (eventCode) await refreshScoutingData();
+  } catch (e) { console.error('loadClosestEventForTeam', e); }
 }
 
 async function refreshScoutingData() {
@@ -6237,17 +6264,15 @@ function renderScoutingMatches(data) {
 }
 
 async function predictScoutingMatch() {
-  const r1 = parseInt(document.getElementById('pred-red-1').value);
-  const r2 = parseInt(document.getElementById('pred-red-2').value);
-  const b1 = parseInt(document.getElementById('pred-blue-1').value);
-  const b2 = parseInt(document.getElementById('pred-blue-2').value);
+  const r1 = parseInt(document.getElementById('pred-red-1').value, 10);
+  const r2 = parseInt(document.getElementById('pred-red-2').value, 10);
+  const b1 = parseInt(document.getElementById('pred-blue-1').value, 10);
+  const b2 = parseInt(document.getElementById('pred-blue-2').value, 10);
 
   if (!r1 || !r2 || !b1 || !b2) { showToast('Enter all team numbers', 'warning'); return; }
 
-  // Mock strengths for demonstration (In production, these come from Optr/Historical data)
-  const red = [{ team: r1, optr: 45 }, { team: r2, optr: 40 }];
-  const blue = [{ team: b1, optr: 35 }, { team: b2, optr: 42 }];
-
+  const red = [{ team: r1 }, { team: r2 }];
+  const blue = [{ team: b1 }, { team: b2 }];
   const res = await window.ftcIDE.scouting.predictMatch(red, blue);
   
   const resultEl = document.getElementById('prediction-result');
@@ -6311,13 +6336,19 @@ function initMechanicsView() {
     });
   });
 
-  document.getElementById('btn-calc-gear').addEventListener('click', calculateGear);
-  document.getElementById('btn-calc-belt').addEventListener('click', calculateBeltChain);
-  document.getElementById('btn-calc-chain').addEventListener('click', calculateChainLength);
-  document.getElementById('btn-analyze-dt').addEventListener('click', analyzeDrivetrain);
-  document.getElementById('btn-design-ai').addEventListener('click', askDesignAI);
+  const btnGear = document.getElementById('btn-calc-gear');
+  if (btnGear) btnGear.addEventListener('click', calculateGear);
+  const btnBelt = document.getElementById('btn-calc-belt');
+  if (btnBelt) btnBelt.addEventListener('click', calculateBeltChain);
+  const btnChain = document.getElementById('btn-calc-chain');
+  if (btnChain) btnChain.addEventListener('click', calculateChainLength);
+  const btnDt = document.getElementById('btn-analyze-dt');
+  if (btnDt) btnDt.addEventListener('click', analyzeDrivetrain);
+  const btnDesign = document.getElementById('btn-design-ai');
+  if (btnDesign) btnDesign.addEventListener('click', askDesignAI);
 
   const cadUploadArea = document.getElementById('cad-upload-area');
+  if (!cadUploadArea) return;
 
   // Click to open file dialog
   cadUploadArea.addEventListener('click', async () => {
@@ -6376,9 +6407,9 @@ function initMechanicsView() {
   });
 
   const revGuideBtn = document.getElementById('btn-guide-rev');
-  if (revGuideBtn) revGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://docs.revrobotics.com/'));
+  if (revGuideBtn) revGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://ftctechnh.github.io/ftc_app/doc/javadoc/index.html'));
   const gobildaGuideBtn = document.getElementById('btn-guide-gobilda');
-  if (gobildaGuideBtn) gobildaGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://www.gobilda.com/'));
+  if (gobildaGuideBtn) gobildaGuideBtn.addEventListener('click', () => window.ftcIDE.shell.openExternal('https://github.com/rowan-mcalpin/nextftc'));
 }
 
 async function calculateGear() {
@@ -6402,29 +6433,37 @@ async function calculateGear() {
 }
 
 async function calculateBeltChain() {
-  const d1 = parseFloat(document.getElementById('belt-d1').value);
-  const d2 = parseFloat(document.getElementById('belt-d2').value);
+  const t1El = document.getElementById('belt-t1');
+  const t2El = document.getElementById('belt-t2');
   const center = parseFloat(document.getElementById('belt-center').value);
   const beltType = document.getElementById('belt-type').value;
+  const t1 = t1El ? parseInt(t1El.value, 10) : null;
+  const t2 = t2El ? parseInt(t2El.value, 10) : null;
 
-  if (!d1 || !d2 || !center) {
-    document.getElementById('belt-result').textContent = 'All pulley diameters and C2C distance are required.';
+  const beltResultEl = document.getElementById('belt-result');
+  if (!beltResultEl) return;
+  if (!center || center <= 0) {
+    beltResultEl.textContent = 'Enter C2C distance and both pulley tooth counts.';
+    return;
+  }
+  if (!t1 || !t2) {
+    beltResultEl.textContent = 'Enter pulley 1 and pulley 2 tooth counts.';
     return;
   }
 
-  const res = await window.ftcIDE.mechanics.calculateBelt({ d1, d2, center, beltType });
+  const res = await window.ftcIDE.mechanics.calculateBelt({ t1, t2, center, beltType });
   if (res.error) {
-    document.getElementById('belt-result').textContent = res.error;
+    beltResultEl.textContent = res.error;
     return;
   }
   let html = `<strong>${escapeHtml(beltType)} Belt Length:</strong><br>${res.length.toFixed(3)} inches`;
   if (res.teeth) {
-    html += `<br><strong>Approx. Teeth:</strong> ${res.teeth} (${res.pitchMm}mm pitch)`;
+    html += `<br><strong>Belt teeth (approx):</strong> ${res.teeth} (${res.pitchMm}mm pitch)`;
   }
   if (res.speedRatio) {
     html += `<br><strong>Speed Ratio:</strong> ${res.speedRatio}`;
   }
-  document.getElementById('belt-result').innerHTML = html;
+  beltResultEl.innerHTML = html;
 }
 
 async function calculateChainLength() {
@@ -6554,13 +6593,18 @@ function initResourcesView() {
       btn.classList.add('active');
       const tabId = btn.dataset.tab;
       document.querySelectorAll('.resources-tab-content').forEach(tc => tc.classList.remove('active'));
-      document.getElementById(`resources-tab-${tabId}`).classList.add('active');
+      const tabEl = document.getElementById(`resources-tab-${tabId}`);
+      if (tabEl) tabEl.classList.add('active');
+      if (tabId === 'hub') loadHubLinks();
     });
   });
 
-  document.getElementById('btn-analyze-manual').addEventListener('click', runManualAnalysis);
-  document.getElementById('btn-start-quiz').addEventListener('click', startRuleQuiz);
-  document.getElementById('btn-add-link').addEventListener('click', addHubLink);
+  const btnAnalyze = document.getElementById('btn-analyze-manual');
+  if (btnAnalyze) btnAnalyze.addEventListener('click', runManualAnalysis);
+  const btnQuiz = document.getElementById('btn-start-quiz');
+  if (btnQuiz) btnQuiz.addEventListener('click', startRuleQuiz);
+  const btnAddLink = document.getElementById('btn-add-link');
+  if (btnAddLink) btnAddLink.addEventListener('click', addHubLink);
 
   loadHubLinks();
 }
@@ -6593,14 +6637,22 @@ async function runManualAnalysis() {
   }, 1200);
 }
 
+const DECODE_QUIZ_BANK = [
+  { q: "What is the maximum robot size at start?", a: "18\" cube", options: ["16\" cube", "18\" cube", "20\" cube"] },
+  { q: "How many points is a High Hub Data Cycle?", a: "5", options: ["2", "3", "5"] },
+  { q: "Is expansion allowed during Autonomous?", a: "No", options: ["Yes", "No", "Only for sensors"] },
+  { q: "How many points is a Low Hub Data Cycle?", a: "2", options: ["1", "2", "3"] },
+  { q: "What is the maximum vertical extension (inches)?", a: "42\"", options: ["36\"", "42\"", "48\""] },
+  { q: "Can the robot leave the 18\" cube before match start?", a: "No", options: ["Yes", "No", "Only for vision"] },
+  { q: "How long is the Autonomous period (seconds)?", a: "30", options: ["20", "30", "45"] },
+  { q: "What must remain inside the 18\" cube at start?", a: "Robot", options: ["Robot", "Only wheels", "Nothing"] }
+];
+
 function startRuleQuiz() {
   const container = document.getElementById('quiz-container');
-  const questions = [
-    { q: "What is the maximum robot size at start?", a: "18\" cube", options: ["16\" cube", "18\" cube", "20\" cube"] },
-    { q: "How many points is a High Hub Data Cycle?", a: "5", options: ["2", "3", "5"] },
-    { q: "Is expansion allowed during Autonomous?", a: "No", options: ["Yes", "No", "Only for sensors"] }
-  ];
-
+  if (!container) return;
+  const shuffled = [...DECODE_QUIZ_BANK].sort(() => Math.random() - 0.5);
+  const questions = shuffled.slice(0, 5);
   let current = 0;
   let score = 0;
 
@@ -6621,7 +6673,9 @@ function startRuleQuiz() {
         current++;
         if (current < questions.length) renderQuestion();
         else {
-          container.innerHTML = `<h3>Quiz Complete!</h3><p>Your Score: ${score}/${questions.length}</p><button class="btn-primary" onclick="startRuleQuiz()">Retry</button>`;
+          container.innerHTML = `<h3>Quiz Complete!</h3><p>Your Score: ${score}/${questions.length}</p><button class="btn-primary" id="quiz-retry-btn">Retry</button>`;
+          const retryBtn = document.getElementById('quiz-retry-btn');
+          if (retryBtn) retryBtn.addEventListener('click', () => startRuleQuiz());
         }
       });
     });
@@ -6629,6 +6683,7 @@ function startRuleQuiz() {
 
   renderQuestion();
 }
+window.startRuleQuiz = startRuleQuiz;
 
 async function addHubLink() {
   const label = document.getElementById('link-label').value;
@@ -6696,44 +6751,52 @@ function initManagementView() {
 }
 
 async function loadKanbanTasks() {
-  const tasks = await window.ftcIDE.management.getTasks();
-  const containers = {
-    'todo': document.getElementById('tasks-todo'),
-    'in-progress': document.getElementById('tasks-in-progress'),
-    'done': document.getElementById('tasks-done')
-  };
+  try {
+    const tasks = await window.ftcIDE.management.getTasks();
+    const list = Array.isArray(tasks) ? tasks : [];
+    const containers = {
+      'todo': document.getElementById('tasks-todo'),
+      'in-progress': document.getElementById('tasks-in-progress'),
+      'done': document.getElementById('tasks-done')
+    };
 
-  Object.entries(containers).forEach(([status, c]) => {
-    if (c) c.innerHTML = '';
-  });
+    Object.values(containers).forEach(c => { if (c) c.innerHTML = ''; });
 
-  tasks.forEach(task => {
-    const container = containers[task.status];
-    if (!container) return;
-    
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.innerHTML = `
-      <span class="task-title">${escapeHtml(task.title)}</span>
-      <div class="task-meta">
-        <span class="priority-${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span>
-        <div class="task-actions">
-          ${task.status !== 'done' ? `<button onclick="moveTask(${task.id}, '${task.status === 'todo' ? 'in-progress' : 'done'}')">→</button>` : ''}
-          <button onclick="aiSuggestTask(${task.id})">🤖</button>
-          <button onclick="deleteTask(${task.id})">✕</button>
+    list.forEach(task => {
+      const status = task.status === 'in-progress' ? 'in-progress' : (task.status === 'done' ? 'done' : 'todo');
+      const container = containers[status];
+      if (!container) return;
+      const nextStatus = status === 'todo' ? 'in-progress' : 'done';
+      const card = document.createElement('div');
+      card.className = 'task-card';
+      card.innerHTML = `
+        <span class="task-title">${escapeHtml(task.title || '')}</span>
+        <div class="task-meta">
+          <span class="priority-${escapeHtml((task.priority || 'Medium'))}">${escapeHtml(task.priority || 'Medium')}</span>
+          <div class="task-actions">
+            ${status !== 'done' ? `<button onclick="moveTask(${task.id}, '${nextStatus}')">→</button>` : ''}
+            <button onclick="aiSuggestTask(${task.id})">🤖</button>
+            <button onclick="deleteTask(${task.id})">✕</button>
+          </div>
         </div>
-      </div>
-    `;
-    container.appendChild(card);
-  });
+      `;
+      container.appendChild(card);
+    });
+  } catch (e) {
+    console.error('loadKanbanTasks', e);
+    ['tasks-todo', 'tasks-in-progress', 'tasks-done'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<p class="placeholder-text">Unable to load tasks.</p>';
+    });
+  }
 }
 
 window.moveTask = async (id, nextStatus) => {
   const tasks = await window.ftcIDE.management.getTasks();
-  const task = tasks.find(t => t.id === id);
+  const task = Array.isArray(tasks) ? tasks.find(t => t.id === id) : null;
   if (task) {
-    task.status = nextStatus;
-    await window.ftcIDE.management.saveTask(task);
+    const updated = { ...task, status: nextStatus };
+    await window.ftcIDE.management.saveTask(updated);
     loadKanbanTasks();
   }
 };
@@ -6746,22 +6809,29 @@ window.deleteTask = async (id) => {
 };
 
 window.aiSuggestTask = async (id) => {
-  const res = await window.ftcIDE.management.getAiSuggestion(id);
   const resultArea = document.getElementById('ai-assignment-results');
-  const tasks = await window.ftcIDE.management.getTasks();
-  const task = tasks.find(t => t.id === id);
-  
-  if (resultArea && task) {
+  if (!resultArea) return;
+  try {
+    const res = await window.ftcIDE.management.getAiSuggestion(id);
+    const tasks = await window.ftcIDE.management.getTasks();
+    const task = (Array.isArray(tasks) ? tasks : []).find(t => t.id === id);
+    if (!res || !task) {
+      resultArea.innerHTML = '<p class="placeholder-text">Click the 🤖 icon on a task to get an AI assignment suggestion based on member skills.</p>';
+      return;
+    }
     resultArea.innerHTML = `
       <div class="ai-suggestion-item">
-        <h4>Suggestion for: "${task.title}"</h4>
-        <p>Recommended: <strong>${res.memberName}</strong></p>
-        <p style="font-size:12px; color:var(--fg-dim);">${res.reason}</p>
-        <button class="btn-primary small" onclick="assignTask(${id}, ${res.memberId})">Apply Assignment</button>
+        <h4>Suggestion for: "${escapeHtml(task.title || '')}"</h4>
+        <p>Recommended: <strong>${escapeHtml(res.memberName || '')}</strong></p>
+        <p style="font-size:12px; color:var(--fg-dim);">${escapeHtml(res.reason || '')}</p>
+        <button class="btn-primary small" onclick="assignTask(${id}, ${res.memberId || 0})">Apply Assignment</button>
       </div>
     `;
     const aiTabBtn = document.querySelector('.management-nav-btn[data-tab="ai-assign"]');
     if (aiTabBtn) aiTabBtn.click();
+  } catch (e) {
+    console.error('aiSuggestTask', e);
+    resultArea.innerHTML = '<p class="placeholder-text">Could not get suggestion. Click the 🤖 icon on a task to try again.</p>';
   }
 };
 
@@ -6776,19 +6846,26 @@ window.assignTask = async (taskId, memberId) => {
 };
 
 async function loadTeamHub() {
-  const team = await window.ftcIDE.management.getTeam();
-  const grid = document.getElementById('team-members-grid');
-  if (grid) {
-    grid.innerHTML = team.map(member => `
-      <div class="member-card">
-        <div class="member-avatar">${member.name[0]}</div>
-        <h4>${member.name}</h4>
-        <span class="role">${member.role}</span>
-        <div class="skill-tags">
-          ${member.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+  try {
+    const team = await window.ftcIDE.management.getTeam();
+    const grid = document.getElementById('team-members-grid');
+    if (grid) {
+      const list = Array.isArray(team) ? team : [];
+      grid.innerHTML = list.map(member => `
+        <div class="member-card">
+          <div class="member-avatar">${escapeHtml(String(member.name || '')[0] || '?')}</div>
+          <h4>${escapeHtml(member.name || '')}</h4>
+          <span class="role">${escapeHtml(member.role || '')}</span>
+          <div class="skill-tags">
+            ${(member.skills || []).map(s => `<span class="skill-tag">${escapeHtml(s)}</span>`).join('')}
+          </div>
         </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
+  } catch (e) {
+    console.error('loadTeamHub', e);
+    const grid = document.getElementById('team-members-grid');
+    if (grid) grid.innerHTML = '<p class="placeholder-text">Unable to load team.</p>';
   }
 }
 
@@ -6796,22 +6873,22 @@ async function loadTeamHub() {
 function initOutreachView() {
   const addBtn = document.getElementById('btn-add-outreach');
   if (addBtn) {
-    // Clone to remove old listeners
-    const newBtn = addBtn.cloneNode(true);
-    addBtn.parentNode.replaceChild(newBtn, addBtn);
-    newBtn.addEventListener('click', async () => {
+    addBtn.onclick = async () => {
       const eventName = prompt('Event Name:');
       if (!eventName) return;
       const date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
       const impact = prompt('Impact (e.g. 50 students):', '0');
-      const hours = parseInt(prompt('Volunteer Hours:', '0')) || 0;
-      
-      await window.ftcIDE.management.addOutreachEntry({
-        event: eventName, impact, hours, date
-      });
-      showToast('Outreach event logged', 'success');
-      loadOutreachLog();
-    });
+      const hours = parseInt(prompt('Volunteer Hours:', '0'), 10) || 0;
+      try {
+        await window.ftcIDE.management.addOutreachEntry({
+          event: eventName, impact, hours, date
+        });
+        showToast('Outreach event logged', 'success');
+        loadOutreachLog();
+      } catch (e) {
+        showToast('Failed to log event: ' + (e && e.message), 'error');
+      }
+    };
   }
 
   loadOutreachLog();

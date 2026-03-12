@@ -59,40 +59,36 @@ class MechanicsManager extends EventEmitter {
   }
 
   /**
-   * Belt length calculation using C2C distance, pulley sizes, and belt type.
+   * Belt length calculation using C2C distance and pulley tooth counts (or diameters).
+   * Prefers teeth (t1, t2) with belt type pitch; falls back to diameters (d1, d2) if provided.
    */
   calculateBelt(input) {
-    const { d1, d2, center, beltType = 'HTD 5mm' } = input;
-    if (!d1 || !d2 || !center) return { error: 'All pulley diameters and C2C distance are required.' };
-
-    // Belt pitch lookup (for tooth count estimation)
+    const { d1, d2, t1, t2, center, beltType = 'HTD 5mm' } = input;
     const pitchMap = {
-      'HTD 5mm': 5,      // 5mm pitch
-      'GT2 3mm': 3,      // 3mm pitch
-      'Round Belt': 0     // No teeth
+      'HTD 5mm': 5,
+      'GT2 3mm': 3,
+      'Round Belt': 0
     };
     const pitchMm = pitchMap[beltType] || 5;
 
-    // Standard belt length formula: L = 2C + π/2(D+d) + (D-d)²/(4C)
-    const length = (2 * center) + (Math.PI / 2 * (d1 + d2)) + (Math.pow(d1 - d2, 2) / (4 * center));
+    let pd1 = d1, pd2 = d2;
+    if ((t1 != null && t1 > 0) || (t2 != null && t2 > 0)) {
+      if (pitchMm <= 0) return { error: 'Belt type must have a pitch (e.g. HTD 5mm or GT2 3mm) when using tooth counts.' };
+      // Pitch diameter (mm) = (teeth * pitch) / PI
+      if (t1 != null && t1 > 0) pd1 = ((t1 * pitchMm) / Math.PI) / 25.4; // convert to inches
+      if (t2 != null && t2 > 0) pd2 = ((t2 * pitchMm) / Math.PI) / 25.4;
+    }
+    if (!pd1 || !pd2 || !center) return { error: 'Provide pulley teeth (or diameters) and C2C distance.' };
 
-    const result = {
-      length: length,
-      beltType: beltType
-    };
+    const length = (2 * center) + (Math.PI / 2 * (pd1 + pd2)) + (Math.pow(pd1 - pd2, 2) / (4 * center));
+    const result = { length, beltType };
 
-    // For toothed belts, calculate approximate tooth count
     if (pitchMm > 0) {
-      const lengthMm = length * 25.4; // Convert inches to mm
+      const lengthMm = length * 25.4;
       result.teeth = Math.round(lengthMm / pitchMm);
       result.pitchMm = pitchMm;
     }
-
-    // Speed ratio
-    if (d1 > 0 && d2 > 0) {
-      result.speedRatio = (d1 / d2).toFixed(3);
-    }
-
+    if (pd1 > 0 && pd2 > 0) result.speedRatio = (pd1 / pd2).toFixed(3);
     return result;
   }
 
